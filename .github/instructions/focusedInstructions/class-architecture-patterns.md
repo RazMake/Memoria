@@ -18,6 +18,7 @@
 
 ## Comments policy
 - Comments explain **why**, NOT **what**.
+- Add comments for large components to describe their purpose.
 - Add comments only where the intent isn't clear from code itself. Avoid redundant comments.
 - Add comments when adding public methods to help public API documentation generation.
 - **Never** add comments just to separate sections of a class or method.
