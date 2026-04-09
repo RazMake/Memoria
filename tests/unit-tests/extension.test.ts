@@ -1,0 +1,69 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Unit tests run outside VS Code, so the vscode module must be fully mocked.
+// Only mock the API surface that the module under test actually uses.
+const mockSubscriptions: any[] = [];
+const mockRegisterCommand = vi.fn();
+const mockShowInformationMessage = vi.fn();
+
+vi.mock("vscode", () => ({
+    commands: {
+        registerCommand: (...args: any[]) => {
+            mockRegisterCommand(...args);
+            return { dispose: vi.fn() };
+        },
+    },
+    window: {
+        showInformationMessage: mockShowInformationMessage,
+        createOutputChannel: vi.fn(() => ({
+            appendLine: vi.fn(),
+            dispose: vi.fn(),
+        })),
+    },
+    env: {
+        createTelemetryLogger: vi.fn(() => ({
+            logUsage: vi.fn(),
+            logError: vi.fn(),
+            dispose: vi.fn(),
+        })),
+    },
+}));
+
+// Mock the telemetry module so the lazy require("@vscode/extension-telemetry")
+// inside extension.ts's reporterFactory is never triggered during unit tests.
+vi.mock("../../src/telemetry", () => ({
+    createTelemetry: vi.fn(() => ({ dispose: vi.fn() })),
+}));
+
+describe("extension", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockSubscriptions.length = 0;
+    });
+
+    it("activate is a function", async () => {
+        const { activate } = await import("../../src/extension");
+        expect(typeof activate).toBe("function");
+    });
+
+    it("deactivate is a function", async () => {
+        const { deactivate } = await import("../../src/extension");
+        expect(typeof deactivate).toBe("function");
+    });
+
+    it("activate registers commands", async () => {
+        const { activate } = await import("../../src/extension");
+        const context = {
+            subscriptions: mockSubscriptions,
+        } as any;
+
+        activate(context);
+
+        expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.initializeWorkspace", expect.any(Function));
+    });
+
+    it("deactivate returns void", async () => {
+        const { deactivate } = await import("../../src/extension");
+        expect(deactivate()).toBeUndefined();
+    });
+});

@@ -42,8 +42,6 @@ If `commands` is empty or not provided, scaffold with zero commands (empty array
 │   └── skills/                ← AI agent skills (shared by Cline and Copilot via settings.json)
 │       ├── build/             ← How to build the extension
 │       │   └── SKILL.md
-│       ├── run/               ← How to run and debug the extension
-│       │   └── SKILL.md
 │       ├── publish/           ← How to create VSIX publish artifacts
 │       │   └── SKILL.md
 │       ├── test/              ← How to run unit and integration tests

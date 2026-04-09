@@ -1,5 +1,9 @@
 # Memoria
-A VS Code extension that transforms a given workspace into a notebook with fast scaffolding templates, editing macros,
-and blueprint‑specific assistants powered by MCP servers.
 
-_More details to come soon..._
+Scaffold a personal knowledge base in a workspace - organize notes, meetings, contacts, and TODOs with optional Copilot integration.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `Memoria: Initialize workspace` | Scaffolds the workspace with a structure _based on the selected template_ |

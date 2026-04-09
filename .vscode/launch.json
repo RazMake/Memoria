@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Extension",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": ["--extensionDevelopmentPath=${workspaceFolder}/src"],
+            "outFiles": ["${workspaceFolder}/src/dist/**/*.js"],
+            "preLaunchTask": "Memoria: Build extension"
+        },
+        {
+            "name": "Integration Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "testConfiguration": "${workspaceFolder}/src/.vscode-test.mjs",
+            "outFiles": ["${workspaceFolder}/src/dist/**/*.js"],
+            "preLaunchTask": "npm: pretest:integration - src"
+        }
+    ]
+}

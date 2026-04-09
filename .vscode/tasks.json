@@ -1,0 +1,55 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Memoria: Build extension",
+            "type": "npm",
+            "script": "build",
+            "path": "src/",
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "silent" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Memoria: Run unit-tests",
+            "type": "npm",
+            "script": "test",
+            "path": "src/",
+            "group": { "kind": "test", "isDefault": true },
+            "presentation": { "reveal": "always" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Memoria: Run e2e-tests",
+            "type": "npm",
+            "script": "test:integration",
+            "path": "src/",
+            "presentation": { "reveal": "always" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Memoria: Check unit-test:coverage",
+            "type": "npm",
+            "script": "test:coverage",
+            "path": "src/",
+            "presentation": { "reveal": "always" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Memoria: Check all-tests:coverage",
+            "type": "npm",
+            "script": "test:coverage:all",
+            "path": "src/",
+            "presentation": { "reveal": "always" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Memoria: Package extension",
+            "type": "npm",
+            "script": "package",
+            "path": "src/",
+            "presentation": { "reveal": "always" },
+            "problemMatcher": []
+        }
+    ]
+}
