@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
+        "module": "Node16",
         "target": "ES2022",
         "lib": ["ES2022"],
         "strict": true,
@@ -10,7 +10,8 @@
         "skipLibCheck": true,
         "moduleResolution": "node16",
         "esModuleInterop": true,
-        "types": ["mocha", "node"]
+        "types": ["mocha", "node"],
+        "typeRoots": ["../../src/node_modules/@types"]
     },
     "include": ["./**/*.ts"]
 }
