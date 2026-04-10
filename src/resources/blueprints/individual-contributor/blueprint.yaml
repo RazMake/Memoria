@@ -1,0 +1,20 @@
+id: "individual-contributor"
+name: "Individual Contributor Notebook"
+description: "A personal knowledge base for developers and PMs."
+version: "1.0.0"
+
+workspace:
+  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+  - name: "01-ToRemember/"
+  - name: "02-MeetingNotes/"
+  - name: "03-Inbox/"
+  - name: "04-Archive/"
+
+decorations:
+  - filter: "00-ToDo/"
+    color: "charts.yellow"
+    badge: "TD"
+  - filter: "04-Archive/"
+    color: "charts.grey"

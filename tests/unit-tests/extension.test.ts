@@ -27,6 +27,21 @@ vi.mock("vscode", () => ({
             dispose: vi.fn(),
         })),
     },
+    Uri: {
+        joinPath: vi.fn((base: any, ...segments: string[]) => ({
+            ...base,
+            path: [base.path, ...segments].join("/"),
+        })),
+    },
+    workspace: {
+        fs: {
+            stat: vi.fn(),
+            readFile: vi.fn(),
+            writeFile: vi.fn(),
+            createDirectory: vi.fn(),
+            readDirectory: vi.fn(),
+        },
+    },
 }));
 
 // Mock the telemetry module so the lazy require("@vscode/extension-telemetry")
@@ -55,6 +70,7 @@ describe("extension", () => {
         const { activate } = await import("../../src/extension");
         const context = {
             subscriptions: mockSubscriptions,
+            extensionUri: { path: "/ext" },
         } as any;
 
         activate(context);

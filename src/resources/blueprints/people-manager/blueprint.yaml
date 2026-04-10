@@ -1,0 +1,27 @@
+id: "people-manager"
+name: "People Manager Notebook"
+description: "For managers: meeting notes, 1:1s, team contacts, and project status."
+version: "1.0.0"
+
+workspace:
+  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+  - name: "01-People/"
+  - name: "02-ToRemember/"
+  - name: "03-MeetingNotes/"
+    children:
+      - name: "1-1/"
+      - name: "Ad-hoc/"
+      - name: "WOR/"
+  - name: "04-Inbox/"
+  - name: "05-Archive/"
+
+decorations:
+  - filter: "00-ToDo/"
+    color: "charts.yellow"
+    badge: "TD"
+  - filter: "01-People/"
+    color: "charts.blue"
+  - filter: "05-Archive/"
+    color: "charts.grey"

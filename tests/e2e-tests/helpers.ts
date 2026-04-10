@@ -24,3 +24,42 @@ export async function uriExists(uri: vscode.Uri): Promise<boolean> {
 export async function writeTextFile(uri: vscode.Uri, content: string): Promise<void> {
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf-8"));
 }
+
+export async function readTextFile(uri: vscode.Uri): Promise<string> {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Writes a JSON object as a UTF-8 file, creating parent directories as needed.
+ */
+export async function writeJsonFile(uri: vscode.Uri, value: unknown): Promise<void> {
+    const parent = vscode.Uri.joinPath(uri, "..");
+    await vscode.workspace.fs.createDirectory(parent);
+    const bytes = new TextEncoder().encode(JSON.stringify(value, null, 2));
+    await vscode.workspace.fs.writeFile(uri, bytes);
+}
+
+/**
+ * Reads and JSON-parses a file. Returns null when the file does not exist.
+ */
+export async function readJsonFile<T>(uri: vscode.Uri): Promise<T | null> {
+    try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        return JSON.parse(new TextDecoder().decode(bytes)) as T;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Deletes a directory and all its contents if it exists. No-op when absent.
+ */
+export async function deleteRecursive(uri: vscode.Uri): Promise<void> {
+    try {
+        await vscode.workspace.fs.delete(uri, { recursive: true });
+    } catch {
+        // Ignore — directory may not exist.
+    }
+}
+
