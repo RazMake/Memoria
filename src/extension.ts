@@ -39,7 +39,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand(
             "memoria.initializeWorkspace",
-            createInitializeWorkspaceCommand(engine, registry, manifest, telemetry, resolver)
+            createInitializeWorkspaceCommand(
+                engine,
+                registry,
+                manifest,
+                telemetry,
+                resolver,
+                () => updateWorkspaceInitializedContext(manifest)
+            )
         ),
         vscode.commands.registerCommand(
             "memoria.toggleDotFolders",

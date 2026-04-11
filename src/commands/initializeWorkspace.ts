@@ -13,7 +13,12 @@ export function createInitializeWorkspaceCommand(
     registry: BlueprintRegistry,
     manifest: ManifestManager,
     telemetry: vscode.TelemetryLogger,
-    resolver: ReinitConflictResolver
+    resolver: ReinitConflictResolver,
+    // Called after every successful initialization so callers can update any
+    // state that depends on the workspace being initialized (e.g. context keys
+    // that drive command visibility). Injected rather than hard-coded so this
+    // command stays decoupled from VS Code context management.
+    onWorkspaceInitialized: () => Promise<void>
 ): () => Promise<void> {
     return async () => {
         const folders = vscode.workspace.workspaceFolders;
@@ -82,12 +87,14 @@ export function createInitializeWorkspaceCommand(
             if (isInitialized) {
                 await engine.reinitialize(workspaceRoot, picked.id, resolver);
                 telemetry.logUsage("blueprint.reinit", { blueprintId: picked.id });
+                await onWorkspaceInitialized();
                 vscode.window.showInformationMessage(
                     `Memoria: Workspace re-initialized with "${picked.label}".`
                 );
             } else {
                 await engine.initialize(workspaceRoot, picked.id);
                 telemetry.logUsage("blueprint.init", { blueprintId: picked.id });
+                await onWorkspaceInitialized();
                 vscode.window.showInformationMessage(
                     `Memoria: Workspace initialized with "${picked.label}".`
                 );

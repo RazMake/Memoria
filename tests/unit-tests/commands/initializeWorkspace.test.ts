@@ -36,9 +36,10 @@ describe("createInitializeWorkspaceCommand", () => {
     let mockManifest: any;
     let mockTelemetry: any;
     let mockResolver: any;
+    let mockOnWorkspaceInitialized: any;
 
     const makeHandler = () =>
-        createInitializeWorkspaceCommand(mockEngine, mockRegistry, mockManifest, mockTelemetry, mockResolver);
+        createInitializeWorkspaceCommand(mockEngine, mockRegistry, mockManifest, mockTelemetry, mockResolver, mockOnWorkspaceInitialized);
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -55,6 +56,7 @@ describe("createInitializeWorkspaceCommand", () => {
         };
         mockTelemetry = { logUsage: vi.fn() };
         mockResolver = {};
+        mockOnWorkspaceInitialized = vi.fn().mockResolvedValue(undefined);
     });
 
     describe("single-root workspace (Phase 1 behaviour)", () => {
@@ -113,6 +115,28 @@ describe("createInitializeWorkspaceCommand", () => {
             expect(mockShowInformationMessage).toHaveBeenCalledWith(expect.stringContaining("initialized"));
         });
 
+        it("should call onWorkspaceInitialized after fresh initialization", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockOnWorkspaceInitialized).toHaveBeenCalledOnce();
+        });
+
+        it("should not call onWorkspaceInitialized when user cancels the blueprint QuickPick", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockShowQuickPick.mockResolvedValue(undefined);
+            await makeHandler()();
+            expect(mockOnWorkspaceInitialized).not.toHaveBeenCalled();
+        });
+
+        it("should not call onWorkspaceInitialized when engine.initialize throws", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            mockEngine.initialize.mockRejectedValue(new Error("Disk full"));
+            await makeHandler()();
+            expect(mockOnWorkspaceInitialized).not.toHaveBeenCalled();
+        });
+
         it("should show an error message when engine.initialize throws", async () => {
             mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
             mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
@@ -147,6 +171,23 @@ describe("createInitializeWorkspaceCommand", () => {
             mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
             await makeHandler()();
             expect(mockShowInformationMessage).toHaveBeenCalledWith(expect.stringContaining("re-initialized"));
+        });
+
+        it("should call onWorkspaceInitialized after successful re-initialization", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockManifest.isInitialized.mockResolvedValue(true);
+            mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockOnWorkspaceInitialized).toHaveBeenCalledOnce();
+        });
+
+        it("should not call onWorkspaceInitialized when engine.reinitialize throws", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockManifest.isInitialized.mockResolvedValue(true);
+            mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            mockEngine.reinitialize.mockRejectedValue(new Error("Conflict resolution failed"));
+            await makeHandler()();
+            expect(mockOnWorkspaceInitialized).not.toHaveBeenCalled();
         });
 
         it("should show an error message when engine.reinitialize throws", async () => {
