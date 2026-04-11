@@ -18,6 +18,8 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
 
     private rules: DecorationRule[] = [];
+    /** Pre-built decorations matching rules by index — avoids allocating on every provideFileDecoration call. */
+    private builtDecorations: (vscode.FileDecoration | undefined)[] = [];
     private workspaceRoot: vscode.Uri | null = null;
 
     constructor(private readonly manifest: ManifestManager) {}
@@ -25,13 +27,17 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     /**
      * Reloads decoration rules from .memoria/decorations.json and fires the change event
      * so VS Code re-queries all URIs. Should be called after every successful init/reinit.
-     * Discovers the initialized root itself so callers do not need to pass it — this keeps
-     * the onWorkspaceInitialized callback signature unchanged from Phase 1/2.
+     *
+     * When `initializedRoot` is provided the expensive `findInitializedRoot` lookup is
+     * skipped — this avoids redundant I/O when the caller already knows the root (e.g.
+     * during activation). When omitted, the root is discovered automatically.
      */
-    async refresh(): Promise<void> {
-        const folders = vscode.workspace.workspaceFolders;
-        const roots = folders ? folders.map((f) => f.uri) : [];
-        const initializedRoot = await this.manifest.findInitializedRoot(roots);
+    async refresh(initializedRoot?: vscode.Uri | null): Promise<void> {
+        if (initializedRoot === undefined) {
+            const folders = vscode.workspace.workspaceFolders;
+            const roots = folders ? folders.map((f) => f.uri) : [];
+            initializedRoot = await this.manifest.findInitializedRoot(roots);
+        }
 
         if (initializedRoot) {
             const config = await this.manifest.readDecorations(initializedRoot);
@@ -42,6 +48,7 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
             this.rules = [];
         }
 
+        this.builtDecorations = this.rules.map(buildDecoration);
         this._onDidChangeFileDecorations.fire(undefined);
     }
 
@@ -64,9 +71,9 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
             return undefined; // Don't decorate the root itself.
         }
 
-        for (const rule of this.rules) {
-            if (matchesFilter(rule.filter, relativePath, rule.propagate ?? false)) {
-                return buildDecoration(rule);
+        for (let i = 0; i < this.rules.length; i++) {
+            if (matchesFilter(this.rules[i].filter, relativePath, this.rules[i].propagate ?? false)) {
+                return this.builtDecorations[i];
             }
         }
 

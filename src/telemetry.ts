@@ -35,6 +35,31 @@ export class ConsoleTelemetrySender implements vscode.TelemetrySender {
     dispose(): void {}
 }
 
+/**
+ * Minimal interface for telemetry emission — used by command handlers instead of
+ * the concrete vscode.TelemetryLogger so they stay decoupled from initialization timing.
+ */
+export interface TelemetryEmitter {
+    logUsage(eventName: string, data?: Record<string, any>): void;
+}
+
+/**
+ * Wraps a TelemetryLogger that is initialized asynchronously. Calls to logUsage()
+ * are silently dropped until initialize() is called — this lets activation kick off
+ * telemetry setup in a microtask without blocking the critical path.
+ */
+export class DeferredTelemetryLogger implements TelemetryEmitter {
+    private logger: vscode.TelemetryLogger | undefined;
+
+    initialize(logger: vscode.TelemetryLogger): void {
+        this.logger = logger;
+    }
+
+    logUsage(eventName: string, data?: Record<string, any>): void {
+        this.logger?.logUsage(eventName, data);
+    }
+}
+
 export interface CreateTelemetryOptions {
     context: vscode.ExtensionContext;
     connectionString?: string;

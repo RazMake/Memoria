@@ -65,7 +65,11 @@ vi.mock("vscode", () => ({
 // Mock the telemetry module so the lazy require("@vscode/extension-telemetry")
 // inside extension.ts's reporterFactory is never triggered during unit tests.
 vi.mock("../../src/telemetry", () => ({
-    createTelemetry: vi.fn(() => ({ dispose: vi.fn() })),
+    createTelemetry: vi.fn(() => ({ logUsage: vi.fn(), dispose: vi.fn() })),
+    DeferredTelemetryLogger: class {
+        initialize() {}
+        logUsage() {}
+    },
 }));
 
 describe("extension", () => {

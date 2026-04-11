@@ -11,7 +11,7 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "workspaceContains:.memoria/blueprint.json"
     ],
     "main": "./dist/extension.js",
     "contributes": {

@@ -192,6 +192,28 @@ describe("BlueprintDecorationProvider", () => {
 
             expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
         });
+
+        it("should skip findInitializedRoot when a pre-computed root is provided", async () => {
+            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
+
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            await provider.refresh(workspaceRoot);
+
+            expect(mockFindInitializedRoot).not.toHaveBeenCalled();
+            expect(mockReadDecorations).toHaveBeenCalledWith(workspaceRoot);
+            const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
+            expect(decoration).toBeDefined();
+            expect(decoration?.badge).toBe("TD");
+        });
+
+        it("should clear rules when pre-computed root is null", async () => {
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            await provider.refresh(null);
+
+            expect(mockFindInitializedRoot).not.toHaveBeenCalled();
+            expect(mockReadDecorations).not.toHaveBeenCalled();
+            expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
+        });
     });
 
     // ── provideFileDecoration ─────────────────────────────────────────────────

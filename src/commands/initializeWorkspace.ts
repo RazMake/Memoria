@@ -7,12 +7,13 @@ import type { BlueprintEngine } from "../blueprints/blueprintEngine";
 import type { BlueprintRegistry } from "../blueprints/blueprintRegistry";
 import type { ManifestManager } from "../blueprints/manifestManager";
 import type { ReinitConflictResolver } from "../blueprints/reinitConflictResolver";
+import type { TelemetryEmitter } from "../telemetry";
 
 export function createInitializeWorkspaceCommand(
     engine: BlueprintEngine,
     registry: BlueprintRegistry,
     manifest: ManifestManager,
-    telemetry: vscode.TelemetryLogger,
+    telemetry: TelemetryEmitter,
     resolver: ReinitConflictResolver,
     // Called after every successful initialization so callers can update any
     // state that depends on the workspace being initialized (e.g. context keys

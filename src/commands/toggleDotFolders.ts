@@ -8,10 +8,11 @@
 
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
+import type { TelemetryEmitter } from "../telemetry";
 
 export function createToggleDotFoldersCommand(
     manifest: ManifestManager,
-    telemetry: vscode.TelemetryLogger
+    telemetry: TelemetryEmitter
 ): () => Promise<void> {
     return async () => {
         const folders = vscode.workspace.workspaceFolders;

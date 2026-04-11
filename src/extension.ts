@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { createTelemetry, type TelemetryReporterFactory } from "./telemetry";
+import { createTelemetry, DeferredTelemetryLogger, type TelemetryReporterFactory } from "./telemetry";
 import { BlueprintRegistry } from "./blueprints/blueprintRegistry";
 import { ManifestManager } from "./blueprints/manifestManager";
 import { FileScaffold } from "./blueprints/fileScaffold";
@@ -18,12 +18,15 @@ const reporterFactory: TelemetryReporterFactory = (connectionString) => {
 // Extension entry point — called once when the activation event fires.
 // Initializes telemetry and registers all commands.
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    // Telemetry respects the user's telemetry.telemetryLevel setting automatically.
-    // createTelemetry() returns TelemetryLogger when no connection string is configured (dev path).
-    const telemetry = createTelemetry({
-        context,
-        createReporter: reporterFactory,
-    }) as vscode.TelemetryLogger;
+    // Telemetry is initialized asynchronously so it does not block the activation
+    // critical path. DeferredTelemetryLogger silently drops events until the real
+    // logger is ready — which happens well before any user-triggered command.
+    const telemetry = new DeferredTelemetryLogger();
+    queueMicrotask(() => {
+        telemetry.initialize(
+            createTelemetry({ context, createReporter: reporterFactory }) as vscode.TelemetryLogger
+        );
+    });
 
     const registry = new BlueprintRegistry(context.extensionUri);
     const manifest = new ManifestManager(vscode.workspace.fs);
@@ -35,17 +38,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
 
-    // Set the context key so menus with `when: memoria.workspaceInitialized` are shown correctly.
-    await updateWorkspaceInitializedContext(manifest);
+    // Register the decoration provider eagerly so VS Code is already listening when
+    // refresh() fires the change event — otherwise the first fire is wasted.
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(decorationProvider),
+    );
 
-    // Load decoration rules from any already-initialized workspace so decorations appear
-    // immediately on activation without requiring another init/reinit.
-    await decorationProvider.refresh();
+    // Discover the initialized root once and share it across all startup operations
+    // instead of calling findInitializedRoot() separately in each one (saves 2 fs.stat round-trips).
+    const folders = vscode.workspace.workspaceFolders;
+    const roots = folders ? folders.map((f) => f.uri) : [];
+    const initializedRoot = await manifest.findInitializedRoot(roots);
 
-    // Notify the user when the bundled blueprint has been updated since the workspace was last
-    // initialized. Runs silently if the workspace is not initialized or the bundle version
-    // hasn't changed.
-    await checkForBlueprintUpdates(manifest, registry, engine, resolver, decorationProvider);
+    // Set the context key and load decoration rules in parallel — they are independent.
+    await Promise.all([
+        updateWorkspaceInitializedContext(initializedRoot),
+        decorationProvider.refresh(initializedRoot),
+    ]);
+
+    // Check for blueprint updates in the background — this may show a dialog that blocks
+    // indefinitely and must not delay decoration rendering.
+    void checkForBlueprintUpdates(
+        initializedRoot,
+        manifest,
+        registry,
+        engine,
+        resolver,
+        decorationProvider
+    ).catch(() => {
+        /* update check is best-effort — swallow errors silently */
+    });
 
     const onWorkspaceInitialized = async (): Promise<void> => {
         await updateWorkspaceInitializedContext(manifest);
@@ -54,7 +76,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Push disposables to context.subscriptions so VS Code cleans them up on deactivation.
     context.subscriptions.push(
-        vscode.window.registerFileDecorationProvider(decorationProvider),
         vscode.commands.registerCommand(
             "memoria.initializeWorkspace",
             createInitializeWorkspaceCommand(
@@ -79,11 +100,21 @@ export function deactivate(): void {}
  * Sets the VS Code context key `memoria.workspaceInitialized` based on whether
  * any workspace folder has a .memoria/blueprint.json.
  * This drives the `when` clause visibility of the toggleDotFolders command.
+ *
+ * Accepts either a pre-computed root (fast path at activation) or a ManifestManager
+ * to discover it (used by the onWorkspaceInitialized callback after init/reinit).
  */
-async function updateWorkspaceInitializedContext(manifest: ManifestManager): Promise<void> {
-    const folders = vscode.workspace.workspaceFolders;
-    const roots = folders ? folders.map((f) => f.uri) : [];
-    const initializedRoot = await manifest.findInitializedRoot(roots);
+async function updateWorkspaceInitializedContext(
+    rootOrManifest: vscode.Uri | null | ManifestManager
+): Promise<void> {
+    let initializedRoot: vscode.Uri | null;
+    if (rootOrManifest instanceof ManifestManager) {
+        const folders = vscode.workspace.workspaceFolders;
+        const roots = folders ? folders.map((f) => f.uri) : [];
+        initializedRoot = await rootOrManifest.findInitializedRoot(roots);
+    } else {
+        initializedRoot = rootOrManifest;
+    }
     await vscode.commands.executeCommand(
         "setContext",
         "memoria.workspaceInitialized",
@@ -100,24 +131,18 @@ async function updateWorkspaceInitializedContext(manifest: ManifestManager): Pro
  * longer bundled, or the stored version is current.
  */
 async function checkForBlueprintUpdates(
+    initializedRoot: vscode.Uri | null,
     manifest: ManifestManager,
     registry: BlueprintRegistry,
     engine: BlueprintEngine,
     resolver: ReinitConflictResolver,
     decorationProvider: BlueprintDecorationProvider
 ): Promise<void> {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
+    if (!initializedRoot) {
         return;
     }
 
-    const roots = folders.map((f) => f.uri);
-    const workspaceRoot = await manifest.findInitializedRoot(roots);
-    if (!workspaceRoot) {
-        return;
-    }
-
-    const storedManifest = await manifest.readManifest(workspaceRoot);
+    const storedManifest = await manifest.readManifest(initializedRoot);
     if (!storedManifest) {
         return;
     }
@@ -145,7 +170,7 @@ async function checkForBlueprintUpdates(
     }
 
     try {
-        await engine.reinitialize(workspaceRoot, storedManifest.blueprintId, resolver);
+        await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
         await updateWorkspaceInitializedContext(manifest);
         await decorationProvider.refresh();
         vscode.window.showInformationMessage(
