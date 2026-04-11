@@ -3,10 +3,13 @@
 ## Architecture
 
 ```
-extension.ts (activation, command registration, context key)
+extension.ts (activation, command registration, context key, versioning check)
   ├── commands/
   │   ├── initializeWorkspace.ts  — factory function → command handler
   │   └── toggleDotFolders.ts     — factory function → command handler
+  ├── features/
+  │   └── decorations/
+  │       └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
   └── blueprints/
       ├── types.ts                — shared data contracts (interfaces only)
       ├── blueprintParser.ts      — YAML → BlueprintDefinition (pure, no vscode)
@@ -46,8 +49,27 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - **Skipped file hashing**: Files the user skips get their current on-disk hash recorded in the manifest, so future re-inits can detect further modifications.
 
 ## Component Relationships
-- `extension.ts` creates all collaborators and wires them together
+- `extension.ts` creates all collaborators and wires them together; also runs `checkForBlueprintUpdates()` on activation
 - `BlueprintEngine` depends on `BlueprintRegistry`, `ManifestManager`, `FileScaffold`
 - `initializeWorkspace` command depends on `BlueprintEngine`, `BlueprintRegistry`, `ManifestManager`, `ReinitConflictResolver`
 - `toggleDotFolders` command depends on `ManifestManager`
+- `BlueprintDecorationProvider` depends on `ManifestManager` (reads decorations.json, discovers root)
 - `BlueprintParser` is pure (no vscode dependency) — used only by `BlueprintRegistry`
+
+## BlueprintDecorationProvider Pattern
+- Registered via `vscode.window.registerFileDecorationProvider` in `extension.ts`
+- `refresh()` self-discovers the initialized root via `findInitializedRoot()` — callers do not pass the root URI, keeping the `onWorkspaceInitialized` callback signature unchanged
+- `matchesFilter(filter, relativePath)` — exported for unit testability; handles three syntaxes:
+  - `"FolderName/"` → matches any item whose last path segment equals `FolderName`
+  - `"*.ext"` → matches any item whose filename ends with `.ext`
+  - `"exact/path"` → exact workspace-relative path match
+- Returns `undefined` (no decoration) for items outside the workspace root, the root itself, or when no rule matches
+- Fires `onDidChangeFileDecorations(undefined)` after each `refresh()` to re-query all URIs
+
+## Blueprint Versioning UX Pattern
+`checkForBlueprintUpdates()` in `extension.ts`:
+1. Finds initialized root via `ManifestManager.findInitializedRoot()`
+2. Reads stored `blueprintId` + `blueprintVersion` from `.memoria/blueprint.json`
+3. Loads bundled definition for that ID; skips silently if ID no longer bundled
+4. Calls `isNewerVersion(bundled, stored)` — plain major.minor.patch comparison
+5. If newer: shows info message with "Re-initialize" / "Later"; on confirmation triggers `engine.reinitialize()`

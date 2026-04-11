@@ -3,19 +3,22 @@
 ## What Works (Implemented)
 - **Phase 1 (MVP)**: Full blueprint scaffolding pipeline — YAML parsing, blueprint discovery, folder/file creation, manifest writing, decoration rules
 - **Phase 2 (Core Polish)**: Re-initialization with conflict resolution (folder cleanup, per-file overwrite prompts), dot-folder toggling, multi-root workspace support, single-root `.memoria` enforcement
+- **Phase 3 (Visual & UX)**:
+  - `BlueprintDecorationProvider` — `vscode.FileDecorationProvider` reading rules from `.memoria/decorations.json`; registered at activation; refreshed after every init/reinit
+  - Blueprint versioning UX — on activation, compares stored vs bundled SemVer; prompts user to re-initialize if the bundle is newer
+  - `isNewerVersion(bundled, stored)` — exported pure utility for major.minor.patch SemVer comparison
 - **Telemetry**: Production-ready pattern with `ConsoleTelemetrySender` + lazy factory for `@vscode/extension-telemetry`
 - **Two bundled blueprints**: Individual Contributor (5 folders) and People Manager (6 folders with nested meeting types)
-- **Test coverage**: 146 unit tests passing, all files ≥ 85% coverage. E2E tests for activation, init, and reinit flows.
+- **Test coverage**: 176 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. New: 25 unit tests for `BlueprintDecorationProvider`.
 - **Context key**: `memoria.workspaceInitialized` checks all workspace roots (not just first)
 
 ## What's Left (Not Implemented)
-- **Phase 3**: File decoration provider (colors/badges in Explorer)
-- **Phase 3**: Blueprint versioning UX
 - **`.vscodeignore`**: Not yet created (needed for publishing)
 - **Publishing**: `publisher` field in package.json is still `TODO_PUBLISHER_ID`
+- **TelemetryReporter → TelemetryLogger adapter**: Needed when a connection string is configured pre-publish
 
 ## Current Status
-Version 0.0.1, not publicly released. Phase 1 + Phase 2 complete. Phase 3 remaining.
+Version 0.0.1, not publicly released. All three phases complete and verified.
 
 ## Known Issues
 - `blueprintEngine.ts` branch coverage at 90% (the `buildSeedCallback` inner function has complex branching)

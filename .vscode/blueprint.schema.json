@@ -76,6 +76,15 @@
           "type": "string",
           "maxLength": 2,
           "description": "Short badge text (1–2 characters) shown on the file decoration."
+        },
+        "tooltip": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hover tooltip text shown for the decorated item in the Explorer."
+        },
+        "propagate": {
+          "type": "boolean",
+          "description": "When true, children of the decorated folder inherit the decoration. Only applies to folder-name filters (e.g. 'FolderName/'). Defaults to false."
         }
       }
     }

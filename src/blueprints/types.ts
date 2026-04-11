@@ -16,6 +16,14 @@ export interface DecorationRule {
     filter: string;
     color?: string;
     badge?: string;
+    /** Hover tooltip shown on the decorated item in the Explorer. */
+    tooltip?: string;
+    /**
+     * When true, children of a decorated folder inherit the decoration.
+     * Only meaningful for folder-name filters (e.g. "FolderName/").
+     * Defaults to false.
+     */
+    propagate?: boolean;
 }
 
 /** The fully parsed, validated representation of a blueprint.yaml file. */

@@ -164,4 +164,36 @@ describe("parseDecorationRules", () => {
     it("should throw when color is an empty string", () => {
         expect(() => parseDecorationRules([{ filter: "f/", color: "" }])).toThrow('"color"');
     });
+
+    it("should parse a rule with a tooltip", () => {
+        const rules = parseDecorationRules([{ filter: "Folder/", tooltip: "My folder" }]);
+        expect(rules[0].tooltip).toBe("My folder");
+    });
+
+    it("should throw when tooltip is an empty string", () => {
+        expect(() => parseDecorationRules([{ filter: "f/", tooltip: "" }])).toThrow('"tooltip"');
+    });
+
+    it("should throw when tooltip is not a string", () => {
+        expect(() => parseDecorationRules([{ filter: "f/", tooltip: 42 }])).toThrow('"tooltip"');
+    });
+
+    it("should parse a rule with propagate: true", () => {
+        const rules = parseDecorationRules([{ filter: "Folder/", color: "charts.blue", propagate: true }]);
+        expect(rules[0].propagate).toBe(true);
+    });
+
+    it("should parse a rule with propagate: false", () => {
+        const rules = parseDecorationRules([{ filter: "Folder/", color: "charts.blue", propagate: false }]);
+        expect(rules[0].propagate).toBe(false);
+    });
+
+    it("should throw when propagate is not a boolean", () => {
+        expect(() => parseDecorationRules([{ filter: "f/", propagate: "yes" }])).toThrow('"propagate"');
+    });
+
+    it("should omit propagate when not present", () => {
+        const rules = parseDecorationRules([{ filter: "f/", color: "charts.blue" }]);
+        expect(rules[0].propagate).toBeUndefined();
+    });
 });

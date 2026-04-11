@@ -133,6 +133,20 @@ export function parseDecorationRules(raw: unknown): DecorationRule[] {
             result.badge = rule["badge"] as string;
         }
 
+        if (rule["tooltip"] !== undefined) {
+            if (typeof rule["tooltip"] !== "string" || !rule["tooltip"]) {
+                throw new Error(`Decoration rule at index ${index}: "tooltip" must be a non-empty string.`);
+            }
+            result.tooltip = rule["tooltip"] as string;
+        }
+
+        if (rule["propagate"] !== undefined) {
+            if (typeof rule["propagate"] !== "boolean") {
+                throw new Error(`Decoration rule at index ${index}: "propagate" must be a boolean.`);
+            }
+            result.propagate = rule["propagate"] as boolean;
+        }
+
         return result;
     });
 }

@@ -16,5 +16,8 @@ decorations:
   - filter: "00-ToDo/"
     color: "charts.yellow"
     badge: "TD"
+    tooltip: "Active tasks"
+    propagate: true
   - filter: "04-Archive/"
     color: "charts.grey"
+    tooltip: "Archived items"

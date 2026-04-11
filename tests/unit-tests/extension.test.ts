@@ -20,6 +20,7 @@ vi.mock("vscode", () => ({
             appendLine: vi.fn(),
             dispose: vi.fn(),
         })),
+        registerFileDecorationProvider: vi.fn(() => ({ dispose: vi.fn() })),
     },
     env: {
         createTelemetryLogger: vi.fn(() => ({
@@ -43,6 +44,21 @@ vi.mock("vscode", () => ({
             createDirectory: vi.fn(),
             readDirectory: vi.fn(),
         },
+    },
+    EventEmitter: class {
+        fire = vi.fn();
+        event = vi.fn();
+        dispose = vi.fn();
+    },
+    ThemeColor: class {
+        constructor(public id: string) {}
+    },
+    FileDecoration: class {
+        constructor(
+            public badge: string | undefined,
+            public tooltip: string | undefined,
+            public color: any
+        ) {}
     },
 }));
 

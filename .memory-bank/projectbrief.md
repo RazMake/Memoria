@@ -9,7 +9,9 @@ A VS Code extension that scaffolds a **personal knowledge base** inside a worksp
 3. **Re-initialization** — Users can switch blueprints or re-apply the same blueprint with conflict resolution (folder cleanup, per-file overwrite prompts).
 4. **Single-root enforcement** — In multi-root workspaces, only one root may have `.memoria/` at a time; initializing a different root deletes the old root's `.memoria/`.
 5. **Dot-folder toggling** — Hide/show dot-prefixed folders in the Explorer via `files.exclude`.
-6. **Telemetry** — Events for `blueprint.init`, `blueprint.reinit`, `dotfolders.toggle`.
+6. **File decorations** — Colors and badges in the Explorer driven by rules in `.memoria/decorations.json`. Provided by `BlueprintDecorationProvider`.
+7. **Blueprint versioning UX** — On activation, compare stored vs bundled SemVer; prompt user to re-initialize if the bundle is newer.
+8. **Telemetry** — Events for `blueprint.init`, `blueprint.reinit`, `dotfolders.toggle`.
 
 ## Non-Goals (current scope)
 - No custom user-authored blueprints (only bundled ones)
