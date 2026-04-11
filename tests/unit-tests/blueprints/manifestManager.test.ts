@@ -6,6 +6,7 @@ const mockStat = vi.fn();
 const mockReadFile = vi.fn();
 const mockWriteFile = vi.fn();
 const mockCreateDirectory = vi.fn();
+const mockDelete = vi.fn();
 const mockJoinPath = vi.fn((base: any, ...segments: string[]) => ({
     ...base,
     path: [base.path, ...segments].join("/"),
@@ -18,6 +19,7 @@ vi.mock("vscode", () => ({
             readFile: (...args: any[]) => mockReadFile(...args),
             writeFile: (...args: any[]) => mockWriteFile(...args),
             createDirectory: (...args: any[]) => mockCreateDirectory(...args),
+            delete: (...args: any[]) => mockDelete(...args),
         },
     },
     Uri: {
@@ -33,6 +35,7 @@ const mockFs = {
     readFile: (...args: any[]) => mockReadFile(...args),
     writeFile: (...args: any[]) => mockWriteFile(...args),
     createDirectory: (...args: any[]) => mockCreateDirectory(...args),
+    delete: (...args: any[]) => mockDelete(...args),
 } as any;
 
 describe("ManifestManager", () => {
@@ -152,6 +155,50 @@ describe("ManifestManager", () => {
             expect(mockCreateDirectory).toHaveBeenCalledOnce();
             const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
             expect(written).toEqual(config);
+        });
+    });
+
+    describe("findInitializedRoot", () => {
+        const root2 = { path: "/workspace2" } as any;
+
+        it("should return the initialized root when one root has .memoria", async () => {
+            mockStat.mockRejectedValueOnce(new Error("not found")); // root1: not initialized
+            mockStat.mockResolvedValueOnce({}); // root2: initialized
+            const manager = new ManifestManager(mockFs);
+            const result = await manager.findInitializedRoot([workspaceRoot, root2]);
+            expect(result).toBe(root2);
+        });
+
+        it("should return null when no root is initialized", async () => {
+            mockStat.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            const result = await manager.findInitializedRoot([workspaceRoot, root2]);
+            expect(result).toBeNull();
+        });
+
+        it("should return the first initialized root when multiple are initialized", async () => {
+            mockStat.mockResolvedValue({}); // both initialized
+            const manager = new ManifestManager(mockFs);
+            const result = await manager.findInitializedRoot([workspaceRoot, root2]);
+            expect(result).toBe(workspaceRoot);
+        });
+
+        it("should return null for an empty roots array", async () => {
+            const manager = new ManifestManager(mockFs);
+            const result = await manager.findInitializedRoot([]);
+            expect(result).toBeNull();
+        });
+    });
+
+    describe("deleteMemoriaDir", () => {
+        it("should delete .memoria/ directory recursively", async () => {
+            mockDelete.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            await manager.deleteMemoriaDir(workspaceRoot);
+            expect(mockDelete).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/.memoria" }),
+                { recursive: true }
+            );
         });
     });
 });

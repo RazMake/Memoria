@@ -6,11 +6,16 @@
 
 import * as vscode from "vscode";
 import { createHash } from "crypto";
-import type { WorkspaceEntry } from "./types";
+import type { WorkspaceEntry, ScaffoldResult } from "./types";
+
+/** Returned by the seed content callback to signal that an existing file should not be overwritten. */
+export const SKIP_FILE = Symbol("SKIP_FILE");
 
 export class FileScaffold {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
-    private readonly fs: typeof vscode.workspace.fs;
+    // Exposed as a public readonly property so BlueprintEngine can use it for folder renames
+    // and file reads during re-initialization, without needing a separate fs injection.
+    readonly fs: typeof vscode.workspace.fs;
 
     constructor(fs: typeof vscode.workspace.fs) {
         this.fs = fs;
@@ -18,30 +23,37 @@ export class FileScaffold {
 
     /**
      * Recursively creates all folders and files defined by the workspace entry tree.
-     * Returns a fileManifest mapping each created file's relative path to its SHA-256 hash.
-     * The manifest uses forward-slash paths regardless of OS.
+     * Returns a ScaffoldResult with:
+     *   - fileManifest: relative path → SHA-256 hash for every file written.
+     *   - skippedPaths: relative paths of files explicitly skipped via SKIP_FILE.
+     *
+     * The seed content callback may return:
+     *   - Uint8Array  → write this content
+     *   - null        → create an empty file
+     *   - SKIP_FILE   → do not create or overwrite the file
      *
      * @param rootUri - The workspace root to scaffold into.
      * @param entries - The blueprint workspace tree to create.
-     * @param getSeedContent - Callback to retrieve a file's seed content; receives the relative path.
-     *                         Returns null when no seed exists — an empty file is created instead.
+     * @param getSeedContent - Callback to retrieve a file's seed content or skip signal.
      */
     async scaffoldTree(
         rootUri: vscode.Uri,
         entries: WorkspaceEntry[],
-        getSeedContent: (relativePath: string) => Promise<Uint8Array | null>
-    ): Promise<Record<string, string>> {
-        const manifest: Record<string, string> = {};
-        await this.processEntries(rootUri, rootUri, entries, getSeedContent, manifest);
-        return manifest;
+        getSeedContent: (relativePath: string) => Promise<Uint8Array | null | typeof SKIP_FILE>
+    ): Promise<ScaffoldResult> {
+        const fileManifest: Record<string, string> = {};
+        const skippedPaths: string[] = [];
+        await this.processEntries(rootUri, rootUri, entries, getSeedContent, fileManifest, skippedPaths);
+        return { fileManifest, skippedPaths };
     }
 
     private async processEntries(
         rootUri: vscode.Uri,
         currentUri: vscode.Uri,
         entries: WorkspaceEntry[],
-        getSeedContent: (relativePath: string) => Promise<Uint8Array | null>,
-        manifest: Record<string, string>
+        getSeedContent: (relativePath: string) => Promise<Uint8Array | null | typeof SKIP_FILE>,
+        fileManifest: Record<string, string>,
+        skippedPaths: string[]
     ): Promise<void> {
         for (const entry of entries) {
             this.validateEntryName(entry.name);
@@ -52,14 +64,18 @@ export class FileScaffold {
             if (entry.isFolder) {
                 await this.fs.createDirectory(entryUri);
                 if (entry.children && entry.children.length > 0) {
-                    await this.processEntries(rootUri, entryUri, entry.children, getSeedContent, manifest);
+                    await this.processEntries(rootUri, entryUri, entry.children, getSeedContent, fileManifest, skippedPaths);
                 }
             } else {
                 const relativePath = this.toRelativePath(rootUri, entryUri);
-                const seedContent = await getSeedContent(relativePath);
-                const content = seedContent ?? new Uint8Array(0);
-                await this.fs.writeFile(entryUri, content);
-                manifest[relativePath] = this.computeHash(content);
+                const seedResult = await getSeedContent(relativePath);
+                if (seedResult === SKIP_FILE) {
+                    skippedPaths.push(relativePath);
+                } else {
+                    const content = seedResult ?? new Uint8Array(0);
+                    await this.fs.writeFile(entryUri, content);
+                    fileManifest[relativePath] = this.computeHash(content);
+                }
             }
         }
     }

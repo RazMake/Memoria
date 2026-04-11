@@ -34,6 +34,21 @@ export class ManifestManager {
         }
     }
 
+    /** Returns the first root that has .memoria/blueprint.json, or null if none. */
+    async findInitializedRoot(roots: vscode.Uri[]): Promise<vscode.Uri | null> {
+        for (const root of roots) {
+            if (await this.isInitialized(root)) {
+                return root;
+            }
+        }
+        return null;
+    }
+
+    /** Deletes the .memoria/ directory and all its contents from the given root. */
+    async deleteMemoriaDir(root: vscode.Uri): Promise<void> {
+        await this.fs.delete(this.memoriaDir(root), { recursive: true });
+    }
+
     async readManifest(workspaceRoot: vscode.Uri): Promise<BlueprintManifest | null> {
         return this.readJson<BlueprintManifest>(this.manifestUri(workspaceRoot));
     }

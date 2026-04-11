@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { getWorkspaceFolder, uriExists, writeJsonFile, readJsonFile, deleteRecursive } from "../helpers";
+import { getWorkspaceFolder, uriExists, deleteRecursive } from "../helpers";
 
 // Minimal shape of .memoria/blueprint.json — kept local to avoid crossing the rootDir boundary.
 interface BlueprintManifest {
@@ -15,11 +15,11 @@ interface BlueprintManifest {
 // Non-interactive strategy: QuickPick selection logic is fully covered by unit tests.
 // These E2E tests verify observable outcomes that unit tests cannot cover:
 //   - Command registration in the live Extension Host.
-//   - The "already initialized" guard (pre-writing .memoria/blueprint.json) completes
-//     without driving the QuickPick UI.
 //
-// Full init flow (scaffold → manifest → decorations) is verifiable here because:
-// the already-initialized guard path lets executeCommand return quickly without a QuickPick.
+// Note: In Phase 2, the blueprint QuickPick is shown for every invocation (before checking
+// initialization state), so tests that call executeCommand must be limited to registration
+// checks or scenarios where the command returns before or immediately after the QuickPick
+// (e.g., QuickPick resolves to undefined without user interaction in the test host).
 
 suite("Initialize workspace command", () => {
     let workspaceRoot: vscode.Uri;
@@ -41,28 +41,6 @@ suite("Initialize workspace command", () => {
             commands.includes("memoria.initializeWorkspace"),
             "memoria.initializeWorkspace must be registered"
         );
-    });
-
-    test("command returns without error when workspace is already initialized", async () => {
-        // Arrange — pre-write a .memoria/blueprint.json so the command sees an initialized workspace
-        // and takes the early-return path before showing any QuickPick.
-        const manifestUri = vscode.Uri.joinPath(memoriaDir, "blueprint.json");
-        const existingManifest: BlueprintManifest = {
-            blueprintId: "individual-contributor",
-            blueprintVersion: "1.0.0",
-            initializedAt: new Date().toISOString(),
-            lastReinitAt: null,
-            fileManifest: {},
-        };
-        await writeJsonFile(manifestUri, existingManifest);
-
-        // Act — executing the command should return quickly (no QuickPick shown) without throwing.
-        await vscode.commands.executeCommand("memoria.initializeWorkspace");
-
-        // Assert — the pre-written manifest is preserved (command did not overwrite it).
-        const manifest = await readJsonFile<BlueprintManifest>(manifestUri);
-        assert.ok(manifest, "blueprint.json should still exist after already-initialized command run");
-        assert.strictEqual(manifest.blueprintId, "individual-contributor", "blueprint name should be unchanged");
     });
 
     test(".memoria/ directory does not exist before any initialization", async () => {

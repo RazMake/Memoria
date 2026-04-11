@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { FileScaffold } from "../../../src/blueprints/fileScaffold";
+import { FileScaffold, SKIP_FILE } from "../../../src/blueprints/fileScaffold";
 import type { WorkspaceEntry } from "../../../src/blueprints/types";
 
 const mockCreateDirectory = vi.fn();
@@ -83,11 +83,11 @@ describe("FileScaffold", () => {
         it("should return a manifest with forward-slash paths and sha256 hashes for created files", async () => {
             const entries: WorkspaceEntry[] = [{ name: "file.md", isFolder: false }];
             const scaffold = new FileScaffold(mockFs);
-            const manifest = await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
-            const keys = Object.keys(manifest);
+            const { fileManifest } = await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
+            const keys = Object.keys(fileManifest);
             expect(keys).toHaveLength(1);
             expect(keys[0]).not.toContain("\\");
-            expect(manifest[keys[0]]).toMatch(/^sha256:[0-9a-f]{64}$/);
+            expect(fileManifest[keys[0]]).toMatch(/^sha256:[0-9a-f]{64}$/);
         });
 
         it("should not include folder entries in the returned manifest", async () => {
@@ -96,16 +96,41 @@ describe("FileScaffold", () => {
                 { name: "file.md", isFolder: false },
             ];
             const scaffold = new FileScaffold(mockFs);
-            const manifest = await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
-            const keys = Object.keys(manifest);
+            const { fileManifest } = await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
+            const keys = Object.keys(fileManifest);
             expect(keys).toHaveLength(1);
             expect(keys[0]).not.toContain("Folder/");
         });
 
-        it("should return an empty manifest when no file entries exist", async () => {
+        it("should return an empty fileManifest and empty skippedPaths when no file entries exist", async () => {
             const scaffold = new FileScaffold(mockFs);
-            const manifest = await scaffold.scaffoldTree(rootUri, [], noSeedContent);
-            expect(manifest).toEqual({});
+            const result = await scaffold.scaffoldTree(rootUri, [], noSeedContent);
+            expect(result.fileManifest).toEqual({});
+            expect(result.skippedPaths).toEqual([]);
+        });
+
+        it("should not write a file when the seed callback returns SKIP_FILE", async () => {
+            const entries: WorkspaceEntry[] = [{ name: "skipped.md", isFolder: false }];
+            const scaffold = new FileScaffold(mockFs);
+            const result = await scaffold.scaffoldTree(rootUri, entries, async () => SKIP_FILE);
+            expect(mockWriteFile).not.toHaveBeenCalled();
+            expect(result.skippedPaths).toContain("skipped.md");
+            expect(result.fileManifest).toEqual({});
+        });
+
+        it("should include non-skipped files in fileManifest and skipped files in skippedPaths", async () => {
+            const entries: WorkspaceEntry[] = [
+                { name: "written.md", isFolder: false },
+                { name: "skipped.md", isFolder: false },
+            ];
+            const scaffold = new FileScaffold(mockFs);
+            const result = await scaffold.scaffoldTree(
+                rootUri,
+                entries,
+                async (path) => (path === "skipped.md" ? SKIP_FILE : null)
+            );
+            expect(Object.keys(result.fileManifest)).toEqual(["written.md"]);
+            expect(result.skippedPaths).toEqual(["skipped.md"]);
         });
     });
 

@@ -6,12 +6,14 @@ import * as vscode from "vscode";
 import type { BlueprintEngine } from "../blueprints/blueprintEngine";
 import type { BlueprintRegistry } from "../blueprints/blueprintRegistry";
 import type { ManifestManager } from "../blueprints/manifestManager";
+import type { ReinitConflictResolver } from "../blueprints/reinitConflictResolver";
 
 export function createInitializeWorkspaceCommand(
     engine: BlueprintEngine,
     registry: BlueprintRegistry,
     manifest: ManifestManager,
-    telemetry: vscode.TelemetryLogger
+    telemetry: vscode.TelemetryLogger,
+    resolver: ReinitConflictResolver
 ): () => Promise<void> {
     return async () => {
         const folders = vscode.workspace.workspaceFolders;
@@ -20,14 +22,25 @@ export function createInitializeWorkspaceCommand(
             return;
         }
 
-        // Phase 1: single-root only. Multi-root root selection is Phase 2.
-        const workspaceRoot = folders[0].uri;
-
-        if (await manifest.isInitialized(workspaceRoot)) {
-            vscode.window.showInformationMessage(
-                "Memoria: This workspace is already initialized. Re-initialization will be available in a future update."
-            );
-            return;
+        // Multi-root: let the user choose which root to initialize.
+        // Single-root: use the only available root directly.
+        let workspaceRoot: vscode.Uri;
+        if (folders.length === 1) {
+            workspaceRoot = folders[0].uri;
+        } else {
+            const rootItems = folders.map((f) => ({
+                label: f.name,
+                description: f.uri.fsPath,
+                uri: f.uri,
+            }));
+            const pickedRoot = await vscode.window.showQuickPick(rootItems, {
+                title: "Memoria: Select a workspace root",
+                placeHolder: "Choose which root to initialize",
+            });
+            if (!pickedRoot) {
+                return;
+            }
+            workspaceRoot = pickedRoot.uri;
         }
 
         const blueprints = await registry.listBlueprints();
@@ -51,12 +64,34 @@ export function createInitializeWorkspaceCommand(
             return;
         }
 
+        // In multi-root workspaces, only one root may have .memoria/ at a time.
+        // If a different root is already initialized, delete its .memoria/ before proceeding.
+        // This cleanup runs after blueprint selection rather than earlier (after root
+        // selection) so that cancelling the blueprint QuickPick does not delete .memoria/
+        // from the old root unnecessarily.
+        if (folders.length > 1) {
+            const oldRoot = await manifest.findInitializedRoot(folders.map((f) => f.uri));
+            if (oldRoot && oldRoot.toString() !== workspaceRoot.toString()) {
+                await manifest.deleteMemoriaDir(oldRoot);
+            }
+        }
+
+        const isInitialized = await manifest.isInitialized(workspaceRoot);
+
         try {
-            await engine.initialize(workspaceRoot, picked.id);
-            telemetry.logUsage("blueprint.init", { blueprintId: picked.id });
-            vscode.window.showInformationMessage(
-                `Memoria: Workspace initialized with "${picked.label}".`
-            );
+            if (isInitialized) {
+                await engine.reinitialize(workspaceRoot, picked.id, resolver);
+                telemetry.logUsage("blueprint.reinit", { blueprintId: picked.id });
+                vscode.window.showInformationMessage(
+                    `Memoria: Workspace re-initialized with "${picked.label}".`
+                );
+            } else {
+                await engine.initialize(workspaceRoot, picked.id);
+                telemetry.logUsage("blueprint.init", { blueprintId: picked.id });
+                vscode.window.showInformationMessage(
+                    `Memoria: Workspace initialized with "${picked.label}".`
+                );
+            }
         } catch (err) {
             vscode.window.showErrorMessage(
                 `Memoria: Initialization failed — ${(err as Error).message}`

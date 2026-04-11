@@ -57,3 +57,34 @@ export interface BlueprintInfo {
     version: string;
     path: vscode.Uri;
 }
+
+/**
+ * The user's choice when prompted about a user-modified file during re-initialization.
+ * Controls whether the blueprint version overwrites the user's changes.
+ */
+export type OverwriteChoice = "yes" | "yes-folder" | "yes-folder-recursive" | "no";
+
+/**
+ * Result of conflict analysis before re-initialization begins.
+ * Folder cleanup decisions are captured here; per-file overwrite decisions
+ * are made interactively during the re-init scaffold pass.
+ */
+export interface ReinitPlan {
+    /** Relative paths of extra folders the user chose to move to ReInitializationCleanup/. */
+    foldersToCleanup: string[];
+    /** Blueprint file paths whose stored hash matches the on-disk content (safe to overwrite silently). */
+    unmodifiedBlueprintFiles: string[];
+    /** Blueprint file paths whose on-disk content differs from the stored hash (user has modified them). */
+    modifiedBlueprintFiles: string[];
+}
+
+/**
+ * Extended return type from scaffoldTree — separates created files from explicitly skipped files.
+ * Skipped files are those the user chose not to overwrite during re-initialization.
+ */
+export interface ScaffoldResult {
+    /** Relative path → SHA-256 hash for every file that was created or overwritten. */
+    fileManifest: Record<string, string>;
+    /** Relative paths of files that were skipped (not created or overwritten). */
+    skippedPaths: string[];
+}

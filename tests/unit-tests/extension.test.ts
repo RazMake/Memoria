@@ -12,6 +12,7 @@ vi.mock("vscode", () => ({
             mockRegisterCommand(...args);
             return { dispose: vi.fn() };
         },
+        executeCommand: vi.fn().mockResolvedValue(undefined),
     },
     window: {
         showInformationMessage: mockShowInformationMessage,
@@ -34,8 +35,9 @@ vi.mock("vscode", () => ({
         })),
     },
     workspace: {
+        workspaceFolders: [],
         fs: {
-            stat: vi.fn(),
+            stat: vi.fn().mockRejectedValue(new Error("not found")),
             readFile: vi.fn(),
             writeFile: vi.fn(),
             createDirectory: vi.fn(),
@@ -73,9 +75,10 @@ describe("extension", () => {
             extensionUri: { path: "/ext" },
         } as any;
 
-        activate(context);
+        await activate(context);
 
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.initializeWorkspace", expect.any(Function));
+        expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.toggleDotFolders", expect.any(Function));
     });
 
     it("deactivate returns void", async () => {
