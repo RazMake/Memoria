@@ -3,7 +3,7 @@
 // Validation happens at parse time (fail-fast before any filesystem operations touch the workspace).
 
 import { parse } from "yaml";
-import type { BlueprintDefinition, WorkspaceEntry, DecorationRule } from "./types";
+import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule } from "./types";
 
 /**
  * Parses a blueprint.yaml string into a validated BlueprintDefinition.
@@ -39,13 +39,17 @@ export function parseBlueprintYaml(content: string): BlueprintDefinition {
         throw new Error('Blueprint is missing required array field "workspace".');
     }
 
+    if (!Array.isArray(obj["features"])) {
+        throw new Error('Blueprint is missing required array field "features".');
+    }
+
     return {
         id: obj["id"] as string,
         name: obj["name"] as string,
         description: obj["description"] as string,
         version: obj["version"] as string,
         workspace: parseWorkspaceTree(obj["workspace"]),
-        decorations: parseDecorationRules(obj["decorations"]),
+        features: parseFeatures(obj["features"]),
     };
 }
 
@@ -88,7 +92,50 @@ export function parseWorkspaceTree(raw: unknown): WorkspaceEntry[] {
 }
 
 /**
- * Validates the decorations array from raw YAML.
+ * Validates the features array from raw YAML.
+ * Each entry must have common fields (id, name, description, enabledByDefault)
+ * and feature-specific fields dispatched by id.
+ */
+export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
+    return raw.map((item: unknown, index: number) => {
+        if (!item || typeof item !== "object") {
+            throw new Error(`Feature entry at index ${index} must be an object.`);
+        }
+
+        const entry = item as Record<string, unknown>;
+
+        if (typeof entry["id"] !== "string" || !entry["id"]) {
+            throw new Error(`Feature entry at index ${index} is missing required string field "id".`);
+        }
+        if (typeof entry["name"] !== "string" || !entry["name"]) {
+            throw new Error(`Feature entry at index ${index} is missing required string field "name".`);
+        }
+        if (typeof entry["description"] !== "string" || !entry["description"]) {
+            throw new Error(`Feature entry at index ${index} is missing required string field "description".`);
+        }
+        if (typeof entry["enabledByDefault"] !== "boolean") {
+            throw new Error(`Feature entry at index ${index} is missing required boolean field "enabledByDefault".`);
+        }
+
+        const id = entry["id"] as string;
+
+        switch (id) {
+            case "decorations":
+                return {
+                    id,
+                    name: entry["name"] as string,
+                    description: entry["description"] as string,
+                    enabledByDefault: entry["enabledByDefault"] as boolean,
+                    rules: parseDecorationRules(entry["rules"]),
+                };
+            default:
+                throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
+        }
+    });
+}
+
+/**
+ * Validates decoration rules from raw YAML.
  * Returns an empty array if the section is absent.
  * Each rule must have a "filter" string; badge must be ≤2 chars; color must be non-empty if present.
  */
@@ -98,7 +145,7 @@ export function parseDecorationRules(raw: unknown): DecorationRule[] {
     }
 
     if (!Array.isArray(raw)) {
-        throw new Error('"decorations" must be an array.');
+        throw new Error('"rules" must be an array.');
     }
 
     return raw.map((item: unknown, index: number) => {

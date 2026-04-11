@@ -4,7 +4,7 @@
   "title": "Memoria Blueprint",
   "description": "Schema for Memoria workspace blueprint definition files.",
   "type": "object",
-  "required": ["id", "name", "description", "version", "workspace"],
+  "required": ["id", "name", "description", "version", "workspace", "features"],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -33,10 +33,10 @@
       "description": "Top-level workspace entries to scaffold. Folder names must end with '/'.",
       "items": { "$ref": "#/$defs/workspaceEntry" }
     },
-    "decorations": {
+    "features": {
       "type": "array",
-      "description": "Optional file decoration rules applied after scaffolding.",
-      "items": { "$ref": "#/$defs/decorationRule" }
+      "description": "Blueprint features such as Explorer decorations. Each entry must have a known feature id.",
+      "items": { "$ref": "#/$defs/featureEntry" }
     }
   },
   "$defs": {
@@ -56,6 +56,54 @@
           "items": { "$ref": "#/$defs/workspaceEntry" }
         }
       }
+    },
+    "featureEntry": {
+      "type": "object",
+      "required": ["id", "name", "description", "enabledByDefault"],
+      "description": "A blueprint feature entry. Additional properties depend on the feature id.",
+      "allOf": [
+        {
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Feature identifier. Currently supported: 'decorations'."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Human-readable feature name."
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Short description of what the feature provides."
+            },
+            "enabledByDefault": {
+              "type": "boolean",
+              "description": "Whether the feature is enabled when the blueprint is first applied."
+            }
+          }
+        },
+        {
+          "if": { "properties": { "id": { "const": "decorations" } } },
+          "then": {
+            "required": ["rules"],
+            "properties": {
+              "id": true,
+              "name": true,
+              "description": true,
+              "enabledByDefault": true,
+              "rules": {
+                "type": "array",
+                "description": "Decoration rules applied to workspace entries.",
+                "items": { "$ref": "#/$defs/decorationRule" }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
     },
     "decorationRule": {
       "type": "object",

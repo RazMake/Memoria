@@ -47,33 +47,46 @@ export class ReinitConflictResolver {
         const flatFiles = this.flattenWorkspaceFiles(newDefinition.workspace);
         const unmodifiedBlueprintFiles: string[] = [];
         const modifiedBlueprintFiles: string[] = [];
+        const currentFileHashes: Record<string, string | null> = {};
 
-        for (const relativePath of flatFiles) {
-            // Skip files in folders chosen for cleanup — they'll be moved with the folder.
-            const isInCleanupFolder = foldersToCleanup.some(
-                (f) => relativePath === f || relativePath.startsWith(f + "/") || relativePath.startsWith(f.replace(/\/$/, "") + "/")
-            );
-            if (isInCleanupFolder) {
+        // Parallel hash reads — independent I/O operations across distinct files.
+        const hashResults = await Promise.all(
+            flatFiles.map(async (relativePath) => {
+                const isInCleanupFolder = foldersToCleanup.some(
+                    (f) => relativePath === f || relativePath.startsWith(f + "/") || relativePath.startsWith(f.replace(/\/$/, "") + "/")
+                );
+                if (isInCleanupFolder) {
+                    return { relativePath, skip: true, hash: null as string | null };
+                }
+
+                const storedHash = currentManifest.fileManifest[relativePath];
+                if (!storedHash) {
+                    return { relativePath, skip: false, isNew: true, hash: null as string | null };
+                }
+
+                const currentHash = await this.readCurrentHash(workspaceRoot, relativePath);
+                return { relativePath, skip: false, isNew: false, storedHash, hash: currentHash };
+            })
+        );
+
+        for (const result of hashResults) {
+            if (result.skip) {
+                continue;
+            }
+            if (result.isNew) {
+                unmodifiedBlueprintFiles.push(result.relativePath);
                 continue;
             }
 
-            const storedHash = currentManifest.fileManifest[relativePath];
-            if (!storedHash) {
-                // File is new in this blueprint version — not in old manifest.
-                unmodifiedBlueprintFiles.push(relativePath);
-                continue;
-            }
-
-            const currentHash = await this.readCurrentHash(workspaceRoot, relativePath);
-            if (currentHash === null || currentHash === storedHash) {
-                // File is missing on disk or unchanged — safe to overwrite.
-                unmodifiedBlueprintFiles.push(relativePath);
+            currentFileHashes[result.relativePath] = result.hash;
+            if (result.hash === null || result.hash === result.storedHash) {
+                unmodifiedBlueprintFiles.push(result.relativePath);
             } else {
-                modifiedBlueprintFiles.push(relativePath);
+                modifiedBlueprintFiles.push(result.relativePath);
             }
         }
 
-        return { foldersToCleanup, unmodifiedBlueprintFiles, modifiedBlueprintFiles };
+        return { foldersToCleanup, unmodifiedBlueprintFiles, modifiedBlueprintFiles, currentFileHashes };
     }
 
     /**

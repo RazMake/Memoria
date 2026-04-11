@@ -3,18 +3,24 @@
 ## Architecture
 
 ```
-extension.ts (activation, command registration, context key, versioning check)
+extension.ts (activation, DI wiring, versioning check)
+  ├── registerFileWatchers()   — per-root .memoria/blueprint.json watchers + onDidDeleteFiles
+  ├── registerCommands()       — command registration
   ├── commands/
   │   ├── initializeWorkspace.ts  — factory function → command handler
-  │   └── toggleDotFolders.ts     — factory function → command handler
+  │   ├── toggleDotFolders.ts     — factory function → command handler
+  │   └── manageFeatures.ts       — factory function → command handler
   ├── features/
+  │   ├── featureManager.ts       — feature toggle orchestrator
   │   └── decorations/
   │       └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
   └── blueprints/
       ├── types.ts                — shared data contracts (interfaces only)
       ├── blueprintParser.ts      — YAML → BlueprintDefinition (pure, no vscode)
       ├── blueprintRegistry.ts    — discovers bundled blueprints via extensionUri
-      ├── manifestManager.ts      — .memoria/ R/W, SHA-256 hashing, single owner of metadata dir
+      ├── manifestManager.ts      — .memoria/ R/W, single owner of metadata dir
+      ├── hashUtils.ts            — SHA-256 hashing (single source of truth)
+      ├── workspaceUtils.ts       — shared getWorkspaceRoots()
       ├── fileScaffold.ts         — creates folders/files via vscode.workspace.fs
       ├── blueprintEngine.ts      — thin orchestrator (init + reinit flows)
       └── reinitConflictResolver.ts — conflict resolution UI (folder cleanup, file overwrite prompts)
@@ -30,6 +36,7 @@ Command handlers are created by factory functions (`createInitializeWorkspaceCom
 - `typeof vscode.workspace.fs` is the FS abstraction — unit tests pass mock, E2E uses real `vscode.workspace.fs`
 - `BlueprintEngine` takes `fs` separately from `FileScaffold` — engine uses its own `fs` for reinit cleanup ops, scaffold keeps its `fs` private
 - `ReinitConflictResolver` imports `computeFileHash` directly (no callback injection needed)
+- `ManifestManager` does NOT wrap `computeFileHash` — callers import from `hashUtils` directly
 
 ### Shared Utilities
 - `src/blueprints/hashUtils.ts` — single source of truth for SHA-256 hashing via `computeFileHash(content: Uint8Array): string`
@@ -72,11 +79,14 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - `findInitializedRoot`: parallel stat checks across workspace roots
 - Blueprint listing: parallel YAML reads via `Promise.all(dirs.map(...))`
 - Folder renames during reinit: `Promise.all` since destinations are distinct
+- `resolveConflicts`: parallel hash reads across blueprint files via `Promise.all(flatFiles.map(...))`
 
 ### Avoid Redundant Lookups
 - After init/reinit, pass the known workspace root through callbacks: `onWorkspaceInitialized(root: vscode.Uri)`
 - `decorationProvider.refresh(knownRoot)` and `updateWorkspaceInitializedContext(knownRoot)` skip `findInitializedRoot()`
 - Accept pre-computed root as optional param to avoid re-discovery
+- `recheckInitialization()` caches last-known root string; skips context/feature updates when unchanged
+- `ReinitPlan.currentFileHashes` caches hashes computed during conflict analysis so the engine avoids re-reading files for skipped paths
 
 ### Encapsulation
 - Never expose `fs` handle publicly just so another class can use it — inject `fs` into both classes separately

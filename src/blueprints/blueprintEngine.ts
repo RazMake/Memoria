@@ -7,7 +7,7 @@ import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { SKIP_FILE } from "./fileScaffold";
 import { computeFileHash } from "./hashUtils";
-import type { BlueprintManifest, ReinitPlan, OverwriteChoice } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, OverwriteChoice } from "./types";
 import type { ReinitConflictResolver } from "./reinitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -46,7 +46,8 @@ export class BlueprintEngine {
         };
 
         await this.manifest.writeManifest(workspaceRoot, manifest);
-        await this.manifest.writeDecorations(workspaceRoot, { rules: definition.decorations });
+        await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(definition.features) });
+        await this.manifest.writeFeatures(workspaceRoot, buildFeaturesConfig(definition.features));
     }
 
     /**
@@ -92,7 +93,17 @@ export class BlueprintEngine {
         );
 
         // For skipped files, record the current on-disk hash so future re-inits treat them correctly.
+        // Use cached hashes from the conflict resolution phase to avoid re-reading the same files.
         for (const relativePath of skippedPaths) {
+            const cachedHash = plan.currentFileHashes[relativePath];
+            if (cachedHash !== undefined) {
+                if (cachedHash !== null) {
+                    fileManifest[relativePath] = cachedHash;
+                }
+                // null means file was deleted — omit from manifest.
+                continue;
+            }
+            // Fallback for files not hashed during conflict analysis (e.g. new files the user skipped).
             const fileUri = vscode.Uri.joinPath(workspaceRoot, ...relativePath.split("/"));
             try {
                 const content = await this.fs.readFile(fileUri);
@@ -112,7 +123,10 @@ export class BlueprintEngine {
         };
 
         await this.manifest.writeManifest(workspaceRoot, updatedManifest);
-        await this.manifest.writeDecorations(workspaceRoot, { rules: newDefinition.decorations });
+        await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(newDefinition.features) });
+
+        const existingFeaturesConfig = await this.manifest.readFeatures(workspaceRoot);
+        await this.manifest.writeFeatures(workspaceRoot, mergeFeaturesConfig(newDefinition.features, existingFeaturesConfig));
     }
 
     /**
@@ -175,16 +189,13 @@ export class BlueprintEngine {
      */
     private async backupFile(workspaceRoot: vscode.Uri, relativePath: string): Promise<void> {
         try {
-            const src = vscode.Uri.joinPath(workspaceRoot, ...relativePath.split("/"));
-            const dest = vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup", ...relativePath.split("/"));
+            const segments = relativePath.split("/");
+            const src = vscode.Uri.joinPath(workspaceRoot, ...segments);
+            const dest = vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup", ...segments);
 
             // Ensure parent directories exist for the backup destination.
-            const destParent = relativePath.includes("/")
-                ? vscode.Uri.joinPath(
-                      workspaceRoot,
-                      "ReInitializationCleanup",
-                      ...relativePath.split("/").slice(0, -1)
-                  )
+            const destParent = segments.length > 1
+                ? vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup", ...segments.slice(0, -1))
                 : vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup");
             await this.fs.createDirectory(destParent);
 
@@ -196,4 +207,49 @@ export class BlueprintEngine {
             });
         }
     }
+}
+
+/** Builds the initial FeaturesConfig from a blueprint's features, using each feature's enabledByDefault. */
+export function buildFeaturesConfig(features: BlueprintFeature[]): FeaturesConfig {
+    return {
+        features: features.map((f) => ({
+            id: f.id,
+            name: f.name,
+            description: f.description,
+            enabled: f.enabledByDefault,
+        })),
+    };
+}
+
+/** Extracts decoration rules from the features array. Returns empty array if no decorations feature exists. */
+export function extractDecorationRules(features: BlueprintFeature[]): DecorationRule[] {
+    const decorations = features.find((f) => f.id === "decorations");
+    return decorations ? decorations.rules : [];
+}
+
+/**
+ * Merges a new blueprint's features with the user's existing toggle state.
+ * - Features that still exist: preserve user's `enabled` state, update name/description from blueprint.
+ * - New features: use `enabledByDefault`.
+ * - Removed features: dropped.
+ */
+export function mergeFeaturesConfig(
+    newFeatures: BlueprintFeature[],
+    existingConfig: FeaturesConfig | null
+): FeaturesConfig {
+    const existingMap = new Map(
+        (existingConfig?.features ?? []).map((f) => [f.id, f])
+    );
+
+    return {
+        features: newFeatures.map((f) => {
+            const existing = existingMap.get(f.id);
+            return {
+                id: f.id,
+                name: f.name,
+                description: f.description,
+                enabled: existing !== undefined ? existing.enabled : f.enabledByDefault,
+            };
+        }),
+    };
 }

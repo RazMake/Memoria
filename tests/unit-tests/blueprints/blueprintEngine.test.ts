@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BlueprintEngine } from "../../../src/blueprints/blueprintEngine";
-import type { BlueprintDefinition } from "../../../src/blueprints/types";
+import { BlueprintEngine, buildFeaturesConfig, extractDecorationRules, mergeFeaturesConfig } from "../../../src/blueprints/blueprintEngine";
+import type { BlueprintDefinition, BlueprintFeature, FeaturesConfig } from "../../../src/blueprints/types";
 
 // BlueprintEngine uses only injected collaborators — no direct vscode API calls.
 // We mock the vscode module minimally in case any imported dependency references it.
@@ -19,7 +19,13 @@ const mockDefinition: BlueprintDefinition = {
     description: "desc",
     version: "1.0.0",
     workspace: [{ name: "Folder/", isFolder: true, children: [{ name: "file.md", isFolder: false }] }],
-    decorations: [{ filter: "Folder/", color: "charts.green" }],
+    features: [{
+        id: "decorations",
+        name: "Explorer Decorations",
+        description: "Badges and colors",
+        enabledByDefault: true,
+        rules: [{ filter: "Folder/", color: "charts.green" }],
+    }],
 };
 
 const managerDefinition: BlueprintDefinition = {
@@ -28,7 +34,13 @@ const managerDefinition: BlueprintDefinition = {
     description: "desc",
     version: "1.0.0",
     workspace: [{ name: "00-ToDo/", isFolder: true }],
-    decorations: [],
+    features: [{
+        id: "decorations",
+        name: "Explorer Decorations",
+        description: "Badges and colors",
+        enabledByDefault: true,
+        rules: [],
+    }],
 };
 
 const scaffoldResult = { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
@@ -52,6 +64,8 @@ describe("BlueprintEngine", () => {
             readManifest: vi.fn().mockResolvedValue(null),
             writeManifest: vi.fn().mockResolvedValue(undefined),
             writeDecorations: vi.fn().mockResolvedValue(undefined),
+            writeFeatures: vi.fn().mockResolvedValue(undefined),
+            readFeatures: vi.fn().mockResolvedValue(null),
         };
         mockScaffold = {
             scaffoldTree: vi.fn().mockResolvedValue(scaffoldResult),
@@ -103,7 +117,20 @@ describe("BlueprintEngine", () => {
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockManifest.writeDecorations).toHaveBeenCalledWith(workspaceRoot, {
-                rules: mockDefinition.decorations,
+                rules: mockDefinition.features[0].rules,
+            });
+        });
+
+        it("should write features.json with enabledByDefault values", async () => {
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+            expect(mockManifest.writeFeatures).toHaveBeenCalledWith(workspaceRoot, {
+                features: [{
+                    id: "decorations",
+                    name: "Explorer Decorations",
+                    description: "Badges and colors",
+                    enabled: true,
+                }],
             });
         });
 
@@ -111,11 +138,12 @@ describe("BlueprintEngine", () => {
             const callOrder: string[] = [];
             mockManifest.writeManifest.mockImplementation(async () => { callOrder.push("manifest"); });
             mockManifest.writeDecorations.mockImplementation(async () => { callOrder.push("decorations"); });
+            mockManifest.writeFeatures.mockImplementation(async () => { callOrder.push("features"); });
 
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
 
-            expect(callOrder).toEqual(["manifest", "decorations"]);
+            expect(callOrder).toEqual(["manifest", "decorations", "features"]);
         });
 
         it("should propagate errors thrown by the registry", async () => {
@@ -149,6 +177,7 @@ describe("BlueprintEngine", () => {
                     foldersToCleanup: [],
                     unmodifiedBlueprintFiles: ["Folder/file.md"],
                     modifiedBlueprintFiles: [],
+                    currentFileHashes: {},
                 }),
                 promptFileOverwrite: vi.fn(),
             };
@@ -177,6 +206,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: ["OldFolder"],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: [],
+                currentFileHashes: {},
             });
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
@@ -213,6 +243,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
             // Make the scaffold mock actually invoke the seed callback for the modified file,
@@ -231,6 +262,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
             mockScaffold.scaffoldTree.mockResolvedValue({
@@ -239,17 +271,33 @@ describe("BlueprintEngine", () => {
             });
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
-            // Skipped file should appear in the final manifest with its current on-disk hash.
-            expect(mockFs.readFile).toHaveBeenCalled();
+            // Skipped file uses the cached hash from the plan — no extra fs.readFile needed.
+            expect(mockFs.readFile).not.toHaveBeenCalled();
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
-            expect(writtenManifest.fileManifest["Folder/file.md"]).toMatch(/^sha256:/);
+            expect(writtenManifest.fileManifest["Folder/file.md"]).toBe("sha256:modified");
         });
 
         it("should write updated decoration rules after reinit", async () => {
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockManifest.writeDecorations).toHaveBeenCalledWith(workspaceRoot, {
-                rules: mockDefinition.decorations,
+                rules: mockDefinition.features[0].rules,
+            });
+        });
+
+        it("should write merged features.json after reinit preserving user toggles", async () => {
+            mockManifest.readFeatures.mockResolvedValue({
+                features: [{ id: "decorations", name: "Old", description: "Old", enabled: false }],
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockManifest.writeFeatures).toHaveBeenCalledWith(workspaceRoot, {
+                features: [{
+                    id: "decorations",
+                    name: "Explorer Decorations",
+                    description: "Badges and colors",
+                    enabled: false,
+                }],
             });
         });
 
@@ -275,6 +323,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
             let callbackResult: any;
@@ -293,6 +342,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/a.md", "Folder/b.md"],
+                currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -313,6 +363,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/a.md", "Folder/sub/b.md"],
+                currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder-recursive");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -333,14 +384,16 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: [],
+                currentFileHashes: { "Folder/deleted.md": null },
             });
             mockScaffold.scaffoldTree.mockResolvedValue({
                 fileManifest: {},
                 skippedPaths: ["Folder/deleted.md"],
             });
-            mockFs.readFile.mockRejectedValue(new Error("file not found"));
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            // Cached null hash means file was deleted — no fs.readFile needed.
+            expect(mockFs.readFile).not.toHaveBeenCalled();
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.fileManifest).not.toHaveProperty("Folder/deleted.md");
         });
@@ -350,6 +403,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -371,6 +425,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
             mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
@@ -387,6 +442,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/a.md", "Folder/b.md"],
+                currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -416,6 +472,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/a.md", "Folder/sub/b.md"],
+                currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder-recursive");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -439,6 +496,7 @@ describe("BlueprintEngine", () => {
                 foldersToCleanup: [],
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: ["Folder/file.md"],
+                currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
             mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
@@ -468,5 +526,94 @@ describe("BlueprintEngine", () => {
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockFs.copy).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe("buildFeaturesConfig", () => {
+    it("should map enabledByDefault to enabled for each feature", () => {
+        const features: BlueprintFeature[] = [{
+            id: "decorations",
+            name: "Decorations",
+            description: "Badges",
+            enabledByDefault: true,
+            rules: [],
+        }];
+        const config = buildFeaturesConfig(features);
+        expect(config.features).toEqual([{
+            id: "decorations",
+            name: "Decorations",
+            description: "Badges",
+            enabled: true,
+        }]);
+    });
+
+    it("should return empty features array for empty input", () => {
+        expect(buildFeaturesConfig([])).toEqual({ features: [] });
+    });
+});
+
+describe("extractDecorationRules", () => {
+    it("should return rules from the decorations feature", () => {
+        const features: BlueprintFeature[] = [{
+            id: "decorations",
+            name: "D",
+            description: "D",
+            enabledByDefault: true,
+            rules: [{ filter: "Folder/", color: "charts.green" }],
+        }];
+        expect(extractDecorationRules(features)).toEqual([{ filter: "Folder/", color: "charts.green" }]);
+    });
+
+    it("should return empty array when no decorations feature exists", () => {
+        expect(extractDecorationRules([])).toEqual([]);
+    });
+});
+
+describe("mergeFeaturesConfig", () => {
+    const baseFeatures: BlueprintFeature[] = [{
+        id: "decorations",
+        name: "New Name",
+        description: "New Desc",
+        enabledByDefault: true,
+        rules: [],
+    }];
+
+    it("should preserve user's enabled state for existing features", () => {
+        const existing: FeaturesConfig = {
+            features: [{ id: "decorations", name: "Old", description: "Old", enabled: false }],
+        };
+        const result = mergeFeaturesConfig(baseFeatures, existing);
+        expect(result.features[0].enabled).toBe(false);
+    });
+
+    it("should update name and description from the new blueprint", () => {
+        const existing: FeaturesConfig = {
+            features: [{ id: "decorations", name: "Old", description: "Old", enabled: false }],
+        };
+        const result = mergeFeaturesConfig(baseFeatures, existing);
+        expect(result.features[0].name).toBe("New Name");
+        expect(result.features[0].description).toBe("New Desc");
+    });
+
+    it("should use enabledByDefault for new features not in existing config", () => {
+        const result = mergeFeaturesConfig(baseFeatures, { features: [] });
+        expect(result.features[0].enabled).toBe(true);
+    });
+
+    it("should drop features that no longer exist in the new blueprint", () => {
+        const existing: FeaturesConfig = {
+            features: [
+                { id: "decorations", name: "D", description: "D", enabled: true },
+                { id: "removed", name: "R", description: "R", enabled: true },
+            ],
+        };
+        const result = mergeFeaturesConfig(baseFeatures, existing);
+        expect(result.features).toHaveLength(1);
+        expect(result.features[0].id).toBe("decorations");
+    });
+
+    it("should use enabledByDefault when existing config is null", () => {
+        const result = mergeFeaturesConfig(baseFeatures, null);
+        expect(result.features[0].enabled).toBe(true);
     });
 });

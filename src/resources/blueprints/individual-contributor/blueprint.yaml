@@ -12,12 +12,17 @@ workspace:
   - name: "03-Inbox/"
   - name: "04-Archive/"
 
-decorations:
-  - filter: "00-ToDo/"
-    color: "charts.yellow"
-    badge: "TD"
-    tooltip: "Active tasks"
-    propagate: true
-  - filter: "04-Archive/"
-    color: "charts.grey"
-    tooltip: "Archived items"
+features:
+  - id: "decorations"
+    name: "Explorer Decorations"
+    description: "Badges and colors in the VS Code Explorer"
+    enabledByDefault: true
+    rules:
+      - filter: "00-ToDo/"
+        color: "charts.yellow"
+        badge: "TD"
+        tooltip: "Active tasks"
+        propagate: true
+      - filter: "04-Archive/"
+        color: "charts.grey"
+        tooltip: "Archived items"

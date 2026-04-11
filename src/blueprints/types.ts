@@ -26,6 +26,23 @@ export interface DecorationRule {
     propagate?: boolean;
 }
 
+/** Common properties shared by all blueprint feature entries. */
+export interface FeatureEntry {
+    id: string;
+    name: string;
+    description: string;
+    enabledByDefault: boolean;
+}
+
+/** A decorations feature — provides Explorer badges and colors based on filter rules. */
+export interface DecorationsFeatureEntry extends FeatureEntry {
+    id: "decorations";
+    rules: DecorationRule[];
+}
+
+/** Discriminated union of all known feature types. Expand as new features are added. */
+export type BlueprintFeature = DecorationsFeatureEntry;
+
 /** The fully parsed, validated representation of a blueprint.yaml file. */
 export interface BlueprintDefinition {
     id: string;
@@ -33,7 +50,20 @@ export interface BlueprintDefinition {
     description: string;
     version: string;
     workspace: WorkspaceEntry[];
-    decorations: DecorationRule[];
+    features: BlueprintFeature[];
+}
+
+/** Per-feature enabled/disabled state — stored in .memoria/features.json. */
+export interface FeatureState {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+}
+
+/** Stored in .memoria/features.json — tracks user's feature toggle choices. */
+export interface FeaturesConfig {
+    features: FeatureState[];
 }
 
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
@@ -84,6 +114,8 @@ export interface ReinitPlan {
     unmodifiedBlueprintFiles: string[];
     /** Blueprint file paths whose on-disk content differs from the stored hash (user has modified them). */
     modifiedBlueprintFiles: string[];
+    /** Cached on-disk hashes computed during conflict analysis — avoids re-reading files in the engine. */
+    currentFileHashes: Record<string, string | null>;
 }
 
 /**

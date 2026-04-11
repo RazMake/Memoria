@@ -8,7 +8,9 @@ import { ReinitConflictResolver } from "./blueprints/reinitConflictResolver";
 import { getWorkspaceRoots } from "./blueprints/workspaceUtils";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
+import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
+import { FeatureManager } from "./features/featureManager";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
 const reporterFactory: TelemetryReporterFactory = (connectionString) => {
@@ -17,7 +19,6 @@ const reporterFactory: TelemetryReporterFactory = (connectionString) => {
 };
 
 // Extension entry point — called once when the activation event fires.
-// Initializes telemetry and registers all commands.
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     // Telemetry is initialized asynchronously so it does not block the activation
     // critical path. DeferredTelemetryLogger silently drops events until the real
@@ -36,6 +37,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const resolver = new ReinitConflictResolver(vscode.workspace.fs);
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
+    const featureManager = new FeatureManager(manifest);
+    featureManager.register("decorations", (root, enabled) => decorationProvider.refresh(root, enabled));
 
     // Register the decoration provider eagerly so VS Code is already listening when
     // refresh() fires the change event — otherwise the first fire is wasted.
@@ -48,10 +51,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const roots = getWorkspaceRoots();
     const initializedRoot = await manifest.findInitializedRoot(roots);
 
-    // Set the context key and load decoration rules in parallel — they are independent.
+    // Set the context key and refresh features in parallel — they are independent.
     await Promise.all([
         updateWorkspaceInitializedContext(initializedRoot),
-        decorationProvider.refresh(initializedRoot),
+        featureManager.refresh(initializedRoot),
     ]);
 
     // Check for blueprint updates in the background — this may show a dialog that blocks
@@ -62,37 +65,60 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registry,
         engine,
         resolver,
-        decorationProvider
+        featureManager
     ).catch(() => {
         /* update check is best-effort — swallow errors silently */
     });
 
     const onWorkspaceInitialized = async (workspaceRoot: vscode.Uri): Promise<void> => {
         await updateWorkspaceInitializedContext(workspaceRoot);
-        await decorationProvider.refresh(workspaceRoot);
+        await featureManager.refresh(workspaceRoot);
     };
 
-    // Keep the context key in sync when the initialization marker is
-    // created or deleted outside our own commands.
-    //
-    // Two complementary listeners are needed:
-    //  • FileSystemWatcher — fires for external FS changes (terminal, OS, etc.)
-    //  • onDidDeleteFiles  — fires when the user deletes via the VS Code Explorer.
-    //    (Deleting the .memoria/ *directory* does not trigger the file-level watcher
-    //     because the glob targets a child file, not the directory itself.)
+    registerFileWatchers(context, roots, manifest, featureManager, initializedRoot);
+    registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, onWorkspaceInitialized);
+}
+
+export function deactivate(): void {}
+
+/**
+ * Watches .memoria/blueprint.json across all workspace roots so the context key
+ * and features stay in sync when external tools or the user modify the file system.
+ *
+ * Two complementary listeners are needed:
+ *  - FileSystemWatcher — fires for external FS changes (terminal, OS, etc.)
+ *  - onDidDeleteFiles  — fires when the user deletes via the VS Code Explorer.
+ *    (Deleting the .memoria/ *directory* does not trigger the file-level watcher
+ *     because the glob targets a child file, not the directory itself.)
+ */
+function registerFileWatchers(
+    context: vscode.ExtensionContext,
+    roots: vscode.Uri[],
+    manifest: ManifestManager,
+    featureManager: FeatureManager,
+    initialRoot: vscode.Uri | null
+): void {
+    let lastKnownRoot = initialRoot?.toString() ?? null;
+
     const recheckInitialization = async (): Promise<void> => {
         const currentRoot = await manifest.findInitializedRoot(roots);
+        const currentRootStr = currentRoot?.toString() ?? null;
+        if (currentRootStr === lastKnownRoot) {
+            return;
+        }
+        lastKnownRoot = currentRootStr;
         await updateWorkspaceInitializedContext(currentRoot);
-        await decorationProvider.refresh(currentRoot);
+        await featureManager.refresh(currentRoot);
     };
 
-    if (roots.length > 0) {
-        const manifestWatcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(roots[0], ".memoria/blueprint.json")
+    // Watch every root — not just the first — so multi-root workspaces are fully covered.
+    for (const root of roots) {
+        const watcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(root, ".memoria/blueprint.json")
         );
-        manifestWatcher.onDidCreate(recheckInitialization);
-        manifestWatcher.onDidDelete(recheckInitialization);
-        context.subscriptions.push(manifestWatcher);
+        watcher.onDidCreate(recheckInitialization);
+        watcher.onDidDelete(recheckInitialization);
+        context.subscriptions.push(watcher);
     }
 
     const memoriaDir = "/.memoria";
@@ -106,8 +132,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         })
     );
+}
 
-    // Push disposables to context.subscriptions so VS Code cleans them up on deactivation.
+function registerCommands(
+    context: vscode.ExtensionContext,
+    engine: BlueprintEngine,
+    registry: BlueprintRegistry,
+    manifest: ManifestManager,
+    telemetry: DeferredTelemetryLogger,
+    resolver: ReinitConflictResolver,
+    featureManager: FeatureManager,
+    onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
+): void {
     context.subscriptions.push(
         vscode.commands.registerCommand(
             "memoria.initializeWorkspace",
@@ -123,11 +159,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand(
             "memoria.toggleDotFolders",
             createToggleDotFoldersCommand(manifest, telemetry)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.manageFeatures",
+            createManageFeaturesCommand(manifest, telemetry, featureManager)
         )
     );
 }
-
-export function deactivate(): void {}
 
 /**
  * Sets the VS Code context key `memoria.workspaceInitialized`.
@@ -157,7 +195,7 @@ async function checkForBlueprintUpdates(
     registry: BlueprintRegistry,
     engine: BlueprintEngine,
     resolver: ReinitConflictResolver,
-    decorationProvider: BlueprintDecorationProvider
+    featureManager: FeatureManager
 ): Promise<void> {
     if (!initializedRoot) {
         return;
@@ -193,7 +231,7 @@ async function checkForBlueprintUpdates(
     try {
         await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
         await updateWorkspaceInitializedContext(initializedRoot);
-        await decorationProvider.refresh(initializedRoot);
+        await featureManager.refresh(initializedRoot);
         vscode.window.showInformationMessage(
             `Memoria: Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
         );

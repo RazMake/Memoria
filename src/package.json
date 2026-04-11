@@ -25,6 +25,11 @@
                 "command": "memoria.toggleDotFolders",
                 "title": "Toggle dot-folders",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.manageFeatures",
+                "title": "Manage features",
+                "category": "Memoria"
             }
         ],
         "menus": {
@@ -34,6 +39,10 @@
                 },
                 {
                     "command": "memoria.toggleDotFolders",
+                    "when": "memoria.workspaceInitialized"
+                },
+                {
+                    "command": "memoria.manageFeatures",
                     "when": "memoria.workspaceInitialized"
                 }
             ]

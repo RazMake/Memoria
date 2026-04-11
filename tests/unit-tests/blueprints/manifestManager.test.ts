@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ManifestManager } from "../../../src/blueprints/manifestManager";
-import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig } from "../../../src/blueprints/types";
+import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "../../../src/blueprints/types";
 
 const mockStat = vi.fn();
 const mockReadFile = vi.fn();
@@ -55,30 +55,30 @@ describe("ManifestManager", () => {
         mockWriteFile.mockResolvedValue(undefined);
     });
 
-    describe("computeFileHash", () => {
-        it("should return a sha256: prefixed lowercase hex hash", () => {
-            const manager = new ManifestManager(mockFs);
-            const hash = manager.computeFileHash(encoder.encode("hello"));
+    describe("computeFileHash (via hashUtils)", () => {
+        it("should return a sha256: prefixed lowercase hex hash", async () => {
+            const { computeFileHash } = await import("../../../src/blueprints/hashUtils");
+            const hash = computeFileHash(encoder.encode("hello"));
             expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
         });
 
-        it("should return consistent hashes for the same content", () => {
-            const manager = new ManifestManager(mockFs);
-            const a = manager.computeFileHash(encoder.encode("same"));
-            const b = manager.computeFileHash(encoder.encode("same"));
+        it("should return consistent hashes for the same content", async () => {
+            const { computeFileHash } = await import("../../../src/blueprints/hashUtils");
+            const a = computeFileHash(encoder.encode("same"));
+            const b = computeFileHash(encoder.encode("same"));
             expect(a).toBe(b);
         });
 
-        it("should return different hashes for different content", () => {
-            const manager = new ManifestManager(mockFs);
-            const a = manager.computeFileHash(encoder.encode("abc"));
-            const b = manager.computeFileHash(encoder.encode("xyz"));
+        it("should return different hashes for different content", async () => {
+            const { computeFileHash } = await import("../../../src/blueprints/hashUtils");
+            const a = computeFileHash(encoder.encode("abc"));
+            const b = computeFileHash(encoder.encode("xyz"));
             expect(a).not.toBe(b);
         });
 
-        it("should return a lowercase hex hash (no uppercase letters)", () => {
-            const manager = new ManifestManager(mockFs);
-            const hash = manager.computeFileHash(encoder.encode("test content"));
+        it("should return a lowercase hex hash (no uppercase letters)", async () => {
+            const { computeFileHash } = await import("../../../src/blueprints/hashUtils");
+            const hash = computeFileHash(encoder.encode("test content"));
             expect(hash).toBe(hash.toLowerCase());
         });
     });
@@ -162,6 +162,32 @@ describe("ManifestManager", () => {
         it("should write dotfolders config to dotfolders.json", async () => {
             const manager = new ManifestManager(mockFs);
             await manager.writeDotfolders(workspaceRoot, config);
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+            const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
+            expect(written).toEqual(config);
+        });
+    });
+
+    describe("readFeatures / writeFeatures", () => {
+        const config: FeaturesConfig = {
+            features: [{ id: "decorations", name: "Decorations", description: "Badges", enabled: true }],
+        };
+
+        it("should return null when features.json is not found", async () => {
+            mockReadFile.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readFeatures(workspaceRoot)).toBeNull();
+        });
+
+        it("should return parsed config when features.json exists", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(config)));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readFeatures(workspaceRoot)).toEqual(config);
+        });
+
+        it("should write features config to features.json", async () => {
+            const manager = new ManifestManager(mockFs);
+            await manager.writeFeatures(workspaceRoot, config);
             expect(mockCreateDirectory).toHaveBeenCalledOnce();
             const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
             expect(written).toEqual(config);

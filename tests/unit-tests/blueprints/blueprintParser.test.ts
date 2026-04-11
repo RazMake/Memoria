@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseBlueprintYaml, parseWorkspaceTree, parseDecorationRules } from "../../../src/blueprints/blueprintParser";
+import { parseBlueprintYaml, parseWorkspaceTree, parseDecorationRules, parseFeatures } from "../../../src/blueprints/blueprintParser";
 
 // blueprintParser is pure logic with no VS Code API dependency — no mocks needed.
 
 describe("parseBlueprintYaml", () => {
-    it("should parse a valid blueprint YAML with workspace and decorations", () => {
+    it("should parse a valid blueprint YAML with workspace and features", () => {
         const yaml = `
 id: "test-blueprint"
 name: "Test Blueprint"
@@ -15,10 +15,15 @@ workspace:
     children:
       - name: "File.md"
   - name: "Root.md"
-decorations:
-  - filter: "Folder1/"
-    color: "charts.green"
-    badge: "F1"
+features:
+  - id: "decorations"
+    name: "Explorer Decorations"
+    description: "Badges and colors"
+    enabledByDefault: true
+    rules:
+      - filter: "Folder1/"
+        color: "charts.green"
+        badge: "F1"
 `;
         const result = parseBlueprintYaml(yaml);
 
@@ -27,10 +32,11 @@ decorations:
         expect(result.description).toBe("A test.");
         expect(result.version).toBe("1.0.0");
         expect(result.workspace).toHaveLength(2);
-        expect(result.decorations).toHaveLength(1);
+        expect(result.features).toHaveLength(1);
+        expect(result.features[0].id).toBe("decorations");
     });
 
-    it("should return empty decorations array when decorations section is absent", () => {
+    it("should throw when features field is missing", () => {
         const yaml = `
 id: "test-blueprint"
 name: "Test"
@@ -39,8 +45,7 @@ version: "1.0.0"
 workspace:
   - name: "File.md"
 `;
-        const result = parseBlueprintYaml(yaml);
-        expect(result.decorations).toEqual([]);
+        expect(() => parseBlueprintYaml(yaml)).toThrow('"features"');
     });
 
     it("should throw when YAML is not valid syntax", () => {
@@ -195,5 +200,67 @@ describe("parseDecorationRules", () => {
     it("should omit propagate when not present", () => {
         const rules = parseDecorationRules([{ filter: "f/", color: "charts.blue" }]);
         expect(rules[0].propagate).toBeUndefined();
+    });
+});
+
+describe("parseFeatures", () => {
+    it("should parse a valid decorations feature", () => {
+        const features = parseFeatures([
+            {
+                id: "decorations",
+                name: "Explorer Decorations",
+                description: "Badges and colors",
+                enabledByDefault: true,
+                rules: [{ filter: "Folder/", color: "charts.green" }],
+            },
+        ]);
+        expect(features).toHaveLength(1);
+        expect(features[0].id).toBe("decorations");
+        expect(features[0].name).toBe("Explorer Decorations");
+        expect(features[0].enabledByDefault).toBe(true);
+        expect(features[0].rules).toHaveLength(1);
+    });
+
+    it("should throw when entry is not an object", () => {
+        expect(() => parseFeatures(["not-an-object"])).toThrow("must be an object");
+    });
+
+    it("should throw when id is missing", () => {
+        expect(() => parseFeatures([{ name: "N", description: "D", enabledByDefault: true }])).toThrow('"id"');
+    });
+
+    it("should throw when name is missing", () => {
+        expect(() => parseFeatures([{ id: "decorations", description: "D", enabledByDefault: true }])).toThrow('"name"');
+    });
+
+    it("should throw when description is missing", () => {
+        expect(() => parseFeatures([{ id: "decorations", name: "N", enabledByDefault: true }])).toThrow('"description"');
+    });
+
+    it("should throw when enabledByDefault is missing", () => {
+        expect(() => parseFeatures([{ id: "decorations", name: "N", description: "D" }])).toThrow('"enabledByDefault"');
+    });
+
+    it("should throw when enabledByDefault is not a boolean", () => {
+        expect(() => parseFeatures([{ id: "decorations", name: "N", description: "D", enabledByDefault: "yes" }])).toThrow('"enabledByDefault"');
+    });
+
+    it("should throw for unknown feature id", () => {
+        expect(() =>
+            parseFeatures([{ id: "unknown-feature", name: "N", description: "D", enabledByDefault: true }])
+        ).toThrow('unknown feature id "unknown-feature"');
+    });
+
+    it("should accept enabledByDefault: false", () => {
+        const features = parseFeatures([
+            {
+                id: "decorations",
+                name: "N",
+                description: "D",
+                enabledByDefault: false,
+                rules: [],
+            },
+        ]);
+        expect(features[0].enabledByDefault).toBe(false);
     });
 });

@@ -8,7 +8,6 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { DecorationRule } from "../../blueprints/types";
-import { getWorkspaceRoots } from "../../blueprints/workspaceUtils";
 
 export class BlueprintDecorationProvider implements vscode.FileDecorationProvider {
     // EventEmitter drives VS Code's re-query of all decorated URIs. Firing with `undefined`
@@ -27,19 +26,12 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
     /**
      * Reloads decoration rules from .memoria/decorations.json and fires the change event
-     * so VS Code re-queries all URIs. Should be called after every successful init/reinit.
+     * so VS Code re-queries all URIs. Called by FeatureManager after every refresh cycle.
      *
-     * When `initializedRoot` is provided the expensive `findInitializedRoot` lookup is
-     * skipped — this avoids redundant I/O when the caller already knows the root (e.g.
-     * during activation). When omitted, the root is discovered automatically.
+     * When `enabled` is false the provider clears all rules so no decorations are shown.
      */
-    async refresh(initializedRoot?: vscode.Uri | null): Promise<void> {
-        if (initializedRoot === undefined) {
-            const roots = getWorkspaceRoots();
-            initializedRoot = await this.manifest.findInitializedRoot(roots);
-        }
-
-        if (initializedRoot) {
+    async refresh(initializedRoot: vscode.Uri | null, enabled: boolean): Promise<void> {
+        if (initializedRoot && enabled) {
             const config = await this.manifest.readDecorations(initializedRoot);
             this.workspaceRoot = initializedRoot;
             this.rules = config?.rules ?? [];

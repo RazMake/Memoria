@@ -81,6 +81,7 @@ describe("ReinitConflictResolver", () => {
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition);
 
             expect(plan.foldersToCleanup).toEqual([]);
+            expect(plan.currentFileHashes).toBeDefined();
         });
 
         it("should identify extra folders not in the new blueprint", async () => {
@@ -141,6 +142,19 @@ describe("ReinitConflictResolver", () => {
 
             expect(plan.modifiedBlueprintFiles).toContain("00-ToDo/Main.todo");
             expect(plan.unmodifiedBlueprintFiles).not.toContain("00-ToDo/Main.todo");
+        });
+
+        it("should populate currentFileHashes for files that have a stored hash", async () => {
+            mockReadDirectory.mockResolvedValue([["00-ToDo", 2], ["01-ToRemember", 2]]);
+            mockReadFile.mockResolvedValue(encoder.encode("# user modifications"));
+            mockShowQuickPick.mockResolvedValue([]);
+
+            const resolver = new ReinitConflictResolver(mockFs);
+            const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition);
+
+            expect(plan.currentFileHashes["00-ToDo/Main.todo"]).toBe(
+                computeFileHash(encoder.encode("# user modifications"))
+            );
         });
 
         it("should treat missing files (not in old manifest) as unmodified (new in blueprint)", async () => {

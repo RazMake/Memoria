@@ -7,8 +7,7 @@
 // without storing any file content or PII.
 
 import * as vscode from "vscode";
-import { computeFileHash } from "./hashUtils";
-import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig } from "./types";
+import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -19,11 +18,6 @@ export class ManifestManager {
 
     constructor(fs: typeof vscode.workspace.fs) {
         this.fs = fs;
-    }
-
-    /** Computes SHA-256 of the given bytes. Returns "sha256:<lowercase hex>". */
-    computeFileHash(content: Uint8Array): string {
-        return computeFileHash(content);
     }
 
     /** Returns true when .memoria/blueprint.json exists at the workspace root. */
@@ -113,6 +107,15 @@ export class ManifestManager {
         await this.writeJson(this.dotfoldersUri(workspaceRoot), config);
     }
 
+    async readFeatures(workspaceRoot: vscode.Uri): Promise<FeaturesConfig | null> {
+        return this.readJson<FeaturesConfig>(this.featuresUri(workspaceRoot));
+    }
+
+    async writeFeatures(workspaceRoot: vscode.Uri, config: FeaturesConfig): Promise<void> {
+        await this.ensureMemoriaDir(workspaceRoot);
+        await this.writeJson(this.featuresUri(workspaceRoot), config);
+    }
+
     private manifestUri(root: vscode.Uri): vscode.Uri {
         return vscode.Uri.joinPath(root, ".memoria", "blueprint.json");
     }
@@ -123,6 +126,10 @@ export class ManifestManager {
 
     private dotfoldersUri(root: vscode.Uri): vscode.Uri {
         return vscode.Uri.joinPath(root, ".memoria", "dotfolders.json");
+    }
+
+    private featuresUri(root: vscode.Uri): vscode.Uri {
+        return vscode.Uri.joinPath(root, ".memoria", "features.json");
     }
 
     private memoriaDir(root: vscode.Uri): vscode.Uri {

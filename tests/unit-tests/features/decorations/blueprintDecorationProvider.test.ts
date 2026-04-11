@@ -8,16 +8,9 @@ import {
 // VS Code mock
 // ────────────────────────────────────────────────────────────────────────────
 
-const mockWorkspaceFolders: any[] = [];
-const mockFindInitializedRoot = vi.fn<any, any>();
 const mockReadDecorations = vi.fn<any, any>();
 
 vi.mock("vscode", () => ({
-    workspace: {
-        get workspaceFolders() {
-            return mockWorkspaceFolders;
-        },
-    },
     EventEmitter: class {
         fire = vi.fn();
         event = vi.fn();
@@ -43,7 +36,6 @@ const makeUri = (path: string) => ({ path } as any);
 
 const makeManifest = () =>
     ({
-        findInitializedRoot: mockFindInitializedRoot,
         readDecorations: mockReadDecorations,
     }) as any;
 
@@ -141,77 +133,65 @@ describe("matchesFilter", () => {
 describe("BlueprintDecorationProvider", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockWorkspaceFolders.length = 0;
     });
 
     // ── refresh ──────────────────────────────────────────────────────────────
 
     describe("refresh", () => {
-        it("should load decoration rules from the initialized root", async () => {
-            mockWorkspaceFolders.push({ uri: workspaceRoot, name: "workspace" });
-            mockFindInitializedRoot.mockResolvedValue(workspaceRoot);
+        it("should load decoration rules when enabled is true", async () => {
             mockReadDecorations.mockResolvedValue({ rules: defaultRules });
 
             const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh();
+            await provider.refresh(workspaceRoot, true);
 
             expect(mockReadDecorations).toHaveBeenCalledWith(workspaceRoot);
         });
 
-        it("should clear rules when no root is initialized", async () => {
-            mockWorkspaceFolders.push({ uri: workspaceRoot, name: "workspace" });
-            mockFindInitializedRoot.mockResolvedValue(null);
+        it("should clear rules when root is null", async () => {
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            await provider.refresh(null, false);
+
+            expect(mockReadDecorations).not.toHaveBeenCalled();
+            expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
+        });
+
+        it("should clear rules when enabled is false", async () => {
+            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
 
             const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh();
+            // First load rules
+            await provider.refresh(workspaceRoot, true);
+            expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeDefined();
 
-            // No decorations should be returned after clearing.
+            // Then disable
+            await provider.refresh(workspaceRoot, false);
             expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
         });
 
         it("should fire the change event after loading rules", async () => {
-            mockWorkspaceFolders.push({ uri: workspaceRoot, name: "workspace" });
-            mockFindInitializedRoot.mockResolvedValue(workspaceRoot);
             mockReadDecorations.mockResolvedValue({ rules: defaultRules });
 
             const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh();
+            await provider.refresh(workspaceRoot, true);
 
-            // The internal EventEmitter.fire was called (cast needed because it's a mock class).
+            const emitter = (provider as any)._onDidChangeFileDecorations;
+            expect(emitter.fire).toHaveBeenCalledWith(undefined);
+        });
+
+        it("should fire the change event when disabling", async () => {
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            await provider.refresh(workspaceRoot, false);
+
             const emitter = (provider as any)._onDidChangeFileDecorations;
             expect(emitter.fire).toHaveBeenCalledWith(undefined);
         });
 
         it("should treat missing decorations.json as empty rules", async () => {
-            mockWorkspaceFolders.push({ uri: workspaceRoot, name: "workspace" });
-            mockFindInitializedRoot.mockResolvedValue(workspaceRoot);
             mockReadDecorations.mockResolvedValue(null);
 
             const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh();
+            await provider.refresh(workspaceRoot, true);
 
-            expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
-        });
-
-        it("should skip findInitializedRoot when a pre-computed root is provided", async () => {
-            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
-
-            const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh(workspaceRoot);
-
-            expect(mockFindInitializedRoot).not.toHaveBeenCalled();
-            expect(mockReadDecorations).toHaveBeenCalledWith(workspaceRoot);
-            const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
-            expect(decoration).toBeDefined();
-            expect(decoration?.badge).toBe("TD");
-        });
-
-        it("should clear rules when pre-computed root is null", async () => {
-            const provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh(null);
-
-            expect(mockFindInitializedRoot).not.toHaveBeenCalled();
-            expect(mockReadDecorations).not.toHaveBeenCalled();
             expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
         });
     });
@@ -222,12 +202,10 @@ describe("BlueprintDecorationProvider", () => {
         let provider: BlueprintDecorationProvider;
 
         beforeEach(async () => {
-            mockWorkspaceFolders.push({ uri: workspaceRoot, name: "workspace" });
-            mockFindInitializedRoot.mockResolvedValue(workspaceRoot);
             mockReadDecorations.mockResolvedValue({ rules: defaultRules });
 
             provider = new BlueprintDecorationProvider(makeManifest());
-            await provider.refresh();
+            await provider.refresh(workspaceRoot, true);
         });
 
         it("should return undefined before refresh has been called", () => {
@@ -276,7 +254,7 @@ describe("BlueprintDecorationProvider", () => {
                     { filter: "*.todo", color: "charts.blue", badge: "TK" },
                 ],
             });
-            await provider.refresh();
+            await provider.refresh(workspaceRoot, true);
 
             // The *.todo wildcard rule matches; the exact-path rule does not for a nested file.
             const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo/Main.todo"));
@@ -300,7 +278,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", badge: "TD", tooltip: "Active tasks" }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
                 expect(decoration?.tooltip).toBe("Active tasks");
@@ -310,7 +288,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", tooltip: "Tasks folder" }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
                 expect(decoration).toBeDefined();
@@ -325,7 +303,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", badge: "TD" }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo/Main.todo"));
                 expect(decoration).toBeUndefined();
@@ -335,7 +313,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", badge: "TD", propagate: true }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
                 expect(decoration).toBeDefined();
@@ -346,7 +324,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", badge: "TD", propagate: true }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo/Main.todo"));
                 expect(decoration).toBeDefined();
@@ -358,7 +336,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", propagate: true }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/00-ToDo/Sub/Deep.md"));
                 expect(decoration).toBeDefined();
@@ -369,7 +347,7 @@ describe("BlueprintDecorationProvider", () => {
                 mockReadDecorations.mockResolvedValue({
                     rules: [{ filter: "00-ToDo/", color: "charts.yellow", propagate: true }],
                 });
-                await provider.refresh();
+                await provider.refresh(workspaceRoot, true);
 
                 const decoration = provider.provideFileDecoration(makeUri("/workspace/01-People/Note.md"));
                 expect(decoration).toBeUndefined();
@@ -380,9 +358,7 @@ describe("BlueprintDecorationProvider", () => {
     // ── dispose ───────────────────────────────────────────────────────────────
 
     describe("dispose", () => {
-        it("should dispose the internal EventEmitter", async () => {
-            mockFindInitializedRoot.mockResolvedValue(null);
-
+        it("should dispose the internal EventEmitter", () => {
             const provider = new BlueprintDecorationProvider(makeManifest());
             provider.dispose();
 

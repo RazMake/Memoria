@@ -117,6 +117,7 @@ describe("extension", () => {
 
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.initializeWorkspace", expect.any(Function));
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.toggleDotFolders", expect.any(Function));
+        expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.manageFeatures", expect.any(Function));
     });
 
     it("deactivate returns void", async () => {

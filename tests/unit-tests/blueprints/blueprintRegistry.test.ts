@@ -32,7 +32,12 @@ description: "A test blueprint."
 version: "1.2.3"
 workspace:
   - name: "Folder/"
-decorations: []
+features:
+  - id: "decorations"
+    name: "Explorer Decorations"
+    description: "Badges and colors"
+    enabledByDefault: true
+    rules: []
 `;
 
 const encoder = new TextEncoder();
