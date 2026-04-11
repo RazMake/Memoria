@@ -1,0 +1,53 @@
+# System Patterns — Memoria
+
+## Architecture
+
+```
+extension.ts (activation, command registration, context key)
+  ├── commands/
+  │   ├── initializeWorkspace.ts  — factory function → command handler
+  │   └── toggleDotFolders.ts     — factory function → command handler
+  └── blueprints/
+      ├── types.ts                — shared data contracts (interfaces only)
+      ├── blueprintParser.ts      — YAML → BlueprintDefinition (pure, no vscode)
+      ├── blueprintRegistry.ts    — discovers bundled blueprints via extensionUri
+      ├── manifestManager.ts      — .memoria/ R/W, SHA-256 hashing, single owner of metadata dir
+      ├── fileScaffold.ts         — creates folders/files via vscode.workspace.fs
+      ├── blueprintEngine.ts      — thin orchestrator (init + reinit flows)
+      └── reinitConflictResolver.ts — conflict resolution UI (folder cleanup, file overwrite prompts)
+```
+
+## Key Design Patterns
+
+### Factory Functions for Commands
+Command handlers are created by factory functions (`createInitializeWorkspaceCommand`, `createToggleDotFoldersCommand`) that receive dependencies at construction time. This avoids classes for single-operation callbacks while preserving testability via DI.
+
+### Composition in Engine
+`BlueprintEngine` is a thin orchestrator that sequences calls to `BlueprintRegistry`, `FileScaffold`, and `ManifestManager`. All domain logic lives in the collaborators; the engine just sequences them.
+
+### Single Owner of `.memoria/`
+`ManifestManager` is the sole component that reads/writes the `.memoria/` directory. It handles `blueprint.json`, `decorations.json`, and `dotfolders.json`. All write methods call `ensureMemoriaDir()` internally, so no other component needs to know about the metadata folder structure.
+
+### SKIP_FILE Symbol
+`FileScaffold` exports a `SKIP_FILE` symbol that seed callbacks return to signal "do not overwrite this file". This avoids boolean/null ambiguity and enables clean scaffold result tracking (`skippedPaths`).
+
+### Single-Root `.memoria` Enforcement
+In multi-root workspaces, only one root may have `.memoria/` at a time. `ManifestManager.findInitializedRoot()` discovers which root (if any) is initialized, and `deleteMemoriaDir()` removes `.memoria/` from the old root before initializing/re-initializing a different one.
+
+## Behavioral Decisions
+
+### Cleanup Timing (Multi-Root)
+When initializing a different root in a multi-root workspace, deletion of the old root's `.memoria/` happens **after** the user has selected both the root and the blueprint, but **before** `engine.initialize`/`engine.reinitialize` is called. This ensures the old `.memoria/` is NOT deleted if the user cancels the blueprint selection QuickPick.
+
+### Re-Initialization Conflict Resolution
+- **Folder cleanup**: Extra top-level folders (absent from the new blueprint) are offered for move to `ReInitializationCleanup/`. `.memoria` and `ReInitializationCleanup` themselves are always excluded.
+- **Different blueprint detection**: When `currentManifest.blueprintId !== newDefinition.id`, ALL top-level folders are treated as "extra" (aggressive cleanup).
+- **Per-file prompts**: Modified files prompt the user with 4 choices: Yes, Yes-folder, Yes-folder-recursive, No. Scope decisions are memoized to avoid redundant prompts.
+- **Skipped file hashing**: Files the user skips get their current on-disk hash recorded in the manifest, so future re-inits can detect further modifications.
+
+## Component Relationships
+- `extension.ts` creates all collaborators and wires them together
+- `BlueprintEngine` depends on `BlueprintRegistry`, `ManifestManager`, `FileScaffold`
+- `initializeWorkspace` command depends on `BlueprintEngine`, `BlueprintRegistry`, `ManifestManager`, `ReinitConflictResolver`
+- `toggleDotFolders` command depends on `ManifestManager`
+- `BlueprintParser` is pure (no vscode dependency) — used only by `BlueprintRegistry`
