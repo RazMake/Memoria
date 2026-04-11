@@ -30,6 +30,7 @@ When in genuine doubt, ask the user for clarification rather than making assumpt
 # Memory Bank Usage
 - The knowledge about the current project resets completely between sessions. This isn't a limitation - it's the reason why I maintain perfect documentation.
   Refer to the [memory-bank](./focusedInstructions/memory-bank.md) instructions for further details.
+- **IMPORTANT**: Always use the `.memory-bank/` folder at the repo root for all project knowledge. Do NOT use `/memories/repo/` (Copilot's workspace-scoped memory). `.memory-bank/` is checked into git so it survives forks, clones, and machine changes.
 
 # Design principles
 Follow the [design principles](./focusedInstructions/generic-design-principles.md).

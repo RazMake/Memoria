@@ -8,6 +8,7 @@
 // each conflicted file.
 
 import * as vscode from "vscode";
+import { computeFileHash } from "./hashUtils";
 import type {
     BlueprintDefinition,
     BlueprintManifest,
@@ -17,13 +18,8 @@ import type {
 } from "./types";
 
 export class ReinitConflictResolver {
-    /**
-     * @param fs - Injected filesystem for reading current file content to compute hashes.
-     * @param computeHash - Hash function from ManifestManager; avoids duplicating hash logic.
-     */
     constructor(
-        private readonly fs: typeof vscode.workspace.fs,
-        private readonly computeHash: (content: Uint8Array) => string
+        private readonly fs: typeof vscode.workspace.fs
     ) {}
 
     /**
@@ -187,7 +183,7 @@ export class ReinitConflictResolver {
         try {
             const uri = vscode.Uri.joinPath(workspaceRoot, ...relativePath.split("/"));
             const content = await this.fs.readFile(uri);
-            return this.computeHash(content);
+            return computeFileHash(content);
         } catch {
             return null;
         }

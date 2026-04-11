@@ -7,6 +7,8 @@ const mockReadFile = vi.fn();
 const mockWriteFile = vi.fn();
 const mockCreateDirectory = vi.fn();
 const mockDelete = vi.fn();
+const mockReadDirectory = vi.fn();
+const mockCopy = vi.fn();
 const mockJoinPath = vi.fn((base: any, ...segments: string[]) => ({
     ...base,
     path: [base.path, ...segments].join("/"),
@@ -20,10 +22,16 @@ vi.mock("vscode", () => ({
             writeFile: (...args: any[]) => mockWriteFile(...args),
             createDirectory: (...args: any[]) => mockCreateDirectory(...args),
             delete: (...args: any[]) => mockDelete(...args),
+            readDirectory: (...args: any[]) => mockReadDirectory(...args),
+            copy: (...args: any[]) => mockCopy(...args),
         },
     },
     Uri: {
         joinPath: (...args: any[]) => mockJoinPath(...args),
+    },
+    FileType: {
+        File: 1,
+        Directory: 2,
     },
 }));
 
@@ -36,6 +44,8 @@ const mockFs = {
     writeFile: (...args: any[]) => mockWriteFile(...args),
     createDirectory: (...args: any[]) => mockCreateDirectory(...args),
     delete: (...args: any[]) => mockDelete(...args),
+    readDirectory: (...args: any[]) => mockReadDirectory(...args),
+    copy: (...args: any[]) => mockCopy(...args),
 } as any;
 
 describe("ManifestManager", () => {
@@ -199,6 +209,77 @@ describe("ManifestManager", () => {
                 expect.objectContaining({ path: "/workspace/.memoria" }),
                 { recursive: true }
             );
+        });
+    });
+
+    describe("backupMemoriaDir", () => {
+        const newRoot = { path: "/newRoot" } as any;
+
+        it("should copy all files from old .memoria/ to newRoot/ReInitializationCleanup/.memoria/", async () => {
+            mockReadDirectory.mockResolvedValue([
+                ["blueprint.json", 1],
+                ["decorations.json", 1],
+            ]);
+            mockCopy.mockResolvedValue(undefined);
+            mockCreateDirectory.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            const failed = await manager.backupMemoriaDir(workspaceRoot, newRoot);
+            expect(failed).toEqual([]);
+            expect(mockCreateDirectory).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria" })
+            );
+            expect(mockCopy).toHaveBeenCalledTimes(2);
+            expect(mockCopy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/.memoria/blueprint.json" }),
+                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria/blueprint.json" }),
+                { overwrite: true }
+            );
+            expect(mockCopy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/.memoria/decorations.json" }),
+                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria/decorations.json" }),
+                { overwrite: true }
+            );
+        });
+
+        it("should skip directories inside .memoria/", async () => {
+            mockReadDirectory.mockResolvedValue([
+                ["blueprint.json", 1],
+                ["subdir", 2],
+            ]);
+            mockCopy.mockResolvedValue(undefined);
+            mockCreateDirectory.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            await manager.backupMemoriaDir(workspaceRoot, newRoot);
+            expect(mockCopy).toHaveBeenCalledTimes(1);
+        });
+
+        it("should return failed path when copy throws for a file", async () => {
+            mockReadDirectory.mockResolvedValue([
+                ["blueprint.json", 1],
+                ["custom.json", 1],
+            ]);
+            mockCopy.mockResolvedValueOnce(undefined);
+            mockCopy.mockRejectedValueOnce(new Error("disk full"));
+            mockCreateDirectory.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            const failed = await manager.backupMemoriaDir(workspaceRoot, newRoot);
+            expect(failed).toEqual(["custom.json"]);
+        });
+
+        it("should return empty array when .memoria/ does not exist", async () => {
+            mockReadDirectory.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            const failed = await manager.backupMemoriaDir(workspaceRoot, newRoot);
+            expect(failed).toEqual([]);
+            expect(mockCopy).not.toHaveBeenCalled();
+        });
+
+        it("should return empty array when .memoria/ is empty", async () => {
+            mockReadDirectory.mockResolvedValue([]);
+            mockCreateDirectory.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            const failed = await manager.backupMemoriaDir(workspaceRoot, newRoot);
+            expect(failed).toEqual([]);
         });
     });
 });

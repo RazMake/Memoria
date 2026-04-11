@@ -53,8 +53,9 @@ describe("createInitializeWorkspaceCommand", () => {
             isInitialized: vi.fn().mockResolvedValue(false),
             findInitializedRoot: vi.fn().mockResolvedValue(null),
             deleteMemoriaDir: vi.fn().mockResolvedValue(undefined),
+            backupMemoriaDir: vi.fn().mockResolvedValue([]),
         };
-        mockTelemetry = { logUsage: vi.fn() };
+        mockTelemetry = { logUsage: vi.fn(), logError: vi.fn() };
         mockResolver = {};
         mockOnWorkspaceInitialized = vi.fn().mockResolvedValue(undefined);
     });
@@ -247,6 +248,44 @@ describe("createInitializeWorkspaceCommand", () => {
             mockShowQuickPick.mockResolvedValueOnce({ label: "Blueprint individual-contributor", id: "individual-contributor" });
             await makeHandler()();
             expect(mockManifest.deleteMemoriaDir).toHaveBeenCalledWith(rootUri);
+        });
+
+        it("should back up .memoria from old root to new root before deleting", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockWorkspaceFolders.push({ uri: root2Uri, name: "workspace2" });
+            mockManifest.findInitializedRoot.mockResolvedValue(rootUri);
+            mockShowQuickPick.mockResolvedValueOnce({ label: "workspace2", uri: root2Uri });
+            mockShowQuickPick.mockResolvedValueOnce({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockManifest.backupMemoriaDir).toHaveBeenCalledWith(rootUri, root2Uri);
+            // backupMemoriaDir should be called before deleteMemoriaDir
+            const backupOrder = mockManifest.backupMemoriaDir.mock.invocationCallOrder[0];
+            const deleteOrder = mockManifest.deleteMemoriaDir.mock.invocationCallOrder[0];
+            expect(backupOrder).toBeLessThan(deleteOrder);
+        });
+
+        it("should log telemetry error when .memoria backup has failed paths", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockWorkspaceFolders.push({ uri: root2Uri, name: "workspace2" });
+            mockManifest.findInitializedRoot.mockResolvedValue(rootUri);
+            mockManifest.backupMemoriaDir.mockResolvedValue(["custom.json"]);
+            mockShowQuickPick.mockResolvedValueOnce({ label: "workspace2", uri: root2Uri });
+            mockShowQuickPick.mockResolvedValueOnce({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockTelemetry.logError).toHaveBeenCalledWith("reinit.memoriaBackupFailed", {
+                failedPaths: "custom.json",
+            });
+        });
+
+        it("should not log telemetry error when .memoria backup succeeds fully", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockWorkspaceFolders.push({ uri: root2Uri, name: "workspace2" });
+            mockManifest.findInitializedRoot.mockResolvedValue(rootUri);
+            mockManifest.backupMemoriaDir.mockResolvedValue([]);
+            mockShowQuickPick.mockResolvedValueOnce({ label: "workspace2", uri: root2Uri });
+            mockShowQuickPick.mockResolvedValueOnce({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockTelemetry.logError).not.toHaveBeenCalled();
         });
 
         it("should not delete .memoria when re-initializing the same root", async () => {

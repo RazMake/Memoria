@@ -5,6 +5,7 @@ import { ManifestManager } from "./blueprints/manifestManager";
 import { FileScaffold } from "./blueprints/fileScaffold";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { ReinitConflictResolver } from "./blueprints/reinitConflictResolver";
+import { getWorkspaceRoots } from "./blueprints/workspaceUtils";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
@@ -31,10 +32,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const registry = new BlueprintRegistry(context.extensionUri);
     const manifest = new ManifestManager(vscode.workspace.fs);
     const scaffold = new FileScaffold(vscode.workspace.fs);
-    const engine = new BlueprintEngine(registry, manifest, scaffold);
-    const resolver = new ReinitConflictResolver(vscode.workspace.fs, (content) =>
-        manifest.computeFileHash(content)
-    );
+    const engine = new BlueprintEngine(registry, manifest, scaffold, vscode.workspace.fs, telemetry);
+    const resolver = new ReinitConflictResolver(vscode.workspace.fs);
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
 
@@ -46,8 +45,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Discover the initialized root once and share it across all startup operations
     // instead of calling findInitializedRoot() separately in each one (saves 2 fs.stat round-trips).
-    const folders = vscode.workspace.workspaceFolders;
-    const roots = folders ? folders.map((f) => f.uri) : [];
+    const roots = getWorkspaceRoots();
     const initializedRoot = await manifest.findInitializedRoot(roots);
 
     // Set the context key and load decoration rules in parallel — they are independent.
@@ -69,10 +67,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         /* update check is best-effort — swallow errors silently */
     });
 
-    const onWorkspaceInitialized = async (): Promise<void> => {
-        await updateWorkspaceInitializedContext(manifest);
-        await decorationProvider.refresh();
+    const onWorkspaceInitialized = async (workspaceRoot: vscode.Uri): Promise<void> => {
+        await updateWorkspaceInitializedContext(workspaceRoot);
+        await decorationProvider.refresh(workspaceRoot);
     };
+
+    // Keep the context key in sync when the initialization marker is
+    // created or deleted outside our own commands.
+    //
+    // Two complementary listeners are needed:
+    //  • FileSystemWatcher — fires for external FS changes (terminal, OS, etc.)
+    //  • onDidDeleteFiles  — fires when the user deletes via the VS Code Explorer.
+    //    (Deleting the .memoria/ *directory* does not trigger the file-level watcher
+    //     because the glob targets a child file, not the directory itself.)
+    const recheckInitialization = async (): Promise<void> => {
+        const currentRoot = await manifest.findInitializedRoot(roots);
+        await updateWorkspaceInitializedContext(currentRoot);
+        await decorationProvider.refresh(currentRoot);
+    };
+
+    if (roots.length > 0) {
+        const manifestWatcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(roots[0], ".memoria/blueprint.json")
+        );
+        manifestWatcher.onDidCreate(recheckInitialization);
+        manifestWatcher.onDidDelete(recheckInitialization);
+        context.subscriptions.push(manifestWatcher);
+    }
+
+    const memoriaDir = "/.memoria";
+    context.subscriptions.push(
+        vscode.workspace.onDidDeleteFiles((e) => {
+            const affectsMemoria = e.files.some((uri) =>
+                uri.path.includes(memoriaDir + "/") || uri.path.endsWith(memoriaDir)
+            );
+            if (affectsMemoria) {
+                void recheckInitialization();
+            }
+        })
+    );
 
     // Push disposables to context.subscriptions so VS Code cleans them up on deactivation.
     context.subscriptions.push(
@@ -97,24 +130,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export function deactivate(): void {}
 
 /**
- * Sets the VS Code context key `memoria.workspaceInitialized` based on whether
- * any workspace folder has a .memoria/blueprint.json.
+ * Sets the VS Code context key `memoria.workspaceInitialized`.
  * This drives the `when` clause visibility of the toggleDotFolders command.
- *
- * Accepts either a pre-computed root (fast path at activation) or a ManifestManager
- * to discover it (used by the onWorkspaceInitialized callback after init/reinit).
  */
 async function updateWorkspaceInitializedContext(
-    rootOrManifest: vscode.Uri | null | ManifestManager
+    initializedRoot: vscode.Uri | null
 ): Promise<void> {
-    let initializedRoot: vscode.Uri | null;
-    if (rootOrManifest instanceof ManifestManager) {
-        const folders = vscode.workspace.workspaceFolders;
-        const roots = folders ? folders.map((f) => f.uri) : [];
-        initializedRoot = await rootOrManifest.findInitializedRoot(roots);
-    } else {
-        initializedRoot = rootOrManifest;
-    }
     await vscode.commands.executeCommand(
         "setContext",
         "memoria.workspaceInitialized",
@@ -171,8 +192,8 @@ async function checkForBlueprintUpdates(
 
     try {
         await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
-        await updateWorkspaceInitializedContext(manifest);
-        await decorationProvider.refresh();
+        await updateWorkspaceInitializedContext(initializedRoot);
+        await decorationProvider.refresh(initializedRoot);
         vscode.window.showInformationMessage(
             `Memoria: Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
         );

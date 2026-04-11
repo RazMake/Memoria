@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { DecorationRule } from "../../blueprints/types";
+import { getWorkspaceRoots } from "../../blueprints/workspaceUtils";
 
 export class BlueprintDecorationProvider implements vscode.FileDecorationProvider {
     // EventEmitter drives VS Code's re-query of all decorated URIs. Firing with `undefined`
@@ -34,8 +35,7 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
      */
     async refresh(initializedRoot?: vscode.Uri | null): Promise<void> {
         if (initializedRoot === undefined) {
-            const folders = vscode.workspace.workspaceFolders;
-            const roots = folders ? folders.map((f) => f.uri) : [];
+            const roots = getWorkspaceRoots();
             initializedRoot = await this.manifest.findInitializedRoot(roots);
         }
 

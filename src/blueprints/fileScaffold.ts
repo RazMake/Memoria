@@ -5,7 +5,7 @@
 // The manifest is built during a single scaffolding pass to avoid re-reading created files.
 
 import * as vscode from "vscode";
-import { createHash } from "crypto";
+import { computeFileHash } from "./hashUtils";
 import type { WorkspaceEntry, ScaffoldResult } from "./types";
 
 /** Returned by the seed content callback to signal that an existing file should not be overwritten. */
@@ -13,9 +13,7 @@ export const SKIP_FILE = Symbol("SKIP_FILE");
 
 export class FileScaffold {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
-    // Exposed as a public readonly property so BlueprintEngine can use it for folder renames
-    // and file reads during re-initialization, without needing a separate fs injection.
-    readonly fs: typeof vscode.workspace.fs;
+    private readonly fs: typeof vscode.workspace.fs;
 
     constructor(fs: typeof vscode.workspace.fs) {
         this.fs = fs;
@@ -74,7 +72,7 @@ export class FileScaffold {
                 } else {
                     const content = seedResult ?? new Uint8Array(0);
                     await this.fs.writeFile(entryUri, content);
-                    fileManifest[relativePath] = this.computeHash(content);
+                    fileManifest[relativePath] = computeFileHash(content);
                 }
             }
         }
@@ -100,10 +98,5 @@ export class FileScaffold {
     private toRelativePath(rootUri: vscode.Uri, targetUri: vscode.Uri): string {
         const rootPath = rootUri.path.endsWith("/") ? rootUri.path : rootUri.path + "/";
         return targetUri.path.slice(rootPath.length).replace(/\\/g, "/");
-    }
-
-    private computeHash(content: Uint8Array): string {
-        const hash = createHash("sha256").update(content).digest("hex");
-        return `sha256:${hash}`;
     }
 }

@@ -19,7 +19,7 @@ export function createInitializeWorkspaceCommand(
     // state that depends on the workspace being initialized (e.g. context keys
     // that drive command visibility). Injected rather than hard-coded so this
     // command stays decoupled from VS Code context management.
-    onWorkspaceInitialized: () => Promise<void>
+    onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
 ): () => Promise<void> {
     return async () => {
         const folders = vscode.workspace.workspaceFolders;
@@ -71,13 +71,19 @@ export function createInitializeWorkspaceCommand(
         }
 
         // In multi-root workspaces, only one root may have .memoria/ at a time.
-        // If a different root is already initialized, delete its .memoria/ before proceeding.
-        // This cleanup runs after blueprint selection rather than earlier (after root
-        // selection) so that cancelling the blueprint QuickPick does not delete .memoria/
-        // from the old root unnecessarily.
+        // If a different root is already initialized, back up its .memoria/ files to
+        // ReInitializationCleanup/.memoria/ in the new root, then delete it.
+        // Only .memoria/ is deleted — managed workspace folders are NOT removed to
+        // avoid confusing users into thinking those folders are controlled by the extension.
         if (folders.length > 1) {
             const oldRoot = await manifest.findInitializedRoot(folders.map((f) => f.uri));
             if (oldRoot && oldRoot.toString() !== workspaceRoot.toString()) {
+                const failedPaths = await manifest.backupMemoriaDir(oldRoot, workspaceRoot);
+                if (failedPaths.length > 0) {
+                    telemetry.logError("reinit.memoriaBackupFailed", {
+                        failedPaths: failedPaths.join(", "),
+                    });
+                }
                 await manifest.deleteMemoriaDir(oldRoot);
             }
         }
@@ -88,14 +94,14 @@ export function createInitializeWorkspaceCommand(
             if (isInitialized) {
                 await engine.reinitialize(workspaceRoot, picked.id, resolver);
                 telemetry.logUsage("blueprint.reinit", { blueprintId: picked.id });
-                await onWorkspaceInitialized();
+                await onWorkspaceInitialized(workspaceRoot);
                 vscode.window.showInformationMessage(
                     `Memoria: Workspace re-initialized with "${picked.label}".`
                 );
             } else {
                 await engine.initialize(workspaceRoot, picked.id);
                 telemetry.logUsage("blueprint.init", { blueprintId: picked.id });
-                await onWorkspaceInitialized();
+                await onWorkspaceInitialized(workspaceRoot);
                 vscode.window.showInformationMessage(
                     `Memoria: Workspace initialized with "${picked.label}".`
                 );

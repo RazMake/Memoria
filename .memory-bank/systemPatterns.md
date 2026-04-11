@@ -25,6 +25,17 @@ extension.ts (activation, command registration, context key, versioning check)
 ### Factory Functions for Commands
 Command handlers are created by factory functions (`createInitializeWorkspaceCommand`, `createToggleDotFoldersCommand`) that receive dependencies at construction time. This avoids classes for single-operation callbacks while preserving testability via DI.
 
+### Dependency Injection
+- All classes take dependencies via constructor injection
+- `typeof vscode.workspace.fs` is the FS abstraction — unit tests pass mock, E2E uses real `vscode.workspace.fs`
+- `BlueprintEngine` takes `fs` separately from `FileScaffold` — engine uses its own `fs` for reinit cleanup ops, scaffold keeps its `fs` private
+- `ReinitConflictResolver` imports `computeFileHash` directly (no callback injection needed)
+
+### Shared Utilities
+- `src/blueprints/hashUtils.ts` — single source of truth for SHA-256 hashing via `computeFileHash(content: Uint8Array): string`
+- `src/blueprints/workspaceUtils.ts` — shared `getWorkspaceRoots()` eliminates 3× duplicated `workspaceFolders?.map(f => f.uri) ?? []`
+- Module-level `TextDecoder`/`TextEncoder` singletons in ManifestManager and BlueprintRegistry (avoids per-call allocation)
+
 ### Composition in Engine
 `BlueprintEngine` is a thin orchestrator that sequences calls to `BlueprintRegistry`, `FileScaffold`, and `ManifestManager`. All domain logic lives in the collaborators; the engine just sequences them.
 
@@ -47,6 +58,38 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - **Different blueprint detection**: When `currentManifest.blueprintId !== newDefinition.id`, ALL top-level folders are treated as "extra" (aggressive cleanup).
 - **Per-file prompts**: Modified files prompt the user with 4 choices: Yes, Yes-folder, Yes-folder-recursive, No. Scope decisions are memoized to avoid redundant prompts.
 - **Skipped file hashing**: Files the user skips get their current on-disk hash recorded in the manifest, so future re-inits can detect further modifications.
+
+## Testing Conventions
+- vscode module is fully mocked in all unit tests via `vi.mock("vscode", ...)`
+- Each test file re-declares mock functions at module scope
+- reinitConflictResolver tests use real `computeFileHash` from hashUtils (not fake hashes)
+- `tests/unit-tests/packageJson.test.ts` — **contract tests** enforce that every command in `package.json` has a `commandPalette` entry with a `when: "memoria.workspaceInitialized"` guard. If a command should genuinely always be visible (like `initializeWorkspace`), add it to the `ALWAYS_VISIBLE` set in that test file — this makes the exemption explicit and reviewable.
+
+## Optimization Patterns
+
+### Parallel I/O
+- Use `Promise.all()` for independent fs operations (reads, renames, stats)
+- `findInitializedRoot`: parallel stat checks across workspace roots
+- Blueprint listing: parallel YAML reads via `Promise.all(dirs.map(...))`
+- Folder renames during reinit: `Promise.all` since destinations are distinct
+
+### Avoid Redundant Lookups
+- After init/reinit, pass the known workspace root through callbacks: `onWorkspaceInitialized(root: vscode.Uri)`
+- `decorationProvider.refresh(knownRoot)` and `updateWorkspaceInitializedContext(knownRoot)` skip `findInitializedRoot()`
+- Accept pre-computed root as optional param to avoid re-discovery
+
+### Encapsulation
+- Never expose `fs` handle publicly just so another class can use it — inject `fs` into both classes separately
+- `FileScaffold.fs` is `private readonly`; `BlueprintEngine` has its own `fs` injection for reinit operations
+
+### Activation Performance
+- Defer heavy work via `queueMicrotask()` or `void promise.catch()`
+- Background update checks must not block decoration rendering
+- Pre-compute and cache decorations at refresh time, not per `provideFileDecoration()` call
+
+### Refactoring Complex Closures
+- Extract large inline closures to named private methods (e.g. `buildReinitSeedCallback`)
+- Move local state (Sets, Maps) that the closure captures into the extracted method's scope
 
 ## Component Relationships
 - `extension.ts` creates all collaborators and wires them together; also runs `checkForBlueprintUpdates()` on activation

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ConsoleTelemetrySender, createTelemetry } from "../../src/telemetry";
+import { ConsoleTelemetrySender, createTelemetry, DeferredTelemetryLogger } from "../../src/telemetry";
 
 // Unit tests run outside VS Code — mock only the vscode API surface used by telemetry.ts.
 vi.mock("vscode", () => ({
@@ -107,5 +107,33 @@ describe("createTelemetry", () => {
 
         expect(vscode.env.createTelemetryLogger).toHaveBeenCalled();
         expect(result).toBeDefined();
+    });
+});
+
+describe("DeferredTelemetryLogger", () => {
+    it("logUsage silently drops events before initialize()", () => {
+        const logger = new DeferredTelemetryLogger();
+        expect(() => logger.logUsage("test.event", { key: "value" })).not.toThrow();
+    });
+
+    it("logError silently drops events before initialize()", () => {
+        const logger = new DeferredTelemetryLogger();
+        expect(() => logger.logError("test.error", { key: "value" })).not.toThrow();
+    });
+
+    it("logUsage delegates to the underlying logger after initialize()", () => {
+        const mockLogger = { logUsage: vi.fn(), logError: vi.fn(), dispose: vi.fn() } as any;
+        const logger = new DeferredTelemetryLogger();
+        logger.initialize(mockLogger);
+        logger.logUsage("test.event", { key: "value" });
+        expect(mockLogger.logUsage).toHaveBeenCalledWith("test.event", { key: "value" });
+    });
+
+    it("logError delegates to the underlying logger after initialize()", () => {
+        const mockLogger = { logUsage: vi.fn(), logError: vi.fn(), dispose: vi.fn() } as any;
+        const logger = new DeferredTelemetryLogger();
+        logger.initialize(mockLogger);
+        logger.logError("test.error", { path: "file.md" });
+        expect(mockLogger.logError).toHaveBeenCalledWith("test.error", { path: "file.md" });
     });
 });

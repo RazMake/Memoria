@@ -7,8 +7,11 @@
 // without storing any file content or PII.
 
 import * as vscode from "vscode";
-import { createHash } from "crypto";
+import { computeFileHash } from "./hashUtils";
 import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig } from "./types";
+
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
 export class ManifestManager {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
@@ -20,8 +23,7 @@ export class ManifestManager {
 
     /** Computes SHA-256 of the given bytes. Returns "sha256:<lowercase hex>". */
     computeFileHash(content: Uint8Array): string {
-        const hash = createHash("sha256").update(content).digest("hex");
-        return `sha256:${hash}`;
+        return computeFileHash(content);
     }
 
     /** Returns true when .memoria/blueprint.json exists at the workspace root. */
@@ -36,17 +38,52 @@ export class ManifestManager {
 
     /** Returns the first root that has .memoria/blueprint.json, or null if none. */
     async findInitializedRoot(roots: vscode.Uri[]): Promise<vscode.Uri | null> {
-        for (const root of roots) {
-            if (await this.isInitialized(root)) {
-                return root;
-            }
-        }
-        return null;
+        if (roots.length === 0) return null;
+        // Parallel stat — faster in multi-root workspaces.
+        const results = await Promise.all(roots.map((root) => this.isInitialized(root)));
+        const index = results.indexOf(true);
+        return index >= 0 ? roots[index] : null;
     }
 
     /** Deletes the .memoria/ directory and all its contents from the given root. */
     async deleteMemoriaDir(root: vscode.Uri): Promise<void> {
         await this.fs.delete(this.memoriaDir(root), { recursive: true });
+    }
+
+    /**
+     * Copies all files from oldRoot/.memoria/ into newRoot/ReInitializationCleanup/.memoria/
+     * so the user can recover them after .memoria/ is deleted.
+     * Returns the list of relative paths that failed to copy (empty on full success).
+     */
+    async backupMemoriaDir(oldRoot: vscode.Uri, newRoot: vscode.Uri): Promise<string[]> {
+        const failedPaths: string[] = [];
+        const srcDir = this.memoriaDir(oldRoot);
+        const destDir = vscode.Uri.joinPath(newRoot, "ReInitializationCleanup", ".memoria");
+
+        let entries: [string, vscode.FileType][];
+        try {
+            entries = await this.fs.readDirectory(srcDir);
+        } catch {
+            // .memoria/ does not exist or is unreadable — nothing to back up.
+            return failedPaths;
+        }
+
+        await this.fs.createDirectory(destDir);
+
+        for (const [name, type] of entries) {
+            if (type !== vscode.FileType.File) {
+                continue;
+            }
+            try {
+                const src = vscode.Uri.joinPath(srcDir, name);
+                const dest = vscode.Uri.joinPath(destDir, name);
+                await this.fs.copy(src, dest, { overwrite: true });
+            } catch {
+                failedPaths.push(name);
+            }
+        }
+
+        return failedPaths;
     }
 
     async readManifest(workspaceRoot: vscode.Uri): Promise<BlueprintManifest | null> {
@@ -99,14 +136,14 @@ export class ManifestManager {
     private async readJson<T>(uri: vscode.Uri): Promise<T | null> {
         try {
             const bytes = await this.fs.readFile(uri);
-            return JSON.parse(new TextDecoder().decode(bytes)) as T;
+            return JSON.parse(decoder.decode(bytes)) as T;
         } catch {
             return null;
         }
     }
 
     private async writeJson(uri: vscode.Uri, value: unknown): Promise<void> {
-        const bytes = new TextEncoder().encode(JSON.stringify(value, null, 2));
+        const bytes = encoder.encode(JSON.stringify(value, null, 2));
         await this.fs.writeFile(uri, bytes);
     }
 }

@@ -5,6 +5,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSubscriptions: any[] = [];
 const mockRegisterCommand = vi.fn();
 const mockShowInformationMessage = vi.fn();
+const mockWatcherDispose = vi.fn();
+const mockOnDidCreate = vi.fn();
+const mockOnDidDelete = vi.fn();
+const mockCreateFileSystemWatcher = vi.fn(() => ({
+    onDidCreate: mockOnDidCreate,
+    onDidDelete: mockOnDidDelete,
+    onDidChange: vi.fn(),
+    dispose: mockWatcherDispose,
+}));
+const mockOnDidDeleteFiles = vi.fn();
 
 vi.mock("vscode", () => ({
     commands: {
@@ -35,8 +45,16 @@ vi.mock("vscode", () => ({
             path: [base.path, ...segments].join("/"),
         })),
     },
+    RelativePattern: class {
+        constructor(public base: any, public pattern: string) {}
+    },
     workspace: {
-        workspaceFolders: [],
+        workspaceFolders: [{ uri: { path: "/workspace" } }],
+        createFileSystemWatcher: (...args: any[]) => mockCreateFileSystemWatcher(...args),
+        onDidDeleteFiles: (...args: any[]) => {
+            mockOnDidDeleteFiles(...args);
+            return { dispose: vi.fn() };
+        },
         fs: {
             stat: vi.fn().mockRejectedValue(new Error("not found")),
             readFile: vi.fn(),
@@ -104,5 +122,31 @@ describe("extension", () => {
     it("deactivate returns void", async () => {
         const { deactivate } = await import("../../src/extension");
         expect(deactivate()).toBeUndefined();
+    });
+
+    it("activate creates a file system watcher for .memoria/blueprint.json", async () => {
+        const { activate } = await import("../../src/extension");
+        const context = {
+            subscriptions: mockSubscriptions,
+            extensionUri: { path: "/ext" },
+        } as any;
+
+        await activate(context);
+
+        expect(mockCreateFileSystemWatcher).toHaveBeenCalledOnce();
+        expect(mockOnDidCreate).toHaveBeenCalledWith(expect.any(Function));
+        expect(mockOnDidDelete).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    it("activate registers onDidDeleteFiles listener", async () => {
+        const { activate } = await import("../../src/extension");
+        const context = {
+            subscriptions: mockSubscriptions,
+            extensionUri: { path: "/ext" },
+        } as any;
+
+        await activate(context);
+
+        expect(mockOnDidDeleteFiles).toHaveBeenCalledWith(expect.any(Function));
     });
 });

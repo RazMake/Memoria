@@ -41,6 +41,7 @@ export class ConsoleTelemetrySender implements vscode.TelemetrySender {
  */
 export interface TelemetryEmitter {
     logUsage(eventName: string, data?: Record<string, any>): void;
+    logError(eventName: string, data?: Record<string, any>): void;
 }
 
 /**
@@ -57,6 +58,10 @@ export class DeferredTelemetryLogger implements TelemetryEmitter {
 
     logUsage(eventName: string, data?: Record<string, any>): void {
         this.logger?.logUsage(eventName, data);
+    }
+
+    logError(eventName: string, data?: Record<string, any>): void {
+        this.logger?.logError(eventName, data);
     }
 }
 

@@ -39,6 +39,8 @@ describe("BlueprintEngine", () => {
     let mockRegistry: any;
     let mockManifest: any;
     let mockScaffold: any;
+    let mockFs: any;
+    let mockTelemetry: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -50,27 +52,31 @@ describe("BlueprintEngine", () => {
             readManifest: vi.fn().mockResolvedValue(null),
             writeManifest: vi.fn().mockResolvedValue(undefined),
             writeDecorations: vi.fn().mockResolvedValue(undefined),
-            computeFileHash: vi.fn().mockReturnValue("sha256:current"),
         };
         mockScaffold = {
             scaffoldTree: vi.fn().mockResolvedValue(scaffoldResult),
-            fs: {
-                createDirectory: vi.fn().mockResolvedValue(undefined),
-                rename: vi.fn().mockResolvedValue(undefined),
-                readFile: vi.fn().mockResolvedValue(new Uint8Array(0)),
-            },
+        };
+        mockFs = {
+            createDirectory: vi.fn().mockResolvedValue(undefined),
+            rename: vi.fn().mockResolvedValue(undefined),
+            readFile: vi.fn().mockResolvedValue(new Uint8Array(0)),
+            copy: vi.fn().mockResolvedValue(undefined),
+        };
+        mockTelemetry = {
+            logUsage: vi.fn(),
+            logError: vi.fn(),
         };
     });
 
     describe("initialize", () => {
         it("should call getBlueprintDefinition with the provided blueprint id", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockRegistry.getBlueprintDefinition).toHaveBeenCalledWith("individual-contributor");
         });
 
         it("should call scaffoldTree with the workspace root and definition workspace entries", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockScaffold.scaffoldTree).toHaveBeenCalledWith(
                 workspaceRoot,
@@ -80,7 +86,7 @@ describe("BlueprintEngine", () => {
         });
 
         it("should write manifest to .memoria/blueprint.json after scaffolding", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockManifest.writeManifest).toHaveBeenCalledWith(
                 workspaceRoot,
@@ -94,7 +100,7 @@ describe("BlueprintEngine", () => {
         });
 
         it("should write decoration rules to .memoria/decorations.json", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockManifest.writeDecorations).toHaveBeenCalledWith(workspaceRoot, {
                 rules: mockDefinition.decorations,
@@ -106,7 +112,7 @@ describe("BlueprintEngine", () => {
             mockManifest.writeManifest.mockImplementation(async () => { callOrder.push("manifest"); });
             mockManifest.writeDecorations.mockImplementation(async () => { callOrder.push("decorations"); });
 
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.initialize(workspaceRoot, "individual-contributor");
 
             expect(callOrder).toEqual(["manifest", "decorations"]);
@@ -114,13 +120,13 @@ describe("BlueprintEngine", () => {
 
         it("should propagate errors thrown by the registry", async () => {
             mockRegistry.getBlueprintDefinition.mockRejectedValue(new Error("Blueprint not found"));
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await expect(engine.initialize(workspaceRoot, "unknown")).rejects.toThrow("Blueprint not found");
         });
 
         it("should propagate errors thrown by the scaffold", async () => {
             mockScaffold.scaffoldTree.mockRejectedValue(new Error("Disk write failed"));
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await expect(engine.initialize(workspaceRoot, "individual-contributor")).rejects.toThrow("Disk write failed");
         });
     });
@@ -150,14 +156,14 @@ describe("BlueprintEngine", () => {
 
         it("should throw when no manifest exists (workspace not initialized)", async () => {
             mockManifest.readManifest.mockResolvedValue(null);
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await expect(engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver)).rejects.toThrow(
                 "no .memoria/blueprint.json"
             );
         });
 
         it("should call resolveConflicts with the current manifest and new definition", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockResolver.resolveConflicts).toHaveBeenCalledWith(
                 workspaceRoot,
@@ -172,10 +178,10 @@ describe("BlueprintEngine", () => {
                 unmodifiedBlueprintFiles: [],
                 modifiedBlueprintFiles: [],
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
-            expect(mockScaffold.fs.createDirectory).toHaveBeenCalled();
-            expect(mockScaffold.fs.rename).toHaveBeenCalledWith(
+            expect(mockFs.createDirectory).toHaveBeenCalled();
+            expect(mockFs.rename).toHaveBeenCalledWith(
                 expect.objectContaining({ path: expect.stringContaining("OldFolder") }),
                 expect.objectContaining({ path: expect.stringContaining("ReInitializationCleanup") }),
                 { overwrite: false }
@@ -183,13 +189,13 @@ describe("BlueprintEngine", () => {
         });
 
         it("should not rename anything when no folders need cleanup", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
-            expect(mockScaffold.fs.rename).not.toHaveBeenCalled();
+            expect(mockFs.rename).not.toHaveBeenCalled();
         });
 
         it("should update manifest with new blueprintId and set lastReinitAt", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockManifest.writeManifest).toHaveBeenCalledWith(
                 workspaceRoot,
@@ -215,7 +221,7 @@ describe("BlueprintEngine", () => {
                 await callback("Folder/file.md");
                 return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockResolver.promptFileOverwrite).toHaveBeenCalledWith("Folder/file.md");
         });
@@ -231,16 +237,16 @@ describe("BlueprintEngine", () => {
                 fileManifest: {},
                 skippedPaths: ["Folder/file.md"],
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             // Skipped file should appear in the final manifest with its current on-disk hash.
-            expect(mockScaffold.fs.readFile).toHaveBeenCalled();
+            expect(mockFs.readFile).toHaveBeenCalled();
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.fileManifest["Folder/file.md"]).toMatch(/^sha256:/);
         });
 
         it("should write updated decoration rules after reinit", async () => {
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockManifest.writeDecorations).toHaveBeenCalledWith(workspaceRoot, {
                 rules: mockDefinition.decorations,
@@ -253,7 +259,7 @@ describe("BlueprintEngine", () => {
                 blueprintId: "manager",
             });
             mockRegistry.getBlueprintDefinition.mockResolvedValue(mockDefinition);
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             // resolveConflicts receives the NEW definition; ReinitConflictResolver handles
             // the different-blueprint detection internally.
@@ -276,7 +282,7 @@ describe("BlueprintEngine", () => {
                 callbackResult = await callback("Folder/file.md");
                 return { fileManifest: {}, skippedPaths: ["Folder/file.md"] };
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             // SKIP_FILE is a Symbol — verify the callback returned it
             expect(typeof callbackResult).toBe("symbol");
@@ -295,7 +301,7 @@ describe("BlueprintEngine", () => {
                 await callback("Folder/b.md");
                 return { fileManifest: { "Folder/a.md": "sha256:a", "Folder/b.md": "sha256:b" }, skippedPaths: [] };
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             // Only the first file should trigger a prompt; the second is auto-overwritten.
             expect(mockResolver.promptFileOverwrite).toHaveBeenCalledTimes(1);
@@ -315,7 +321,7 @@ describe("BlueprintEngine", () => {
                 await callback("Folder/sub/b.md");
                 return { fileManifest: { "Folder/a.md": "sha256:a", "Folder/sub/b.md": "sha256:b" }, skippedPaths: [] };
             });
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             // Only the first file triggers a prompt; nested file is covered by recursive scope.
             expect(mockResolver.promptFileOverwrite).toHaveBeenCalledTimes(1);
@@ -332,11 +338,135 @@ describe("BlueprintEngine", () => {
                 fileManifest: {},
                 skippedPaths: ["Folder/deleted.md"],
             });
-            mockScaffold.fs.readFile.mockRejectedValue(new Error("file not found"));
-            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold);
+            mockFs.readFile.mockRejectedValue(new Error("file not found"));
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.fileManifest).not.toHaveProperty("Folder/deleted.md");
+        });
+
+        it("should back up a modified file to ReInitializationCleanup/ before overwriting when user chooses 'yes'", async () => {
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: [],
+                modifiedBlueprintFiles: ["Folder/file.md"],
+            });
+            mockResolver.promptFileOverwrite.mockResolvedValue("yes");
+            mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/file.md");
+                return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockFs.copy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/Folder/file.md" }),
+                expect.objectContaining({ path: "/workspace/ReInitializationCleanup/Folder/file.md" }),
+                { overwrite: true }
+            );
+        });
+
+        it("should not back up a modified file when user chooses 'no'", async () => {
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: [],
+                modifiedBlueprintFiles: ["Folder/file.md"],
+            });
+            mockResolver.promptFileOverwrite.mockResolvedValue("no");
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/file.md");
+                return { fileManifest: {}, skippedPaths: ["Folder/file.md"] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockFs.copy).not.toHaveBeenCalled();
+        });
+
+        it("should back up all files in folder scope after 'yes-folder'", async () => {
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: [],
+                modifiedBlueprintFiles: ["Folder/a.md", "Folder/b.md"],
+            });
+            mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder");
+            mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/a.md");
+                await callback("Folder/b.md");
+                return { fileManifest: { "Folder/a.md": "sha256:a", "Folder/b.md": "sha256:b" }, skippedPaths: [] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            // Both files should be backed up.
+            expect(mockFs.copy).toHaveBeenCalledTimes(2);
+            expect(mockFs.copy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/Folder/a.md" }),
+                expect.objectContaining({ path: "/workspace/ReInitializationCleanup/Folder/a.md" }),
+                { overwrite: true }
+            );
+            expect(mockFs.copy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/Folder/b.md" }),
+                expect.objectContaining({ path: "/workspace/ReInitializationCleanup/Folder/b.md" }),
+                { overwrite: true }
+            );
+        });
+
+        it("should back up nested files after 'yes-folder-recursive'", async () => {
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: [],
+                modifiedBlueprintFiles: ["Folder/a.md", "Folder/sub/b.md"],
+            });
+            mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder-recursive");
+            mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/a.md");
+                await callback("Folder/sub/b.md");
+                return { fileManifest: { "Folder/a.md": "sha256:a", "Folder/sub/b.md": "sha256:b" }, skippedPaths: [] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockFs.copy).toHaveBeenCalledTimes(2);
+            expect(mockFs.copy).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/Folder/sub/b.md" }),
+                expect.objectContaining({ path: "/workspace/ReInitializationCleanup/Folder/sub/b.md" }),
+                { overwrite: true }
+            );
+        });
+
+        it("should continue reinit and log telemetry error when backup copy fails", async () => {
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: [],
+                modifiedBlueprintFiles: ["Folder/file.md"],
+            });
+            mockResolver.promptFileOverwrite.mockResolvedValue("yes");
+            mockRegistry.getSeedFileContent.mockResolvedValue(new Uint8Array([1]));
+            mockFs.copy.mockRejectedValue(new Error("permission denied"));
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/file.md");
+                return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            // Should not throw despite copy failure.
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockTelemetry.logError).toHaveBeenCalledWith("reinit.backupFailed", {
+                path: "Folder/file.md",
+                error: "permission denied",
+            });
+            // Reinit should still complete — manifest is written.
+            expect(mockManifest.writeManifest).toHaveBeenCalled();
+        });
+
+        it("should not back up unmodified files", async () => {
+            // Default resolver returns unmodifiedBlueprintFiles: ["Folder/file.md"], modifiedBlueprintFiles: []
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/file.md");
+                return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
+            });
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockFs.copy).not.toHaveBeenCalled();
         });
     });
 });

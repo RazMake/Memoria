@@ -9,7 +9,7 @@
   - `isNewerVersion(bundled, stored)` — exported pure utility for major.minor.patch SemVer comparison
 - **Telemetry**: Production-ready pattern with `ConsoleTelemetrySender` + lazy factory for `@vscode/extension-telemetry`
 - **Two bundled blueprints**: Individual Contributor (5 folders) and People Manager (6 folders with nested meeting types)
-- **Test coverage**: 176 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. New: 25 unit tests for `BlueprintDecorationProvider`.
+- **Test coverage**: 221 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
 - **Context key**: `memoria.workspaceInitialized` checks all workspace roots (not just first)
 
 ## What's Left (Not Implemented)

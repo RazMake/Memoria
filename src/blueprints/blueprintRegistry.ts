@@ -5,6 +5,8 @@ import * as vscode from "vscode";
 import { parseBlueprintYaml } from "./blueprintParser";
 import type { BlueprintDefinition, BlueprintInfo } from "./types";
 
+const decoder = new TextDecoder();
+
 export class BlueprintRegistry {
     private readonly blueprintsRoot: vscode.Uri;
 
@@ -15,26 +17,22 @@ export class BlueprintRegistry {
     /** Lists all discoverable bundled blueprints with their summary info. */
     async listBlueprints(): Promise<BlueprintInfo[]> {
         const entries = await vscode.workspace.fs.readDirectory(this.blueprintsRoot);
-        const results: BlueprintInfo[] = [];
+        const dirs = entries.filter(([, type]) => type === vscode.FileType.Directory);
 
-        for (const [name, type] of entries) {
-            if (type !== vscode.FileType.Directory) {
-                continue;
-            }
-
-            const blueprintPath = vscode.Uri.joinPath(this.blueprintsRoot, name);
-            const definition = await this.readDefinition(blueprintPath);
-
-            results.push({
-                id: name,
-                name: definition.name,
-                description: definition.description,
-                version: definition.version,
-                path: blueprintPath,
-            });
-        }
-
-        return results;
+        // Parallel reads — avoids sequential I/O scaling with blueprint count.
+        return Promise.all(
+            dirs.map(async ([name]) => {
+                const blueprintPath = vscode.Uri.joinPath(this.blueprintsRoot, name);
+                const definition = await this.readDefinition(blueprintPath);
+                return {
+                    id: name,
+                    name: definition.name,
+                    description: definition.description,
+                    version: definition.version,
+                    path: blueprintPath,
+                };
+            })
+        );
     }
 
     /** Reads and fully parses the blueprint definition for a given blueprint id. */
@@ -59,7 +57,7 @@ export class BlueprintRegistry {
     private async readDefinition(blueprintPath: vscode.Uri): Promise<BlueprintDefinition> {
         const yamlUri = vscode.Uri.joinPath(blueprintPath, "blueprint.yaml");
         const bytes = await vscode.workspace.fs.readFile(yamlUri);
-        const content = new TextDecoder().decode(bytes);
+        const content = decoder.decode(bytes);
         return parseBlueprintYaml(content);
     }
 }
