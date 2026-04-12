@@ -6,8 +6,7 @@
 
 import * as vscode from "vscode";
 import { getLocation, parseTree, findNodeAtLocation, type Location } from "jsonc-parser";
-import { getWorkspaceRoots } from "../../blueprints/workspaceUtils";
-import { getRootFolderName } from "../../commands/openDefaultFile";
+import { getWorkspaceRoots, getRootFolderName, classifyFolderKey } from "../../blueprints/workspaceUtils";
 
 /** Document selector that matches only .memoria/default-files.json files. */
 export const DEFAULT_FILES_JSON_SELECTOR: vscode.DocumentSelector = {
@@ -119,14 +118,10 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
 
         // Determine which roots to search based on key format.
         const rootNameSet = new Set(roots.map(getRootFolderName));
-        const firstSlash = folderKey.indexOf("/");
-        const firstSegment = folderKey.slice(0, firstSlash);
-        const isRootSpecific =
-            rootNameSet.has(firstSegment) && folderKey.length > firstSlash + 1;
+        const { isRootSpecific, relFolder, rootName } = classifyFolderKey(folderKey, rootNameSet);
 
-        const relFolder = isRootSpecific ? folderKey.slice(firstSlash + 1) : folderKey;
         const targetRoots = isRootSpecific
-            ? roots.filter((r) => getRootFolderName(r) === firstSegment)
+            ? roots.filter((r) => getRootFolderName(r) === rootName)
             : roots;
 
         // The partial value determines the subdirectory to list.

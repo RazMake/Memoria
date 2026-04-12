@@ -46,7 +46,7 @@ export class ReinitConflictResolver {
         // Categorise files in the new blueprint as unmodified or modified.
         const flatFiles = this.flattenWorkspaceFiles(newDefinition.workspace);
         const unmodifiedBlueprintFiles: string[] = [];
-        const modifiedBlueprintFiles: string[] = [];
+        const modifiedBlueprintFiles = new Set<string>();
         const currentFileHashes: Record<string, string | null> = {};
 
         // Parallel hash reads — independent I/O operations across distinct files.
@@ -82,7 +82,7 @@ export class ReinitConflictResolver {
             if (result.hash === null || result.hash === result.storedHash) {
                 unmodifiedBlueprintFiles.push(result.relativePath);
             } else {
-                modifiedBlueprintFiles.push(result.relativePath);
+                modifiedBlueprintFiles.add(result.relativePath);
             }
         }
 
@@ -176,20 +176,19 @@ export class ReinitConflictResolver {
             .map(([name]) => name);
     }
 
-    private flattenWorkspaceFiles(entries: WorkspaceEntry[], prefix = ""): string[] {
-        const paths: string[] = [];
+    private flattenWorkspaceFiles(entries: WorkspaceEntry[], prefix = "", result: string[] = []): string[] {
         for (const entry of entries) {
             const name = entry.name.replace(/\/$/, "");
             const relativePath = prefix ? `${prefix}/${name}` : name;
             if (entry.isFolder) {
                 if (entry.children) {
-                    paths.push(...this.flattenWorkspaceFiles(entry.children, relativePath));
+                    this.flattenWorkspaceFiles(entry.children, relativePath, result);
                 }
             } else {
-                paths.push(relativePath);
+                result.push(relativePath);
             }
         }
-        return paths;
+        return result;
     }
 
     private async readCurrentHash(workspaceRoot: vscode.Uri, relativePath: string): Promise<string | null> {

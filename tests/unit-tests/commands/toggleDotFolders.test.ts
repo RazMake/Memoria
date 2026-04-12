@@ -52,6 +52,7 @@ describe("createToggleDotFoldersCommand", () => {
         mockWorkspaceFolders.length = 0;
         mockManifest = {
             isInitialized: vi.fn().mockResolvedValue(true),
+            findInitializedRoot: vi.fn().mockResolvedValue(rootUri),
             readDotfolders: vi.fn().mockResolvedValue(null),
             writeDotfolders: vi.fn().mockResolvedValue(undefined),
         };
@@ -66,7 +67,7 @@ describe("createToggleDotFoldersCommand", () => {
 
     it("should show an error when the workspace is not initialized", async () => {
         mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
-        mockManifest.isInitialized.mockResolvedValue(false);
+        mockManifest.findInitializedRoot.mockResolvedValue(null);
         await makeHandler()();
         expect(mockShowErrorMessage).toHaveBeenCalledWith(expect.stringContaining("not initialized"));
     });

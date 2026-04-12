@@ -152,7 +152,7 @@ export interface ReinitPlan {
     /** Blueprint file paths whose stored hash matches the on-disk content (safe to overwrite silently). */
     unmodifiedBlueprintFiles: string[];
     /** Blueprint file paths whose on-disk content differs from the stored hash (user has modified them). */
-    modifiedBlueprintFiles: string[];
+    modifiedBlueprintFiles: ReadonlySet<string>;
     /** Cached on-disk hashes computed during conflict analysis — avoids re-reading files in the engine. */
     currentFileHashes: Record<string, string | null>;
 }

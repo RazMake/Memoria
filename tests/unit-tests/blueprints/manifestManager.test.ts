@@ -308,4 +308,54 @@ describe("ManifestManager", () => {
             expect(failed).toEqual([]);
         });
     });
+
+    describe("readDefaultFiles / writeDefaultFiles", () => {
+        it("should return null when default-files.json is not found", async () => {
+            mockReadFile.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readDefaultFiles(workspaceRoot)).toBeNull();
+        });
+
+        it("should return null when defaultFiles property is missing from the config", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify({})));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readDefaultFiles(workspaceRoot)).toBeNull();
+        });
+
+        it("should return the defaultFiles map when values are already arrays", async () => {
+            const config = { defaultFiles: { "00-ToDo/": ["Main.todo", "Notes.md"] } };
+            mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(config)));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({ "00-ToDo/": ["Main.todo", "Notes.md"] });
+        });
+
+        it("should normalize legacy string values to single-element arrays", async () => {
+            // Legacy format stored a plain string instead of an array.
+            const legacyConfig = { defaultFiles: { "00-ToDo/": "Main.todo" } };
+            mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(legacyConfig)));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({ "00-ToDo/": ["Main.todo"] });
+        });
+
+        it("should write the defaultFiles map wrapped in { defaultFiles } to default-files.json", async () => {
+            const manager = new ManifestManager(mockFs);
+            await manager.writeDefaultFiles(workspaceRoot, { "00-ToDo/": ["Main.todo"] });
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+            const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
+            expect(written).toEqual({ defaultFiles: { "00-ToDo/": ["Main.todo"] } });
+        });
+    });
+
+    describe("ensureMemoriaDir deduplication", () => {
+        it("should only create the directory once when multiple writes target the same root", async () => {
+            const manager = new ManifestManager(mockFs);
+            const config: FeaturesConfig = {
+                features: [{ id: "decorations", name: "D", description: "D", enabled: true }],
+            };
+            await manager.writeFeatures(workspaceRoot, config);
+            await manager.writeFeatures(workspaceRoot, config);
+            // createDirectory must be called only once — the second call hits the early-return guard.
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+        });
+    });
 });

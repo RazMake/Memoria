@@ -207,6 +207,23 @@ describe("BlueprintEngine", () => {
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.defaultFiles).toBeUndefined();
         });
+
+        it("should invoke the seed callback with the relative path to fetch file content", async () => {
+            // The seed callback lambda body (line 38) must be executed — set up scaffoldTree to call it.
+            const seedContent = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
+            mockRegistry.getSeedFileContent.mockResolvedValue(seedContent);
+            let capturedCallback: ((path: string) => Promise<any>) | undefined;
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                capturedCallback = callback;
+                const result = await callback("Folder/file.md");
+                return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
+            });
+
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+
+            expect(mockRegistry.getSeedFileContent).toHaveBeenCalledWith("individual-contributor", "Folder/file.md");
+        });
     });
 
     describe("reinitialize", () => {
@@ -225,8 +242,8 @@ describe("BlueprintEngine", () => {
             mockResolver = {
                 resolveConflicts: vi.fn().mockResolvedValue({
                     foldersToCleanup: [],
-                    unmodifiedBlueprintFiles: ["Folder/file.md"],
-                    modifiedBlueprintFiles: [],
+                    unmodifiedBlueprintFiles: new Set(["Folder/file.md"]),
+                    modifiedBlueprintFiles: new Set(),
                     currentFileHashes: {},
                 }),
                 promptFileOverwrite: vi.fn(),
@@ -254,8 +271,8 @@ describe("BlueprintEngine", () => {
         it("should move cleanup folders to ReInitializationCleanup/ via fs.rename", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: ["OldFolder"],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: [],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(),
                 currentFileHashes: {},
             });
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
@@ -291,8 +308,8 @@ describe("BlueprintEngine", () => {
         it("should prompt the user for each modified file", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
@@ -310,8 +327,8 @@ describe("BlueprintEngine", () => {
         it("should skip a file when the user chooses 'no' for overwrite", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
@@ -371,8 +388,8 @@ describe("BlueprintEngine", () => {
         it("should return SKIP_FILE from the seed callback when user chooses 'no'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
@@ -390,8 +407,8 @@ describe("BlueprintEngine", () => {
         it("should auto-overwrite subsequent files in the same folder after 'yes-folder'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/a.md", "Folder/b.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/a.md", "Folder/b.md"]),
                 currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder");
@@ -411,8 +428,8 @@ describe("BlueprintEngine", () => {
         it("should auto-overwrite nested files after 'yes-folder-recursive'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/a.md", "Folder/sub/b.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/a.md", "Folder/sub/b.md"]),
                 currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder-recursive");
@@ -432,8 +449,8 @@ describe("BlueprintEngine", () => {
         it("should omit deleted files from manifest when recording skipped file hashes", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: [],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(),
                 currentFileHashes: { "Folder/deleted.md": null },
             });
             mockScaffold.scaffoldTree.mockResolvedValue({
@@ -451,8 +468,8 @@ describe("BlueprintEngine", () => {
         it("should back up a modified file to ReInitializationCleanup/ before overwriting when user chooses 'yes'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
@@ -473,8 +490,8 @@ describe("BlueprintEngine", () => {
         it("should not back up a modified file when user chooses 'no'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("no");
@@ -490,8 +507,8 @@ describe("BlueprintEngine", () => {
         it("should back up all files in folder scope after 'yes-folder'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/a.md", "Folder/b.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/a.md", "Folder/b.md"]),
                 currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder");
@@ -520,8 +537,8 @@ describe("BlueprintEngine", () => {
         it("should back up nested files after 'yes-folder-recursive'", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/a.md", "Folder/sub/b.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/a.md", "Folder/sub/b.md"]),
                 currentFileHashes: {},
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes-folder-recursive");
@@ -544,8 +561,8 @@ describe("BlueprintEngine", () => {
         it("should continue reinit and log telemetry error when backup copy fails", async () => {
             mockResolver.resolveConflicts.mockResolvedValue({
                 foldersToCleanup: [],
-                unmodifiedBlueprintFiles: [],
-                modifiedBlueprintFiles: ["Folder/file.md"],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(["Folder/file.md"]),
                 currentFileHashes: { "Folder/file.md": "sha256:modified" },
             });
             mockResolver.promptFileOverwrite.mockResolvedValue("yes");
@@ -567,7 +584,7 @@ describe("BlueprintEngine", () => {
         });
 
         it("should not back up unmodified files", async () => {
-            // Default resolver returns unmodifiedBlueprintFiles: ["Folder/file.md"], modifiedBlueprintFiles: []
+            // Default resolver returns unmodifiedBlueprintFiles: new Set(["Folder/file.md"]), modifiedBlueprintFiles: new Set()
             mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
                 await callback("Folder/file.md");
                 return { fileManifest: { "Folder/file.md": "sha256:abc" }, skippedPaths: [] };
@@ -607,6 +624,55 @@ describe("BlueprintEngine", () => {
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.defaultFiles).toBeUndefined();
+        });
+
+        it("should use fs.readFile to hash a skipped file that was not pre-hashed during conflict analysis", async () => {
+            // skippedPaths contains a file whose hash is NOT in currentFileHashes (undefined key).
+            // This exercises the fallback path (lines 114-117) that reads the file from disk.
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(),
+                currentFileHashes: {}, // "Folder/new.md" is absent → undefined
+            });
+            mockScaffold.scaffoldTree.mockResolvedValue({
+                fileManifest: {},
+                skippedPaths: ["Folder/new.md"],
+            });
+            const fileContent = new Uint8Array([1, 2, 3]);
+            mockFs.readFile.mockResolvedValue(fileContent);
+
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+
+            // fs.readFile should be called to hash the skipped file.
+            expect(mockFs.readFile).toHaveBeenCalledWith(
+                expect.objectContaining({ path: expect.stringContaining("Folder/new.md") })
+            );
+            // The computed hash should appear in the written manifest.
+            const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
+            expect(writtenManifest.fileManifest["Folder/new.md"]).toMatch(/^sha256:/);
+        });
+
+        it("should omit a skipped file from manifest when fs.readFile throws (file deleted by user)", async () => {
+            // Same fallback path but readFile fails — file should be excluded from manifest.
+            mockResolver.resolveConflicts.mockResolvedValue({
+                foldersToCleanup: [],
+                unmodifiedBlueprintFiles: new Set(),
+                modifiedBlueprintFiles: new Set(),
+                currentFileHashes: {},
+            });
+            mockScaffold.scaffoldTree.mockResolvedValue({
+                fileManifest: {},
+                skippedPaths: ["Folder/deleted.md"],
+            });
+            mockFs.readFile.mockRejectedValue(new Error("file not found"));
+
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+
+            const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
+            expect(writtenManifest.fileManifest).not.toHaveProperty("Folder/deleted.md");
         });
     });
 });

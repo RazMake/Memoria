@@ -7,6 +7,7 @@ import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { SKIP_FILE } from "./fileScaffold";
 import { computeFileHash } from "./hashUtils";
+import { getRootFolderName } from "./workspaceUtils";
 import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, OverwriteChoice, DefaultFileMap } from "./types";
 import type { ReinitConflictResolver } from "./reinitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
@@ -157,16 +158,20 @@ export class BlueprintEngine {
         const yesAllRecursiveFolders = new Set<string>();
 
         return async (relativePath: string): Promise<Uint8Array | null | typeof SKIP_FILE> => {
-            const isModified = plan.modifiedBlueprintFiles.includes(relativePath);
+            const isModified = plan.modifiedBlueprintFiles.has(relativePath);
 
             if (isModified) {
                 const parentFolder = relativePath.includes("/")
                     ? relativePath.substring(0, relativePath.lastIndexOf("/"))
                     : "";
 
-                const coveredByRecursive = [...yesAllRecursiveFolders].some(
-                    (f) => parentFolder === f || parentFolder.startsWith(f + "/")
-                );
+                let coveredByRecursive = false;
+                for (const f of yesAllRecursiveFolders) {
+                    if (parentFolder === f || parentFolder.startsWith(f + "/")) {
+                        coveredByRecursive = true;
+                        break;
+                    }
+                }
                 if (coveredByRecursive) {
                     await this.backupFile(workspaceRoot, relativePath);
                     return this.registry.getSeedFileContent(blueprintId, relativePath);
@@ -232,10 +237,7 @@ export function mergeDefaultFileMap(
     const result: Record<string, string[]> = { ...map.relative };
 
     if (Object.keys(map.rootScoped).length > 0) {
-        const rootPath = workspaceRoot.path;
-        const trimmed = rootPath.endsWith("/") ? rootPath.slice(0, -1) : rootPath;
-        const lastSlash = trimmed.lastIndexOf("/");
-        const rootName = lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+        const rootName = getRootFolderName(workspaceRoot);
 
         for (const [folder, files] of Object.entries(map.rootScoped)) {
             result[rootName + "/" + folder] = files;

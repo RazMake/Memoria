@@ -19,8 +19,8 @@ export function createManageFeaturesCommand(
             return;
         }
 
-        const workspaceRoot = folders[0].uri;
-        if (!(await manifest.isInitialized(workspaceRoot))) {
+        const workspaceRoot = await manifest.findInitializedRoot(folders.map((f) => f.uri));
+        if (!workspaceRoot) {
             vscode.window.showErrorMessage(
                 "Memoria: Workspace is not initialized. Run 'Memoria: Initialize workspace' first."
             );

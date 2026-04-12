@@ -5,11 +5,11 @@ import { ManifestManager } from "./blueprints/manifestManager";
 import { FileScaffold } from "./blueprints/fileScaffold";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { ReinitConflictResolver } from "./blueprints/reinitConflictResolver";
-import { getWorkspaceRoots } from "./blueprints/workspaceUtils";
+import { getWorkspaceRoots, getRootFolderName, classifyFolderKey } from "./blueprints/workspaceUtils";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
 import { createManageFeaturesCommand } from "./commands/manageFeatures";
-import { createOpenDefaultFileCommand, getRootFolderName } from "./commands/openDefaultFile";
+import { createOpenDefaultFileCommand } from "./commands/openDefaultFile";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
@@ -93,15 +93,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         /* update check is best-effort — swallow errors silently */
     });
 
+    const defaultFileWatcherHolder: DefaultFileWatcherHolder = { current: undefined };
+
     const onWorkspaceInitialized = async (workspaceRoot: vscode.Uri): Promise<void> => {
         await updateWorkspaceInitializedContext(workspaceRoot);
         await featureManager.refresh(workspaceRoot);
         await updateDefaultFileContext(workspaceRoot, roots, manifest);
-        registerDefaultFileWatcher(context, workspaceRoot, roots, manifest);
+        registerDefaultFileWatcher(context, workspaceRoot, roots, manifest, defaultFileWatcherHolder);
     };
 
     registerFileWatchers(context, roots, manifest, featureManager);
-    registerDefaultFileWatcher(context, initializedRoot, roots, manifest);
+    registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
     registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, onWorkspaceInitialized);
 
     context.subscriptions.push(
@@ -113,10 +115,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
-    if (defaultFileWatcherDisposable) {
-        defaultFileWatcherDisposable.dispose();
-        defaultFileWatcherDisposable = undefined;
-    }
+    // Default-file watchers are tracked by the holder created in activate().
+    // Context subscriptions handle disposal of all other watchers.
 }
 
 /**
@@ -269,17 +269,12 @@ async function updateDefaultFileContext(
             const checks: Promise<void>[] = [];
 
             for (const [key, filePaths] of Object.entries(defaultFiles)) {
-                // Classify: root-specific if first segment matches a workspace root name
-                // and there is a remaining folder path after the root prefix.
-                const firstSlash = key.indexOf("/");
-                const firstSegment = key.slice(0, firstSlash);
-                const isRootSpecific = rootNameSet.has(firstSegment) && key.length > firstSlash + 1;
+                const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
 
-                const relFolder = isRootSpecific ? key.slice(firstSlash + 1) : key;
                 // Root-specific entries apply only to matching roots.
                 // Relative entries apply to all roots that don't have a root-specific override.
                 const targetRoots = isRootSpecific
-                    ? allRoots.filter((r) => getRootFolderName(r) === firstSegment)
+                    ? allRoots.filter((r) => getRootFolderName(r) === rootName)
                     : allRoots.filter((r) => !defaultFiles[getRootFolderName(r) + "/" + key]);
 
                 for (const root of targetRoots) {
@@ -335,17 +330,18 @@ async function updateDefaultFileContext(
  * Also watches the individual default files so context keys update on create/delete.
  * Stores the current watcher disposables so they can be replaced on re-initialization.
  */
-let defaultFileWatcherDisposable: vscode.Disposable | undefined;
+interface DefaultFileWatcherHolder { current: vscode.Disposable | undefined; }
 function registerDefaultFileWatcher(
     context: vscode.ExtensionContext,
     initializedRoot: vscode.Uri | null,
     allRoots: vscode.Uri[],
-    manifest: ManifestManager
+    manifest: ManifestManager,
+    holder: DefaultFileWatcherHolder
 ): void {
     // Dispose previous watchers if any (e.g. on re-init with different default files).
-    if (defaultFileWatcherDisposable) {
-        defaultFileWatcherDisposable.dispose();
-        defaultFileWatcherDisposable = undefined;
+    if (holder.current) {
+        holder.current.dispose();
+        holder.current = undefined;
     }
 
     if (!initializedRoot) {
@@ -361,7 +357,7 @@ function registerDefaultFileWatcher(
     const onConfigChanged = async (): Promise<void> => {
         await updateDefaultFileContext(initializedRoot, allRoots, manifest);
         // Re-register watchers for the (possibly changed) individual files.
-        registerDefaultFileWatcher(context, initializedRoot, allRoots, manifest);
+        registerDefaultFileWatcher(context, initializedRoot, allRoots, manifest, holder);
     };
     configWatcher.onDidCreate(() => void onConfigChanged());
     configWatcher.onDidChange(() => void onConfigChanged());
@@ -382,15 +378,12 @@ function registerDefaultFileWatcher(
 
         const fileDisposables: vscode.Disposable[] = [];
         for (const [key, filePaths] of Object.entries(defaultFiles)) {
-            const firstSlash = key.indexOf("/");
-            const firstSegment = key.slice(0, firstSlash);
-            const isRootSpecific = rootNameSet.has(firstSegment) && key.length > firstSlash + 1;
+            const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
 
-            const relFolder = isRootSpecific ? key.slice(firstSlash + 1) : key;
             // For watchers, root-specific entries watch only matching roots.
             // Relative entries watch all roots (redundant watchers are harmless).
             const watchRoots = isRootSpecific
-                ? allRoots.filter((r) => getRootFolderName(r) === firstSegment)
+                ? allRoots.filter((r) => getRootFolderName(r) === rootName)
                 : allRoots;
 
             for (const root of watchRoots) {
@@ -408,7 +401,7 @@ function registerDefaultFileWatcher(
         disposables.push(...fileDisposables);
     });
 
-    defaultFileWatcherDisposable = vscode.Disposable.from(...disposables);
+    holder.current = vscode.Disposable.from(...disposables);
 }
 
 /**

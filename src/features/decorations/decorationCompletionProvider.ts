@@ -154,6 +154,17 @@ function isRulePropertyKey(loc: Location): boolean {
         && loc.isAtPropertyKey;
 }
 
+/** Pre-built regex cache for `isRulePropertyValue` fallback lookbehind, keyed by property name. */
+const rulePropertyPatterns = new Map<string, RegExp>();
+function getRulePropertyPattern(propertyName: string): RegExp {
+    let pattern = rulePropertyPatterns.get(propertyName);
+    if (!pattern) {
+        pattern = new RegExp(`"${propertyName}"\\s*:\\s*"?[^"]*$`);
+        rulePropertyPatterns.set(propertyName, pattern);
+    }
+    return pattern;
+}
+
 /**
  * Cursor is at the value position for a specific property inside a rule object.
  * We check both the parsed location AND scan backwards from the cursor to find
@@ -169,8 +180,7 @@ function isRulePropertyValue(loc: Location, propertyName: string, text: string, 
     // path is still at depth 2 (hasn't resolved the key yet).
     if (loc.path.length >= 2 && loc.path[0] === "rules" && !loc.isAtPropertyKey) {
         const preceding = text.substring(Math.max(0, offset - 80), offset);
-        const pattern = new RegExp(`"${propertyName}"\\s*:\\s*"?[^"]*$`);
-        return pattern.test(preceding);
+        return getRulePropertyPattern(propertyName).test(preceding);
     }
     return false;
 }

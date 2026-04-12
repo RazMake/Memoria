@@ -128,7 +128,7 @@ describe("ReinitConflictResolver", () => {
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition);
 
             expect(plan.unmodifiedBlueprintFiles).toContain("00-ToDo/Main.todo");
-            expect(plan.modifiedBlueprintFiles).not.toContain("00-ToDo/Main.todo");
+            expect(plan.modifiedBlueprintFiles.has("00-ToDo/Main.todo")).toBe(false);
         });
 
         it("should categorise modified files (hash differs from stored) correctly", async () => {
@@ -140,7 +140,7 @@ describe("ReinitConflictResolver", () => {
             const resolver = new ReinitConflictResolver(mockFs);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition);
 
-            expect(plan.modifiedBlueprintFiles).toContain("00-ToDo/Main.todo");
+            expect(plan.modifiedBlueprintFiles.has("00-ToDo/Main.todo")).toBe(true);
             expect(plan.unmodifiedBlueprintFiles).not.toContain("00-ToDo/Main.todo");
         });
 
@@ -167,7 +167,7 @@ describe("ReinitConflictResolver", () => {
             const plan = await resolver.resolveConflicts(workspaceRoot, manifest, blueprintDefinition);
 
             expect(plan.unmodifiedBlueprintFiles).toContain("00-ToDo/Main.todo");
-            expect(plan.modifiedBlueprintFiles).toHaveLength(0);
+            expect(plan.modifiedBlueprintFiles.size).toBe(0);
         });
 
         it("should treat all folders as extra when switching to a different blueprint", async () => {

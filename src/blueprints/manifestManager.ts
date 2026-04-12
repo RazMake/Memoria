@@ -15,6 +15,8 @@ const encoder = new TextEncoder();
 export class ManifestManager {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
     private readonly fs: typeof vscode.workspace.fs;
+    /** Tracks which .memoria/ dirs have been ensured this session to avoid redundant createDirectory calls. */
+    private readonly ensuredDirs = new Set<string>();
 
     constructor(fs: typeof vscode.workspace.fs) {
         this.fs = fs;
@@ -42,6 +44,7 @@ export class ManifestManager {
     /** Deletes the .memoria/ directory and all its contents from the given root. */
     async deleteMemoriaDir(root: vscode.Uri): Promise<void> {
         await this.fs.delete(this.memoriaDir(root), { recursive: true });
+        this.ensuredDirs.delete(root.toString());
     }
 
     /**
@@ -95,13 +98,11 @@ export class ManifestManager {
             return null;
         }
         // Normalize legacy string values to string[] for backward compatibility.
-        for (const key of Object.keys(config.defaultFiles)) {
-            const value = config.defaultFiles[key];
-            if (typeof value === "string") {
-                (config.defaultFiles as Record<string, string | string[]>)[key] = [value];
-            }
+        const result: Record<string, string[]> = {};
+        for (const [key, value] of Object.entries(config.defaultFiles)) {
+            result[key] = typeof value === "string" ? [value] : value;
         }
-        return config.defaultFiles;
+        return result;
     }
 
     async writeDefaultFiles(workspaceRoot: vscode.Uri, defaultFiles: Record<string, string[]>): Promise<void> {
@@ -161,7 +162,12 @@ export class ManifestManager {
     }
 
     private async ensureMemoriaDir(root: vscode.Uri): Promise<void> {
+        const key = root.toString();
+        if (this.ensuredDirs.has(key)) {
+            return;
+        }
         await this.fs.createDirectory(this.memoriaDir(root));
+        this.ensuredDirs.add(key);
     }
 
     private async readJson<T>(uri: vscode.Uri): Promise<T | null> {

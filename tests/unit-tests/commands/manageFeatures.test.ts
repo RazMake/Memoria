@@ -29,6 +29,7 @@ describe("createManageFeaturesCommand", () => {
         mockWorkspaceFolders.length = 0;
         mockManifest = {
             isInitialized: vi.fn().mockResolvedValue(true),
+            findInitializedRoot: vi.fn().mockResolvedValue(workspaceRoot),
             readFeatures: vi.fn().mockResolvedValue({
                 features: [
                     { id: "decorations", name: "Explorer Decorations", description: "Badges and colors", enabled: true },
@@ -48,7 +49,7 @@ describe("createManageFeaturesCommand", () => {
 
     it("should show error when workspace is not initialized", async () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
-        mockManifest.isInitialized.mockResolvedValue(false);
+        mockManifest.findInitializedRoot.mockResolvedValue(null);
 
         const handler = createManageFeaturesCommand(mockManifest, mockTelemetry, mockFeatureManager);
         await handler();

@@ -23,8 +23,8 @@ export function createToggleDotFoldersCommand(
 
         // Use the first initialized root. If none is initialized, the command should not
         // be visible (enforced by the "when" clause in package.json), but guard defensively.
-        const workspaceRoot = folders[0].uri;
-        if (!(await manifest.isInitialized(workspaceRoot))) {
+        const workspaceRoot = await manifest.findInitializedRoot(folders.map((f) => f.uri));
+        if (!workspaceRoot) {
             vscode.window.showErrorMessage(
                 "Memoria: Workspace is not initialized. Run 'Memoria: Initialize workspace' first."
             );

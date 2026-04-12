@@ -3,17 +3,9 @@
 
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
+import { getRootFolderName } from "../blueprints/workspaceUtils";
 
-/**
- * Extracts the folder name (last path segment) from a URI.
- * Used to match root-prefixed keys in default-files.json.
- */
-export function getRootFolderName(rootUri: { path: string }): string {
-    const path = rootUri.path;
-    const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
-    const lastSlash = trimmed.lastIndexOf("/");
-    return lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
-}
+export { getRootFolderName } from "../blueprints/workspaceUtils";
 
 export function createOpenDefaultFileCommand(
     manifest: ManifestManager

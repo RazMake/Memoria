@@ -99,7 +99,7 @@ describe("matchesFilter", () => {
         });
     });
 
-    describe("propagate (folder filters only)", () => {
+    describe("propagate (folder filters)", () => {
         it("should match the folder itself when propagate is true", () => {
             expect(matchesFilter("00-ToDo/", "00-ToDo", true)).toBe(true);
         });
@@ -122,6 +122,32 @@ describe("matchesFilter", () => {
 
         it("should not match children when propagate is omitted (default false)", () => {
             expect(matchesFilter("00-ToDo/", "00-ToDo/Main.todo")).toBe(false);
+        });
+    });
+
+    describe("propagate (exact-path filters)", () => {
+        it("should match the exact path itself when propagate is true", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Planning", true)).toBe(true);
+        });
+
+        it("should match a direct child when propagate is true", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Planning/FY26-Q4", true)).toBe(true);
+        });
+
+        it("should match a deeply nested descendant when propagate is true", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Planning/FY26-Q4/Sprint1.md", true)).toBe(true);
+        });
+
+        it("should not match children when propagate is false", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Planning/FY26-Q4", false)).toBe(false);
+        });
+
+        it("should not match children when propagate is omitted (default false)", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Planning/FY26-Q4")).toBe(false);
+        });
+
+        it("should not match a sibling path when propagate is true", () => {
+            expect(matchesFilter("00-ToDo/Planning", "00-ToDo/Backlog", true)).toBe(false);
         });
     });
 });

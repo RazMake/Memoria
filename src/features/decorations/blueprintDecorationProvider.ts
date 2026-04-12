@@ -102,20 +102,31 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 export function matchesFilter(filter: string, relativePath: string, propagate = false): boolean {
     if (filter.endsWith("/")) {
         const name = filter.slice(0, -1);
-        const segments = relativePath.split("/");
         if (propagate) {
-            return segments.includes(name);
+            // Check if any segment equals the filter name.
+            // Segments are delimited by "/" — so name must appear between "/" boundaries
+            // or at the start/end of the path.
+            return relativePath === name
+                || relativePath.startsWith(name + "/")
+                || relativePath.endsWith("/" + name)
+                || relativePath.includes("/" + name + "/");
         }
-        const lastSegment = segments.at(-1) ?? "";
+        // Non-propagate: only the last segment must match.
+        const lastSlash = relativePath.lastIndexOf("/");
+        const lastSegment = lastSlash >= 0 ? relativePath.slice(lastSlash + 1) : relativePath;
         return lastSegment === name;
     }
 
     if (filter.startsWith("*.")) {
         const extension = filter.slice(1); // e.g. ".todo"
-        const lastSegment = relativePath.split("/").at(-1) ?? "";
+        const lastSlash = relativePath.lastIndexOf("/");
+        const lastSegment = lastSlash >= 0 ? relativePath.slice(lastSlash + 1) : relativePath;
         return lastSegment.endsWith(extension);
     }
 
+    if (propagate) {
+        return relativePath === filter || relativePath.startsWith(filter + "/");
+    }
     return relativePath === filter;
 }
 
