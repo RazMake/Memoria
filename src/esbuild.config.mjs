@@ -14,6 +14,9 @@ await build({
     format: "cjs",
     platform: "node",
     target: "node20",
+    // Prefer ESM entry points over UMD/CJS — jsonc-parser's UMD wrapper uses an
+    // AMD define() pattern that esbuild cannot statically resolve at bundle time.
+    mainFields: ["module", "main"],
     sourcemap: isDev,
     minify: !isDev,
 });

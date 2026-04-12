@@ -12,6 +12,8 @@ import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { createOpenDefaultFileCommand, getRootFolderName } from "./commands/openDefaultFile";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
+import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
+import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
 import { FeatureManager } from "./features/featureManager";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
@@ -48,6 +50,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // refresh() fires the change event — otherwise the first fire is wasted.
     context.subscriptions.push(
         vscode.window.registerFileDecorationProvider(decorationProvider),
+        vscode.languages.registerCompletionItemProvider(
+            DECORATIONS_JSON_SELECTOR,
+            new DecorationCompletionProvider(),
+            '"',
+        ),
+        vscode.languages.registerColorProvider(
+            DECORATIONS_JSON_SELECTOR,
+            new DecorationColorProvider(),
+        ),
     );
 
     // Discover the initialized root once and share it across all startup operations
@@ -138,6 +149,23 @@ function registerFileWatchers(
         watcher.onDidCreate(recheckInitialization);
         watcher.onDidDelete(recheckInitialization);
         context.subscriptions.push(watcher);
+    }
+
+    // Watch decorations.json so explorer colors update live when the user edits the file.
+    // This needs a separate handler because recheckInitialization short-circuits when the
+    // initialized root hasn't changed — but here the root is the same, only the rules changed.
+    const refreshFeatures = async (): Promise<void> => {
+        const currentRoot = await manifest.findInitializedRoot(roots);
+        await featureManager.refresh(currentRoot);
+    };
+    for (const root of roots) {
+        const decWatcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(root, ".memoria/decorations.json")
+        );
+        decWatcher.onDidChange(() => void refreshFeatures());
+        decWatcher.onDidCreate(() => void refreshFeatures());
+        decWatcher.onDidDelete(() => void refreshFeatures());
+        context.subscriptions.push(decWatcher);
     }
 
     const memoriaDir = "/.memoria";

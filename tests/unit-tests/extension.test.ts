@@ -8,10 +8,11 @@ const mockShowInformationMessage = vi.fn();
 const mockWatcherDispose = vi.fn();
 const mockOnDidCreate = vi.fn();
 const mockOnDidDelete = vi.fn();
+const mockOnDidChange = vi.fn();
 const mockCreateFileSystemWatcher = vi.fn(() => ({
     onDidCreate: mockOnDidCreate,
     onDidDelete: mockOnDidDelete,
-    onDidChange: vi.fn(),
+    onDidChange: mockOnDidChange,
     dispose: mockWatcherDispose,
 }));
 const mockOnDidDeleteFiles = vi.fn();
@@ -31,6 +32,10 @@ vi.mock("vscode", () => ({
             dispose: vi.fn(),
         })),
         registerFileDecorationProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    },
+    languages: {
+        registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+        registerColorProvider: vi.fn(() => ({ dispose: vi.fn() })),
     },
     env: {
         createTelemetryLogger: vi.fn(() => ({
@@ -125,7 +130,7 @@ describe("extension", () => {
         expect(deactivate()).toBeUndefined();
     });
 
-    it("activate creates a file system watcher for .memoria/blueprint.json", async () => {
+    it("activate creates file system watchers for blueprint.json and decorations.json", async () => {
         const { activate } = await import("../../src/extension");
         const context = {
             subscriptions: mockSubscriptions,
@@ -134,9 +139,26 @@ describe("extension", () => {
 
         await activate(context);
 
-        expect(mockCreateFileSystemWatcher).toHaveBeenCalledOnce();
-        expect(mockOnDidCreate).toHaveBeenCalledWith(expect.any(Function));
-        expect(mockOnDidDelete).toHaveBeenCalledWith(expect.any(Function));
+        expect(mockCreateFileSystemWatcher).toHaveBeenCalledTimes(2);
+        expect(mockCreateFileSystemWatcher).toHaveBeenCalledWith(
+            expect.objectContaining({ pattern: ".memoria/blueprint.json" })
+        );
+        expect(mockCreateFileSystemWatcher).toHaveBeenCalledWith(
+            expect.objectContaining({ pattern: ".memoria/decorations.json" })
+        );
+    });
+
+    it("activate watches decorations.json for create, change, and delete", async () => {
+        const { activate } = await import("../../src/extension");
+        const context = {
+            subscriptions: mockSubscriptions,
+            extensionUri: { path: "/ext" },
+        } as any;
+
+        await activate(context);
+
+        // Two watchers registered — each calls onDidCreate, onDidDelete, onDidChange
+        expect(mockOnDidChange).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it("activate registers onDidDeleteFiles listener", async () => {
