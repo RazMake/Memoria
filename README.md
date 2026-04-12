@@ -29,8 +29,6 @@ Scaffold a personal knowledge base in a workspace — organize notes, meetings, 
 3. Pick a blueprint template
 4. Start organizing your knowledge base
 
-After installation, the **Get Started with Memoria** walkthrough will guide you through the setup.
-
 ## User Guide
 
 The full documentation is bundled with the extension. Run **Memoria: Open User Guide** from the Command Palette to browse it inside VS Code.

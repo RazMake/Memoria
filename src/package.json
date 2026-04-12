@@ -70,64 +70,7 @@
                     "group": "navigation"
                 }
             ]
-        },
-        "walkthroughs": [
-            {
-                "id": "memoria.getStarted",
-                "title": "Get Started with Memoria",
-                "description": "Set up your personal knowledge base in a few steps.",
-                "steps": [
-                    {
-                        "id": "welcome",
-                        "title": "Welcome to Memoria",
-                        "description": "Memoria scaffolds a personal knowledge base inside your workspace — organized folders for notes, meetings, contacts, and TODOs.\n\n[Open User Guide](command:memoria.openUserGuide)",
-                        "media": {
-                            "markdown": "resources/walkthrough/welcome.md"
-                        }
-                    },
-                    {
-                        "id": "initializeWorkspace",
-                        "title": "Initialize Your Workspace",
-                        "description": "Run the initialize command to pick a blueprint template and scaffold your knowledge base.\n\n[Initialize Workspace](command:memoria.initializeWorkspace)",
-                        "media": {
-                            "markdown": "resources/walkthrough/initialize.md"
-                        }
-                    },
-                    {
-                        "id": "exploreStructure",
-                        "title": "Explore Your Knowledge Base",
-                        "description": "Browse the folders Memoria created in the Explorer. Each folder serves a specific purpose — TODOs, meeting notes, contacts, and more.",
-                        "media": {
-                            "markdown": "resources/walkthrough/explore.md"
-                        }
-                    },
-                    {
-                        "id": "openDefaultFiles",
-                        "title": "Open Default Files",
-                        "description": "Right-click any folder with a configured default file and select **Open default file(s)** to quickly open your most-used files side by side.",
-                        "media": {
-                            "markdown": "resources/walkthrough/default-files.md"
-                        }
-                    },
-                    {
-                        "id": "toggleDotFolders",
-                        "title": "Hide Configuration Folders",
-                        "description": "Use **Toggle dot-folders** to hide `.memoria/` and other dot-folders from the Explorer for a cleaner view.\n\n[Toggle Dot-Folders](command:memoria.toggleDotFolders)",
-                        "media": {
-                            "markdown": "resources/walkthrough/toggle-dot-folders.md"
-                        }
-                    },
-                    {
-                        "id": "learnMore",
-                        "title": "Learn More",
-                        "description": "Open the full User Guide for detailed documentation on all commands, features, and blueprints.\n\n[Open User Guide](command:memoria.openUserGuide)",
-                        "media": {
-                            "markdown": "resources/walkthrough/learn-more.md"
-                        }
-                    }
-                ]
-            }
-        ]
+        }
     },
     "scripts": {
         "postinstall": "patch-package",
