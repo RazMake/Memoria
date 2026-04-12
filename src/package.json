@@ -74,7 +74,7 @@
     },
     "scripts": {
         "postinstall": "patch-package",
-        "prebuild": "npm install",
+        "prebuild": "node -e \"require('fs').existsSync('node_modules')||process.exit(1)\" || npm install",
         "build": "node esbuild.config.mjs",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",

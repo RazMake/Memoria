@@ -16,14 +16,22 @@ This extension has two test suites:
 
 Fast tests that mock the `vscode` API. Use these for business logic, utilities, and isolated module behavior.
 
-### Run
+### Run (VS Code task — preferred)
+
+Use `run_task` with task ID `"npm: Memoria: Run unit-tests"` — this is the default test task.
+
+### Run (terminal fallback)
 
 ```bash
 cd src
 npm test
 ```
 
-### Run with Coverage
+### Run with Coverage (VS Code task — preferred)
+
+Use `run_task` with task ID `"npm: Memoria: Check unit-test:coverage"`.
+
+### Run with Coverage (terminal fallback)
 
 ```bash
 cd src
@@ -31,11 +39,6 @@ npm run test:coverage
 ```
 
 Coverage is generated via the V8 provider. Reports are output to `coverage/`.
-
-### VS Code Tasks
-
-- **npm: test** — run unit tests
-- **npm: test:coverage** — run unit tests with coverage report
 
 ### Writing Unit Tests
 
@@ -47,7 +50,11 @@ Coverage is generated via the V8 provider. Reports are output to `coverage/`.
 
 Tests that run inside a real VS Code Extension Host. Use these to verify extension activation, command registration, workspace operations, and other behaviors that depend on the VS Code runtime.
 
-### Run
+### Run (VS Code task — preferred)
+
+Use `run_task` with task ID `"npm: Memoria: Run e2e-tests"`.
+
+### Run (terminal fallback)
 
 ```bash
 cd src
@@ -67,11 +74,6 @@ This runs `vscode-test`, which:
 3. Press **F5**.
 
 This launches the Extension Host with the test configuration and attaches the debugger.
-
-### VS Code Tasks
-
-- **npm: pretest:integration** — build + compile e2e tests
-- **npm: test:integration** — run integration tests
 
 ### Writing Integration Tests
 

@@ -7,7 +7,8 @@
             "script": "build",
             "path": "src/",
             "group": { "kind": "build", "isDefault": true },
-            "presentation": { "reveal": "silent" },
+            "presentation": { "reveal": "silent", "clear": true },
+            "runOptions": { "instanceLimit": 1, "reevaluateOnRerun": true },
             "problemMatcher": []
         },
         {

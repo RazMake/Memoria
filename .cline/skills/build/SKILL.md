@@ -7,7 +7,13 @@ description: How to build the VS Code extension. Compiles TypeScript via esbuild
 
 Builds the extension source into `src/dist/extension.js` using esbuild.
 
-## Command
+On first clone (when `node_modules/` doesn't exist), the `prebuild` hook automatically runs `npm install`. Subsequent builds skip this step entirely.
+
+## VS Code Task (preferred)
+
+Use `run_task` with task ID `"npm: Memoria: Build extension"` — this is the default build task (Ctrl+Shift+B).
+
+## Terminal fallback
 
 ```bash
 cd src
@@ -36,7 +42,3 @@ After building, confirm `src/dist/extension.js` exists:
 ```bash
 ls src/dist/extension.js
 ```
-
-## VS Code Task
-
-Use the **npm: build** task (Ctrl+Shift+B) — it is the default build task.
