@@ -21,6 +21,9 @@ const packageJson = JSON.parse(
 /** Commands that intentionally have no `when` guard in the command palette. */
 const ALWAYS_VISIBLE = new Set(["memoria.initializeWorkspace"]);
 
+/** Commands that are context-menu-only and intentionally excluded from the command palette. */
+const PALETTE_EXCLUDED = new Set(["memoria.openDefaultFile"]);
+
 const commands: { command: string; title: string }[] =
     packageJson.contributes.commands;
 
@@ -28,25 +31,27 @@ const paletteEntries: { command: string; when?: string }[] =
     packageJson.contributes.menus.commandPalette;
 
 describe("package.json command declarations", () => {
-    it("should have a commandPalette entry for every declared command", () => {
+    it("should have a commandPalette entry for every declared command (except palette-excluded)", () => {
         const paletteCommands = new Set(paletteEntries.map((e) => e.command));
 
         const missing = commands
             .map((c) => c.command)
-            .filter((cmd) => !paletteCommands.has(cmd));
+            .filter((cmd) => !paletteCommands.has(cmd) && !PALETTE_EXCLUDED.has(cmd));
 
         expect(missing, `Commands missing from menus.commandPalette: ${missing.join(", ")}`).toEqual([]);
     });
 
-    it("should guard non-always-visible commands with a 'when' clause containing memoria.workspaceInitialized", () => {
+    it("should guard non-always-visible commands with a 'when' clause containing a Memoria context key", () => {
+        const memoriaContextKeys = ["memoria.workspaceInitialized", "memoria.defaultFileAvailable"];
+
         const unguarded = paletteEntries
             .filter((e) => !ALWAYS_VISIBLE.has(e.command))
-            .filter((e) => !e.when || !e.when.includes("memoria.workspaceInitialized"));
+            .filter((e) => !e.when || !memoriaContextKeys.some((key) => e.when!.includes(key)));
 
         const names = unguarded.map((e) => e.command);
         expect(
             names,
-            `Commands without a memoria.workspaceInitialized guard: ${names.join(", ")}. ` +
+            `Commands without a Memoria context key guard: ${names.join(", ")}. ` +
             `If a command should always be visible, add it to ALWAYS_VISIBLE in this test.`
         ).toEqual([]);
     });

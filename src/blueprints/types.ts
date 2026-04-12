@@ -4,11 +4,22 @@
 
 import * as vscode from "vscode";
 
+/** Allowed values for the `default` field on a workspace entry. */
+export type DefaultScope = "relative" | "includingRoot";
+
 /** A single entry in the blueprint workspace tree — either a folder or a file. */
 export interface WorkspaceEntry {
     name: string;
     isFolder: boolean;
     children?: WorkspaceEntry[];
+    /**
+     * Marks this file as a default file to open quickly.
+     * - `"relative"` — folder key is relative (e.g. "00-ToDo/"), matches any workspace root.
+     * - `"includingRoot"` — folder key is root-prefixed (e.g. "ProjectA/00-ToDo/"),
+     *   matches only the named root.
+     * Omit to leave the file as a non-default entry.
+     */
+    default?: DefaultScope;
 }
 
 /** A single decoration rule keyed by glob filter pattern. */
@@ -43,6 +54,16 @@ export interface DecorationsFeatureEntry extends FeatureEntry {
 /** Discriminated union of all known feature types. Expand as new features are added. */
 export type BlueprintFeature = DecorationsFeatureEntry;
 
+/**
+ * Default files split by scope, as returned by `resolveDefaultFiles()`.
+ * - `relative` — folder key matches any workspace root.
+ * - `rootScoped` — folder key is prefixed with the root name at write time.
+ */
+export interface DefaultFileMap {
+    relative: Record<string, string[]>;
+    rootScoped: Record<string, string[]>;
+}
+
 /** The fully parsed, validated representation of a blueprint.yaml file. */
 export interface BlueprintDefinition {
     id: string;
@@ -51,6 +72,13 @@ export interface BlueprintDefinition {
     version: string;
     workspace: WorkspaceEntry[];
     features: BlueprintFeature[];
+    /**
+     * Default files split by scope.
+     * - `relative` keys (e.g. "00-ToDo/") match any workspace root.
+     * - `rootScoped` keys (e.g. "00-ToDo/") are prefixed with the workspace root name
+     *   at write time to produce root-specific keys in default-files.json.
+     */
+    defaultFiles?: DefaultFileMap;
 }
 
 /** Per-feature enabled/disabled state — stored in .memoria/features.json. */
@@ -74,6 +102,17 @@ export interface BlueprintManifest {
     initializedAt: string;
     lastReinitAt: string | null;
     fileManifest: Record<string, string>;
+}
+
+/**
+ * Stored in .memoria/default-files.json — maps folder paths to their default file names.
+ * File names are relative to the matched folder, not to the workspace root.
+ * Keys are either relative (e.g. "00-ToDo/") matching any root,
+ * or root-prefixed (e.g. "ProjectA/00-ToDo/") matching only the named root.
+ * Root-prefixed keys take priority over relative keys.
+ */
+export interface DefaultFilesConfig {
+    defaultFiles: Record<string, string[]>;
 }
 
 /** Stored in .memoria/decorations.json — read by FileDecorationProvider at runtime. */

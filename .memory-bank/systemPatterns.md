@@ -57,6 +57,13 @@ In multi-root workspaces, only one root may have `.memoria/` at a time. `Manifes
 
 ## Behavioral Decisions
 
+### ⛔ Protected Behavioral Rules
+The following rules define core extension behavior. **No implementation change may violate these rules without explicit user confirmation.** If a requested change would depart from any of these, explain which rule is affected and ask the user to approve.
+
+1. **Normal + multi-root workspace support** — The extension works in both single-folder workspaces and multi-root workspaces. All user-facing features must function correctly in both modes.
+2. **Single initialized root, cross-root features** — In multi-root workspaces, only one root may hold `.memoria/` at a time. However, features that consume config from `.memoria/` (decorations, open-default-file, default-file context keys, file watchers) apply across **all** workspace roots/folders, not just the initialized one.
+3. **Config stays in initialized root only** — All configuration files (including `default-files.json`) must remain in the single initialized root's `.memoria/` directory. Config must never be spread across multiple roots.
+
 ### Cleanup Timing (Multi-Root)
 When initializing a different root in a multi-root workspace, deletion of the old root's `.memoria/` happens **after** the user has selected both the root and the blueprint, but **before** `engine.initialize`/`engine.reinitialize` is called. This ensures the old `.memoria/` is NOT deleted if the user cancels the blueprint selection QuickPick.
 
@@ -111,7 +118,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 
 ## BlueprintDecorationProvider Pattern
 - Registered via `vscode.window.registerFileDecorationProvider` in `extension.ts`
-- `refresh()` self-discovers the initialized root via `findInitializedRoot()` — callers do not pass the root URI, keeping the `onWorkspaceInitialized` callback signature unchanged
+- `refresh(initializedRoot, enabled, allRoots)` receives the initialized root and all workspace roots from `FeatureManager` — rules are read from the initialized root but applied across all roots
 - `matchesFilter(filter, relativePath)` — exported for unit testability; handles three syntaxes:
   - `"FolderName/"` → matches any item whose last path segment equals `FolderName`
   - `"*.ext"` → matches any item whose filename ends with `.ext`

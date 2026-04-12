@@ -194,6 +194,29 @@ describe("BlueprintDecorationProvider", () => {
 
             expect(provider.provideFileDecoration(makeUri("/workspace/00-ToDo"))).toBeUndefined();
         });
+
+        it("should apply rules to all workspace roots when allRoots is provided", async () => {
+            const root2 = makeUri("/workspace2");
+            mockReadDecorations.mockResolvedValue({
+                rules: [{ filter: "00-ToDo/", color: "charts.yellow", badge: "TD" }],
+            });
+
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            await provider.refresh(workspaceRoot, true, [workspaceRoot, root2]);
+
+            // Rules apply to the initialized root.
+            const dec1 = provider.provideFileDecoration(makeUri("/workspace/00-ToDo"));
+            expect(dec1).toBeDefined();
+            expect(dec1?.badge).toBe("TD");
+
+            // Same rules also apply to the other root.
+            const dec2 = provider.provideFileDecoration(makeUri("/workspace2/00-ToDo"));
+            expect(dec2).toBeDefined();
+            expect(dec2?.badge).toBe("TD");
+
+            // Non-matching paths in the other root are still undefined.
+            expect(provider.provideFileDecoration(makeUri("/workspace2/SomeOther"))).toBeUndefined();
+        });
     });
 
     // ── provideFileDecoration ─────────────────────────────────────────────────

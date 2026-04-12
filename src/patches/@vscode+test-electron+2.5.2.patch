@@ -1,0 +1,14 @@
+diff --git a/node_modules/@vscode/test-electron/out/runTest.js b/node_modules/@vscode/test-electron/out/runTest.js
+index a80cf12..13547b0 100644
+--- a/node_modules/@vscode/test-electron/out/runTest.js
++++ b/node_modules/@vscode/test-electron/out/runTest.js
+@@ -70,8 +70,7 @@ async function runTests(options) {
+ const SIGINT = 'SIGINT';
+ async function innerRunTests(executable, args, testRunnerEnv) {
+     const fullEnv = Object.assign({}, process.env, testRunnerEnv);
+-    const shell = process.platform === 'win32';
+-    const cmd = cp.spawn(shell ? `"${executable}"` : executable, args, { env: fullEnv, shell });
++    const cmd = cp.spawn(executable, args, { env: fullEnv });
+     let exitRequested = false;
+     const ctrlc1 = () => {
+         process.removeListener(SIGINT, ctrlc1);

@@ -3,7 +3,9 @@
 // Validation happens at parse time (fail-fast before any filesystem operations touch the workspace).
 
 import { parse } from "yaml";
-import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule } from "./types";
+import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope } from "./types";
+
+const VALID_DEFAULT_SCOPES: ReadonlySet<string> = new Set<DefaultScope>(["relative", "includingRoot"]);
 
 /**
  * Parses a blueprint.yaml string into a validated BlueprintDefinition.
@@ -43,14 +45,26 @@ export function parseBlueprintYaml(content: string): BlueprintDefinition {
         throw new Error('Blueprint is missing required array field "features".');
     }
 
-    return {
+    const workspace = parseWorkspaceTree(obj["workspace"]);
+    const defaultFiles = resolveDefaultFiles(workspace);
+
+    const definition: BlueprintDefinition = {
         id: obj["id"] as string,
         name: obj["name"] as string,
         description: obj["description"] as string,
         version: obj["version"] as string,
-        workspace: parseWorkspaceTree(obj["workspace"]),
+        workspace,
         features: parseFeatures(obj["features"]),
     };
+
+    const hasDefaults =
+        Object.keys(defaultFiles.relative).length > 0 ||
+        Object.keys(defaultFiles.rootScoped).length > 0;
+    if (hasDefaults) {
+        definition.defaultFiles = defaultFiles;
+    }
+
+    return definition;
 }
 
 /**
@@ -82,6 +96,16 @@ export function parseWorkspaceTree(raw: unknown): WorkspaceEntry[] {
         }
 
         const result: WorkspaceEntry = { name, isFolder };
+
+        if (entry["default"] !== undefined) {
+            if (typeof entry["default"] !== "string" || !VALID_DEFAULT_SCOPES.has(entry["default"])) {
+                throw new Error(`Workspace entry "${name}": "default" must be "relative" or "includingRoot".`);
+            }
+            if (isFolder) {
+                throw new Error(`Workspace entry "${name}": folders cannot be marked as default.`);
+            }
+            result.default = entry["default"] as DefaultScope;
+        }
 
         if (isFolder && Array.isArray(entry["children"])) {
             result.children = parseWorkspaceTree(entry["children"]);
@@ -196,4 +220,51 @@ export function parseDecorationRules(raw: unknown): DecorationRule[] {
 
         return result;
     });
+}
+
+/**
+ * Walks the workspace tree to collect all entries with a `default` scope
+ * and returns two maps of parent folder path → file names array:
+ * - `relative`: keys match any workspace root.
+ * - `rootScoped`: keys are folder-relative; the engine prefixes them with
+ *   the workspace root name before writing to disk.
+ * File names are relative to the parent folder, not to the workspace root.
+ * Multiple default files per folder are allowed.
+ */
+export function resolveDefaultFiles(entries: WorkspaceEntry[], prefix = ""): DefaultFileMap {
+    const relative: Record<string, string[]> = {};
+    const rootScoped: Record<string, string[]> = {};
+
+    for (const entry of entries) {
+        if (entry.default) {
+            if (!prefix) {
+                throw new Error(
+                    `Top-level file "${entry.name}" cannot be marked as default. Only files inside a folder may be default.`
+                );
+            }
+            const target = entry.default === "includingRoot" ? rootScoped : relative;
+            if (!target[prefix]) {
+                target[prefix] = [];
+            }
+            target[prefix].push(entry.name);
+        }
+
+        if (entry.children) {
+            const childResults = resolveDefaultFiles(entry.children, prefix + entry.name);
+            for (const [folder, files] of Object.entries(childResults.relative)) {
+                if (!relative[folder]) {
+                    relative[folder] = [];
+                }
+                relative[folder].push(...files);
+            }
+            for (const [folder, files] of Object.entries(childResults.rootScoped)) {
+                if (!rootScoped[folder]) {
+                    rootScoped[folder] = [];
+                }
+                rootScoped[folder].push(...files);
+            }
+        }
+    }
+
+    return { relative, rootScoped };
 }

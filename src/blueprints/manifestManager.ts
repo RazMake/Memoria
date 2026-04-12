@@ -7,7 +7,7 @@
 // without storing any file content or PII.
 
 import * as vscode from "vscode";
-import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
+import type { BlueprintManifest, DefaultFilesConfig, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -89,6 +89,26 @@ export class ManifestManager {
         await this.writeJson(this.manifestUri(workspaceRoot), manifest);
     }
 
+    async readDefaultFiles(workspaceRoot: vscode.Uri): Promise<Record<string, string[]> | null> {
+        const config = await this.readJson<DefaultFilesConfig>(this.defaultFilesUri(workspaceRoot));
+        if (!config?.defaultFiles) {
+            return null;
+        }
+        // Normalize legacy string values to string[] for backward compatibility.
+        for (const key of Object.keys(config.defaultFiles)) {
+            const value = config.defaultFiles[key];
+            if (typeof value === "string") {
+                (config.defaultFiles as Record<string, string | string[]>)[key] = [value];
+            }
+        }
+        return config.defaultFiles;
+    }
+
+    async writeDefaultFiles(workspaceRoot: vscode.Uri, defaultFiles: Record<string, string[]>): Promise<void> {
+        await this.ensureMemoriaDir(workspaceRoot);
+        await this.writeJson(this.defaultFilesUri(workspaceRoot), { defaultFiles } satisfies DefaultFilesConfig);
+    }
+
     async readDecorations(workspaceRoot: vscode.Uri): Promise<DecorationsConfig | null> {
         return this.readJson<DecorationsConfig>(this.decorationsUri(workspaceRoot));
     }
@@ -118,6 +138,10 @@ export class ManifestManager {
 
     private manifestUri(root: vscode.Uri): vscode.Uri {
         return vscode.Uri.joinPath(root, ".memoria", "blueprint.json");
+    }
+
+    private defaultFilesUri(root: vscode.Uri): vscode.Uri {
+        return vscode.Uri.joinPath(root, ".memoria", "default-files.json");
     }
 
     private decorationsUri(root: vscode.Uri): vscode.Uri {

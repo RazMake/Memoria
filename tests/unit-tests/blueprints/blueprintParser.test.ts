@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBlueprintYaml, parseWorkspaceTree, parseDecorationRules, parseFeatures } from "../../../src/blueprints/blueprintParser";
+import { parseBlueprintYaml, parseWorkspaceTree, parseDecorationRules, parseFeatures, resolveDefaultFiles } from "../../../src/blueprints/blueprintParser";
 
 // blueprintParser is pure logic with no VS Code API dependency — no mocks needed.
 
@@ -120,6 +120,39 @@ describe("parseWorkspaceTree", () => {
 
     it("should return an empty array for an empty workspace", () => {
         expect(parseWorkspaceTree([])).toEqual([]);
+    });
+
+    it("should parse default: 'relative' on a file entry", () => {
+        const entries = parseWorkspaceTree([{ name: "Main.todo", default: "relative" }]);
+        expect(entries[0].default).toBe("relative");
+    });
+
+    it("should parse default: 'includingRoot' on a file entry", () => {
+        const entries = parseWorkspaceTree([{ name: "Main.todo", default: "includingRoot" }]);
+        expect(entries[0].default).toBe("includingRoot");
+    });
+
+    it("should omit default property when not specified", () => {
+        const entries = parseWorkspaceTree([{ name: "Main.todo" }]);
+        expect(entries[0].default).toBeUndefined();
+    });
+
+    it("should throw when default is set on a folder", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "Folder/", default: "relative" }])
+        ).toThrow("folders cannot be marked as default");
+    });
+
+    it("should throw when default is a boolean", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "Main.todo", default: true }])
+        ).toThrow('"default" must be "relative" or "includingRoot"');
+    });
+
+    it("should throw when default is an invalid string", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "Main.todo", default: "yes" }])
+        ).toThrow('"default" must be "relative" or "includingRoot"');
     });
 });
 
@@ -262,5 +295,191 @@ describe("parseFeatures", () => {
             },
         ]);
         expect(features[0].enabledByDefault).toBe(false);
+    });
+});
+
+describe("resolveDefaultFiles", () => {
+    it("should return empty maps when no entry has a default scope", () => {
+        const entries = parseWorkspaceTree([
+            { name: "Folder/", children: [{ name: "file.md" }] },
+            { name: "Root.md" },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({ relative: {}, rootScoped: {} });
+    });
+
+    it("should throw when a top-level file is marked as default", () => {
+        const entries = parseWorkspaceTree([
+            { name: "Root.md", default: "relative" },
+            { name: "Other.md" },
+        ]);
+        expect(() => resolveDefaultFiles(entries)).toThrow("Top-level file");
+    });
+
+    it("should place a 'relative' default in the relative map", () => {
+        const entries = parseWorkspaceTree([
+            { name: "00-ToDo/", children: [{ name: "Main.todo", default: "relative" }] },
+            { name: "01-Notes/" },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "00-ToDo/": ["Main.todo"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should place an 'includingRoot' default in the rootScoped map", () => {
+        const entries = parseWorkspaceTree([
+            { name: "00-ToDo/", children: [{ name: "Main.todo", default: "includingRoot" }] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: {},
+            rootScoped: { "00-ToDo/": ["Main.todo"] },
+        });
+    });
+
+    it("should return the file name for a deeply nested default file", () => {
+        const entries = parseWorkspaceTree([
+            { name: "A/", children: [{ name: "B/", children: [{ name: "deep.txt", default: "relative" }] }] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "A/B/": ["deep.txt"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should support multiple default files in different folders", () => {
+        const entries = parseWorkspaceTree([
+            { name: "A/", children: [{ name: "f1.md", default: "relative" }] },
+            { name: "B/", children: [{ name: "f2.md", default: "relative" }] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "A/": ["f1.md"], "B/": ["f2.md"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should collect multiple default files in the same folder", () => {
+        const entries = parseWorkspaceTree([
+            { name: "A/", children: [
+                { name: "File1.md", default: "relative" },
+                { name: "File2.md", default: "relative" },
+            ] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "A/": ["File1.md", "File2.md"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should collect multiple default files in a nested folder", () => {
+        const entries = parseWorkspaceTree([
+            { name: "A/", children: [
+                { name: "f1.md", default: "relative" },
+                { name: "f2.md", default: "relative" },
+            ] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "A/": ["f1.md", "f2.md"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should separate relative and rootScoped entries in the same folder", () => {
+        const entries = parseWorkspaceTree([
+            { name: "A/", children: [
+                { name: "shared.md", default: "relative" },
+                { name: "local.md", default: "includingRoot" },
+            ] },
+        ]);
+        expect(resolveDefaultFiles(entries)).toEqual({
+            relative: { "A/": ["shared.md"] },
+            rootScoped: { "A/": ["local.md"] },
+        });
+    });
+
+    it("should throw for top-level includingRoot default", () => {
+        const entries = parseWorkspaceTree([
+            { name: "Root.md", default: "includingRoot" },
+        ]);
+        expect(() => resolveDefaultFiles(entries)).toThrow("Top-level file");
+    });
+});
+
+describe("parseBlueprintYaml — defaultFiles", () => {
+    const baseYaml = (workspaceBlock: string) => `
+id: "test"
+name: "Test"
+description: "A test."
+version: "1.0.0"
+workspace:
+${workspaceBlock}
+features: []
+`;
+
+    it("should set defaultFiles when a workspace entry has default: 'relative'", () => {
+        const yaml = baseYaml(`  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+        default: "relative"
+  - name: "01-Notes/"`);
+        const result = parseBlueprintYaml(yaml);
+        expect(result.defaultFiles).toEqual({
+            relative: { "00-ToDo/": ["Main.todo"] },
+            rootScoped: {},
+        });
+    });
+
+    it("should set defaultFiles when a workspace entry has default: 'includingRoot'", () => {
+        const yaml = baseYaml(`  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+        default: "includingRoot"
+  - name: "01-Notes/"`);
+        const result = parseBlueprintYaml(yaml);
+        expect(result.defaultFiles).toEqual({
+            relative: {},
+            rootScoped: { "00-ToDo/": ["Main.todo"] },
+        });
+    });
+
+    it("should not set defaultFiles when no entry has a default scope", () => {
+        const yaml = baseYaml(`  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+  - name: "01-Notes/"`);
+        const result = parseBlueprintYaml(yaml);
+        expect(result.defaultFiles).toBeUndefined();
+    });
+
+    it("should collect multiple default files from different folders", () => {
+        const yaml = baseYaml(`  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+        default: "relative"
+  - name: "01-Notes/"
+    children:
+      - name: "Index.md"
+        default: "relative"`);
+        const result = parseBlueprintYaml(yaml);
+        expect(result.defaultFiles).toEqual({
+            relative: {
+                "00-ToDo/": ["Main.todo"],
+                "01-Notes/": ["Index.md"],
+            },
+            rootScoped: {},
+        });
+    });
+
+    it("should split relative and rootScoped defaults from YAML", () => {
+        const yaml = baseYaml(`  - name: "00-ToDo/"
+    children:
+      - name: "Main.todo"
+        default: "relative"
+      - name: "Local.todo"
+        default: "includingRoot"`);
+        const result = parseBlueprintYaml(yaml);
+        expect(result.defaultFiles).toEqual({
+            relative: { "00-ToDo/": ["Main.todo"] },
+            rootScoped: { "00-ToDo/": ["Local.todo"] },
+        });
     });
 });

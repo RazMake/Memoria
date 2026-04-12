@@ -7,7 +7,7 @@ import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { SKIP_FILE } from "./fileScaffold";
 import { computeFileHash } from "./hashUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, OverwriteChoice } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, OverwriteChoice, DefaultFileMap } from "./types";
 import type { ReinitConflictResolver } from "./reinitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -46,6 +46,12 @@ export class BlueprintEngine {
         };
 
         await this.manifest.writeManifest(workspaceRoot, manifest);
+        if (definition.defaultFiles) {
+            await this.manifest.writeDefaultFiles(
+                workspaceRoot,
+                mergeDefaultFileMap(definition.defaultFiles, workspaceRoot)
+            );
+        }
         await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(definition.features) });
         await this.manifest.writeFeatures(workspaceRoot, buildFeaturesConfig(definition.features));
     }
@@ -123,6 +129,12 @@ export class BlueprintEngine {
         };
 
         await this.manifest.writeManifest(workspaceRoot, updatedManifest);
+        if (newDefinition.defaultFiles) {
+            await this.manifest.writeDefaultFiles(
+                workspaceRoot,
+                mergeDefaultFileMap(newDefinition.defaultFiles, workspaceRoot)
+            );
+        }
         await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(newDefinition.features) });
 
         const existingFeaturesConfig = await this.manifest.readFeatures(workspaceRoot);
@@ -207,6 +219,30 @@ export class BlueprintEngine {
             });
         }
     }
+}
+
+/**
+ * Merges the two-map DefaultFileMap into a flat Record for writing to default-files.json.
+ * Root-scoped keys are prefixed with the workspace root folder name.
+ */
+export function mergeDefaultFileMap(
+    map: DefaultFileMap,
+    workspaceRoot: vscode.Uri
+): Record<string, string[]> {
+    const result: Record<string, string[]> = { ...map.relative };
+
+    if (Object.keys(map.rootScoped).length > 0) {
+        const rootPath = workspaceRoot.path;
+        const trimmed = rootPath.endsWith("/") ? rootPath.slice(0, -1) : rootPath;
+        const lastSlash = trimmed.lastIndexOf("/");
+        const rootName = lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+
+        for (const [folder, files] of Object.entries(map.rootScoped)) {
+            result[rootName + "/" + folder] = files;
+        }
+    }
+
+    return result;
 }
 
 /** Builds the initial FeaturesConfig from a blueprint's features, using each feature's enabledByDefault. */

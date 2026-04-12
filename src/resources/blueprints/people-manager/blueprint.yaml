@@ -7,6 +7,9 @@ workspace:
   - name: "00-ToDo/"
     children:
       - name: "Main.todo"
+        default: "relative"
+      - name: "test.md"
+        default: "relative"
   - name: "01-People/"
   - name: "02-ToRemember/"
   - name: "03-MeetingNotes/"

@@ -20,7 +20,8 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     private rules: DecorationRule[] = [];
     /** Pre-built decorations matching rules by index — avoids allocating on every provideFileDecoration call. */
     private builtDecorations: (vscode.FileDecoration | undefined)[] = [];
-    private workspaceRoot: vscode.Uri | null = null;
+    /** All workspace root paths to decorate (not just the initialized one). */
+    private rootPaths: string[] = [];
 
     constructor(private readonly manifest: ManifestManager) {}
 
@@ -28,16 +29,20 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
      * Reloads decoration rules from .memoria/decorations.json and fires the change event
      * so VS Code re-queries all URIs. Called by FeatureManager after every refresh cycle.
      *
+     * Rules are read from `initializedRoot` but applied to items under any of the
+     * `allRoots` — in a multi-root workspace only one root holds .memoria/ but
+     * folders in other roots should still be decorated.
+     *
      * When `enabled` is false the provider clears all rules so no decorations are shown.
      */
-    async refresh(initializedRoot: vscode.Uri | null, enabled: boolean): Promise<void> {
+    async refresh(initializedRoot: vscode.Uri | null, enabled: boolean, allRoots?: vscode.Uri[]): Promise<void> {
         if (initializedRoot && enabled) {
             const config = await this.manifest.readDecorations(initializedRoot);
-            this.workspaceRoot = initializedRoot;
             this.rules = config?.rules ?? [];
+            this.rootPaths = (allRoots ?? [initializedRoot]).map((r) => r.path);
         } else {
-            this.workspaceRoot = null;
             this.rules = [];
+            this.rootPaths = [];
         }
 
         this.builtDecorations = this.rules.map(buildDecoration);
@@ -45,22 +50,27 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     }
 
     provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-        if (!this.workspaceRoot || this.rules.length === 0) {
+        if (this.rules.length === 0 || this.rootPaths.length === 0) {
             return undefined;
         }
 
-        const rootPath = this.workspaceRoot.path;
         const uriPath = uri.path;
 
-        // Only decorate items that live inside the initialized workspace root.
-        if (!uriPath.startsWith(rootPath + "/") && uriPath !== rootPath) {
-            return undefined;
+        // Find which workspace root this URI belongs to.
+        let relativePath: string | undefined;
+        for (const rootPath of this.rootPaths) {
+            if (uriPath.startsWith(rootPath + "/")) {
+                relativePath = uriPath.slice(rootPath.length + 1);
+                break;
+            }
+            if (uriPath === rootPath) {
+                // Don't decorate the root itself.
+                return undefined;
+            }
         }
 
-        // Workspace-relative path, always forward-slash separated. Strip leading /.
-        const relativePath = uriPath.slice(rootPath.length).replace(/^\//, "");
-        if (!relativePath) {
-            return undefined; // Don't decorate the root itself.
+        if (relativePath === undefined) {
+            return undefined;
         }
 
         for (let i = 0; i < this.rules.length; i++) {

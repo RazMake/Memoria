@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BlueprintEngine, buildFeaturesConfig, extractDecorationRules, mergeFeaturesConfig } from "../../../src/blueprints/blueprintEngine";
+import { BlueprintEngine, buildFeaturesConfig, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
 import type { BlueprintDefinition, BlueprintFeature, FeaturesConfig } from "../../../src/blueprints/types";
 
 // BlueprintEngine uses only injected collaborators — no direct vscode API calls.
@@ -63,6 +63,7 @@ describe("BlueprintEngine", () => {
         mockManifest = {
             readManifest: vi.fn().mockResolvedValue(null),
             writeManifest: vi.fn().mockResolvedValue(undefined),
+            writeDefaultFiles: vi.fn().mockResolvedValue(undefined),
             writeDecorations: vi.fn().mockResolvedValue(undefined),
             writeFeatures: vi.fn().mockResolvedValue(undefined),
             readFeatures: vi.fn().mockResolvedValue(null),
@@ -156,6 +157,55 @@ describe("BlueprintEngine", () => {
             mockScaffold.scaffoldTree.mockRejectedValue(new Error("Disk write failed"));
             const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
             await expect(engine.initialize(workspaceRoot, "individual-contributor")).rejects.toThrow("Disk write failed");
+        });
+
+        it("should write default-files.json when blueprint defines defaultFiles", async () => {
+            const definitionWithDefault = {
+                ...mockDefinition,
+                defaultFiles: { relative: { "Folder/": ["file.md"] }, rootScoped: {} },
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithDefault);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+            expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
+                workspaceRoot,
+                { "Folder/": ["file.md"] }
+            );
+        });
+
+        it("should prefix rootScoped defaultFiles with the workspace root name", async () => {
+            const definitionWithDefault = {
+                ...mockDefinition,
+                defaultFiles: {
+                    relative: { "A/": ["shared.md"] },
+                    rootScoped: { "A/": ["local.md"] },
+                },
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithDefault);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+            expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
+                workspaceRoot,
+                { "A/": ["shared.md"], "workspace/A/": ["local.md"] }
+            );
+        });
+
+        it("should not write default-files.json when blueprint does not define any", async () => {
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+            expect(mockManifest.writeDefaultFiles).not.toHaveBeenCalled();
+        });
+
+        it("should not include defaultFiles in manifest", async () => {
+            const definitionWithDefault = {
+                ...mockDefinition,
+                defaultFiles: { relative: { "Folder/": ["file.md"] }, rootScoped: {} },
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithDefault);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+            const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
+            expect(writtenManifest.defaultFiles).toBeUndefined();
         });
     });
 
@@ -526,6 +576,82 @@ describe("BlueprintEngine", () => {
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockFs.copy).not.toHaveBeenCalled();
         });
+
+        it("should write default-files.json when blueprint defines defaultFiles during reinit", async () => {
+            const definitionWithDefault = {
+                ...mockDefinition,
+                defaultFiles: { relative: { "Folder/": ["file.md"] }, rootScoped: {} },
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithDefault);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
+                workspaceRoot,
+                { "Folder/": ["file.md"] }
+            );
+        });
+
+        it("should not write default-files.json when blueprint does not define any during reinit", async () => {
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            expect(mockManifest.writeDefaultFiles).not.toHaveBeenCalled();
+        });
+
+        it("should not include defaultFiles in updated manifest", async () => {
+            const definitionWithDefault = {
+                ...mockDefinition,
+                defaultFiles: { relative: { "Folder/": ["file.md"] }, rootScoped: {} },
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithDefault);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+            const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
+            expect(writtenManifest.defaultFiles).toBeUndefined();
+        });
+    });
+});
+
+describe("mergeDefaultFileMap", () => {
+    it("should return relative entries as-is", () => {
+        const root = { path: "/workspace" } as any;
+        const result = mergeDefaultFileMap(
+            { relative: { "A/": ["f.md"] }, rootScoped: {} },
+            root
+        );
+        expect(result).toEqual({ "A/": ["f.md"] });
+    });
+
+    it("should prefix rootScoped entries with root folder name", () => {
+        const root = { path: "/workspace" } as any;
+        const result = mergeDefaultFileMap(
+            { relative: {}, rootScoped: { "A/": ["f.md"] } },
+            root
+        );
+        expect(result).toEqual({ "workspace/A/": ["f.md"] });
+    });
+
+    it("should merge both relative and rootScoped entries", () => {
+        const root = { path: "/my-project" } as any;
+        const result = mergeDefaultFileMap(
+            {
+                relative: { "A/": ["shared.md"] },
+                rootScoped: { "A/": ["local.md"] },
+            },
+            root
+        );
+        expect(result).toEqual({
+            "A/": ["shared.md"],
+            "my-project/A/": ["local.md"],
+        });
+    });
+
+    it("should handle root path with trailing slash", () => {
+        const root = { path: "/workspace/" } as any;
+        const result = mergeDefaultFileMap(
+            { relative: {}, rootScoped: { "B/": ["x.md"] } },
+            root
+        );
+        expect(result).toEqual({ "workspace/B/": ["x.md"] });
     });
 });
 

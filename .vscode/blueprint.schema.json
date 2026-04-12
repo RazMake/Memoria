@@ -54,6 +54,11 @@
           "type": "array",
           "description": "Nested entries (folders only).",
           "items": { "$ref": "#/$defs/workspaceEntry" }
+        },
+        "default": {
+          "type": "string",
+          "enum": ["relative", "includingRoot"],
+          "description": "Marks this file as a default file to open quickly.\n - 'relative' matches any workspace root;\n - 'includingRoot' matches only the root whose name is prefixed to the folder key."
         }
       }
     },
