@@ -1,7 +1,7 @@
 # Getting Started with Memoria
 
 **Memoria** is a VS Code extension that scaffolds a notebook inside a workspace.  
-It creates a folder structure, deploys content that could be useful for the specific type of notebook (_or nowledge base_) and enables features specific to the selected customization package, called **blueprints**.  
+It creates a folder structure, deploys content that is considered useful for the specific type of notebook (_or knowledge base_) and enables features specific to the selected customization package, called **blueprints**.  
 
 To get started, first thing you need to do is to initialize your workspace, by following the steps below.
 
@@ -22,6 +22,10 @@ To get started, first thing you need to do is to initialize your workspace, by f
 ### Initializing a multi root workspace
 
 ![Initialize multi-root workspace](media/initialize-multi-root.gif)
+
+## Need Help?
+
+Run [`Memoria: Open User Guide`](commands/open-user-guide.md) from the Command Palette at any time to browse the built-in documentation.
 
 ## Next Steps
 

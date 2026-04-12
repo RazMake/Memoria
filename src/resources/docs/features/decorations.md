@@ -16,6 +16,15 @@ Some decorations **propagate** to child items — for example, a decoration on `
 
 Changes take effect immediately — no restart required.
 
+## IntelliSense
+
+When editing `.memoria/decorations.json`, Memoria provides:
+
+- **Auto-completion** for rule field names, filter patterns, color values, and booleans
+- **Inline color picker** for theme color IDs — pick a color and it maps to the closest VS Code theme color
+
+Decoration rules are also updated **live** — any saved change to `decorations.json` is reflected in the Explorer immediately without reloading.
+
 ## Troubleshooting
 
 - **Badges/colors not showing?** Make sure the feature is enabled via **Memoria: Manage features**
@@ -24,4 +33,4 @@ Changes take effect immediately — no restart required.
 
 ---
 
-[← Back to Getting Started](../getting-started.md) · [Commands](../commands/index.md) · [All Blueprints](../blueprints/index.md)
+[⬅️ **Back** to Features](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

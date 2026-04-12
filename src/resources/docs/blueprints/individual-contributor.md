@@ -36,4 +36,4 @@
 
 ---
 
-[← All Blueprints](index.md) · [People Manager Notebook →](people-manager.md)
+[⬅️ **Back** to Blueprints](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

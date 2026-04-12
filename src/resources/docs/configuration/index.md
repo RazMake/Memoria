@@ -10,7 +10,7 @@ When you initialize a workspace, Memoria creates a `.memoria/` folder at the wor
 |------|---------|
 | [blueprint.json](blueprint-json.md) | Records which blueprint template was applied
 | [features.json](features-json.md) | Stores feature toggle states |
-| [default-files.json](default-files-json.md) | Stores the map between folders and their list of default files (_to open from rigght-click menu_) |
+| [default-files.json](default-files-json.md) | Stores the map between folders and their list of default files (_to open from right-click menu_) |
 | [decorations.json](decorations-json.md) | Defines Explorer decoration rules (_setting colors and badges for folders/files_) |
 | [dotfolders.json](dotfolders-json.md) | Tracks managed `files.exclude` entries |
 

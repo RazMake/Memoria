@@ -22,6 +22,12 @@ Default files are set up by the blueprint during initialization and stored in `.
 }
 ```
 
+When editing this file, Memoria provides **auto-completion** for folder paths (relative and root-prefixed) and file names within those folders.
+
+Changes to `default-files.json` are picked up **live** — the context menu updates without reloading VS Code.
+
+> **Warning:** Using this command closes all currently open editors before opening the default files side by side. Make sure to save any unsaved work first.
+
 ## Troubleshooting
 
 - **"Open default file(s)" missing from context menu?** The menu item only appears when you right-click a **folder** (not a file) that has default files configured, and at least one of those files exists on disk
@@ -29,4 +35,4 @@ Default files are set up by the blueprint during initialization and stored in `.
 
 ---
 
-[← Back to Getting Started](../getting-started.md) · [Commands](../commands/index.md) · [All Blueprints](../blueprints/index.md)
+[⬅️ **Back** to Features](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

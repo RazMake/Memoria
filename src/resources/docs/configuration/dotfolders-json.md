@@ -37,4 +37,4 @@ When you run **Toggle dot-folders**:
 
 ---
 
-[← All configuration files](index.md)
+[⬅️ **Back** to Configuration](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

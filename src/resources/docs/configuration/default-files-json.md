@@ -35,4 +35,4 @@ Each value is an array of file names relative to the matched folder (not the wor
 
 ---
 
-[← All configuration files](index.md)
+[⬅️ **Back** to Configuration](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

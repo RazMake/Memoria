@@ -42,4 +42,4 @@
 
 ---
 
-[← All Blueprints](index.md) · [← Individual Contributor Notebook](individual-contributor.md)
+[⬅️ **Back** to Blueprints](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

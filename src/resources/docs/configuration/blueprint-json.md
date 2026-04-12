@@ -37,4 +37,4 @@ Records which blueprint template was applied to this workspace and tracks file c
 
 ---
 
-[← All configuration files](index.md)
+[⬅️ **Back** to Configuration](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

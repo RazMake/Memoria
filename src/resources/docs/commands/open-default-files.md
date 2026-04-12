@@ -11,8 +11,10 @@ Opens one or more pre-configured files for a folder, side by side in the editor.
 
 ![Open default files](../media/open-default-files.gif)
 
+> **Warning:** This command closes all currently open editors. Make sure to save any unsaved work first.
+
 > **Tip:** Default files are defined in the blueprint template and configured in `.memoria/default-files.json`. See [Default Files](../features/default-files.md) for details.
 
 ---
 
-[← Back to All Commands](index.md) · [Getting Started](../getting-started.md)
+[⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

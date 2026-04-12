@@ -1,11 +1,11 @@
 # Blueprints
 
-**Memoria** extension is shipping with a number of packages (_called **blueprints**_). Each blueprint encapsulates content helpfull for a specific type of notebook (or user scenario).
+**Memoria** extension is shipping with a number of packages (_called **blueprints**_). Each blueprint encapsulates content helpful for a specific type of notebook (or user scenario).
 
-When the user '_initializes_' a workspace (_by running [`Memoria: Initialize workspace`](../commands/initialize-workspace.md) commsnf_), the folder structure is adjusted to match the blueprint and additional content gets deployed in the workspace (_like sample files, specialized features, etc._)
+When the user '_initializes_' a workspace (_by running [`Memoria: Initialize workspace`](../commands/initialize-workspace.md) command_), the folder structure is adjusted to match the blueprint and additional content gets deployed in the workspace (_like sample files, specialized features, etc._)
 
 ## Available Blueprints
-I version `0.0.1` of Memoria, the following blueprints are available:
+In version `0.0.1` of Memoria, the following blueprints are available:
 
 | Blueprint | Description |
 |-----------|-------------|

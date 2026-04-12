@@ -18,4 +18,4 @@ See [Blueprint Templates](../blueprints/index.md) for what each template include
 
 ---
 
-[← Back to All Commands](index.md) · [Getting Started](../getting-started.md)
+[⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

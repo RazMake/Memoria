@@ -31,7 +31,7 @@ Defines the Explorer decoration rules — badges, colors, and tooltips applied t
 
 | Field | Description |
 |-------|-------------|
-| `rules[].filter` | Folder path pattern to match |
+| `rules[].filter` | Pattern to match. Supports: folder names (`"00-ToDo/"`), file extensions (`"*.md"`), or exact workspace-relative paths (`"path/to/file"`) |
 | `rules[].color` | VS Code theme color ID (e.g., `charts.yellow`, `charts.blue`) |
 | `rules[].badge` | Short text badge shown next to the folder name (max 2 characters) |
 | `rules[].tooltip` | Hover tooltip text |
@@ -44,4 +44,4 @@ Defines the Explorer decoration rules — badges, colors, and tooltips applied t
 
 ---
 
-[← All configuration files](index.md)
+[⬅️ **Back** to Configuration](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

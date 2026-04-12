@@ -37,4 +37,4 @@ Stores which optional features are enabled or disabled for this workspace.
 
 ---
 
-[← All configuration files](index.md)
+[⬅️ **Back** to Configuration](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)
