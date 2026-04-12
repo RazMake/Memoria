@@ -14,6 +14,7 @@ import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
 import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
+import { DefaultFileCompletionProvider, DEFAULT_FILES_JSON_SELECTOR } from "./features/navigator/defaultFileCompletionProvider";
 import { FeatureManager } from "./features/featureManager";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
@@ -58,6 +59,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.languages.registerColorProvider(
             DECORATIONS_JSON_SELECTOR,
             new DecorationColorProvider(),
+        ),
+        vscode.languages.registerCompletionItemProvider(
+            DEFAULT_FILES_JSON_SELECTOR,
+            new DefaultFileCompletionProvider(),
+            '"',
+            '/',
         ),
     );
 
