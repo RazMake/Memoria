@@ -19,10 +19,10 @@ const packageJson = JSON.parse(
 );
 
 /** Commands that intentionally have no `when` guard in the command palette. */
-const ALWAYS_VISIBLE = new Set(["memoria.initializeWorkspace"]);
+const ALWAYS_VISIBLE = new Set(["memoria.initializeWorkspace", "memoria.openUserGuide"]);
 
 /** Commands that are context-menu-only and intentionally excluded from the command palette. */
-const PALETTE_EXCLUDED = new Set(["memoria.openDefaultFile"]);
+const PALETTE_EXCLUDED = new Set<string>([]);
 
 const commands: { command: string; title: string }[] =
     packageJson.contributes.commands;
@@ -41,12 +41,12 @@ describe("package.json command declarations", () => {
         expect(missing, `Commands missing from menus.commandPalette: ${missing.join(", ")}`).toEqual([]);
     });
 
-    it("should guard non-always-visible commands with a 'when' clause containing a Memoria context key", () => {
+    it("should guard non-always-visible commands with a 'when' clause", () => {
         const memoriaContextKeys = ["memoria.workspaceInitialized", "memoria.defaultFileAvailable"];
 
         const unguarded = paletteEntries
             .filter((e) => !ALWAYS_VISIBLE.has(e.command))
-            .filter((e) => !e.when || !memoriaContextKeys.some((key) => e.when!.includes(key)));
+            .filter((e) => !e.when || (!memoriaContextKeys.some((key) => e.when!.includes(key)) && e.when !== "false"));
 
         const names = unguarded.map((e) => e.command);
         expect(

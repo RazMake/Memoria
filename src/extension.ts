@@ -10,6 +10,7 @@ import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
 import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { createOpenDefaultFileCommand, getRootFolderName } from "./commands/openDefaultFile";
+import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { FeatureManager } from "./features/featureManager";
 
@@ -84,6 +85,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerFileWatchers(context, roots, manifest, featureManager);
     registerDefaultFileWatcher(context, initializedRoot, roots, manifest);
     registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, onWorkspaceInitialized);
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "memoria.openUserGuide",
+            createOpenUserGuideCommand(context.extensionUri)
+        )
+    );
 }
 
 export function deactivate(): void {
