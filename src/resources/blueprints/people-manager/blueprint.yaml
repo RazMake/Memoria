@@ -4,21 +4,26 @@ description: "For managers: meeting notes, 1:1s, team contacts, and project stat
 version: "1.0.0"
 
 workspace:
-  - name: "00-ToDo/"
+  - name: "00-Workstreams/"
     children:
-      - name: "Main.todo"
-        default: "relative"
-      - name: "test.md"
-        default: "relative"
-  - name: "01-People/"
-  - name: "02-ToRemember/"
-  - name: "03-MeetingNotes/"
+      - name: "Planning/"
+      - name: "Team-Evaluations/"
+      - name: "MyList.todo"
+        default: "includingRoot"
+  - name: "01-ToRemember/"
     children:
-      - name: "1-1/"
-      - name: "Ad-hoc/"
-      - name: "WOR/"
-  - name: "04-Inbox/"
+      - name: "Trainings/"
+      - name: "Hiring/"
+      - name: "Evaluation/"
+  - name: "02-MeetingNotes/"
+    children:
+      - name: "Team-Members-1-1/"
+  - name: "03-Inbox/"
   - name: "05-Archive/"
+    children:
+      - name: "00-Workstreams/"
+      - name: "01-ToRemember/"
+      - name: "02-MeetingNotes/"
 
 features:
   - id: "decorations"
@@ -26,15 +31,49 @@ features:
     description: "Badges and colors in the VS Code Explorer"
     enabledByDefault: true
     rules:
-      - filter: "00-ToDo/"
+      - filter: "Planning/"
         color: "charts.yellow"
-        badge: "TD"
-        tooltip: "Active tasks"
+        badge: "📅"
+        tooltip: "Planning notes, by quarter."
         propagate: true
-      - filter: "01-People/"
-        color: "charts.blue"
-        tooltip: "Team members"
+      - filter: "Team-Evaluations/"
+        color: "charts.yellow"
+        badge: "✏️"
+        tooltip: "Team continuous evaluation notes."
+        propagate: true
+      - filter: "00-Workstreams/"
+        color: "charts.yellow"
+        badge: "📋"
+        tooltip: "Information about current workstreams, todos, etc."
+        propagate: true
+      - filter: "Hiring/"
+        color: "charts.yellow"
+        tooltip: "Notes on the hiring process, with examples."
+        propagate: true
+      - filter: "Evaluation/"
+        color: "charts.yellow"
+        tooltip: "Details and templates used for team members' evaluation."
+        propagate: true
+      - filter: "01-ToRemember/"
+        color: "charts.yellow"
+        badge: "🧠"
+        tooltip: "Personal knowledge base."
+        propagate: true
+      - filter: "Team-Members-1-1/"
+        color: "charts.yellow"
+        tooltip: "Notes from 1:1 meetings with team members."
+        propagate: true
+      - filter: "02-MeetingNotes/"
+        color: "charts.yellow"
+        tooltip: "Meeting notes to be preserved for later references."
+        propagate: true
+      - filter: "03-Inbox/"
+        color: "charts.yellow"
+        badge: "📭"
+        tooltip: "New, unprocessed notes."
         propagate: true
       - filter: "05-Archive/"
-        color: "charts.grey"
-        tooltip: "Archived items"
+        color: "charts.yellow"
+        badge: "⌛"
+        tooltip: "Personal knowledge base."
+        propagate: true

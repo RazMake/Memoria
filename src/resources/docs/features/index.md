@@ -1,18 +1,23 @@
 # Features
 
-**Memoria** blueprints include optional features that enhance the workspace experience. Use [`Memoria: Manage features`](../commands/manage-features.md) to toggle which features are active.
+**Memoria** includes features that enhance the workspace experience. Some are toggleable via [`Memoria: Manage features`](../commands/manage-features.md), while others are always on.
 
-## Available Features
+## Toggleable Features
 
-| Feature | Description | Toggleable |
-|---------|-------------|------------|
-| [Explorer decorations](decorations.md) | Provides customization for the folder/file colors and badges in the Explorer panel | Yes |
-| [Open default file(s)](default-files.md) | Adds a custom entry in the right-click menu of the Explorer panel, which will open multiple files at once side by side | No — always active when configured |
-| [Dot-Folder hiding](dot-folder-hiding.md) | Hide `.memoria/` and other dot-folders from the Explorer | No — controlled via [Toggle dot-folders](../commands/toggle-dot-folders.md) command |
+Use the **Manage features** command to enable or disable these. Which features are enabled by default depends on the blueprint you chose — see the individual [blueprint](../blueprints/index.md) pages for details.
 
-> **Note:** While all features appear in the **Manage features** picker, only **Explorer Decorations** can be toggled on/off through it. Default Files and Dot-Folder Hiding are controlled through their own commands.
+| Feature | Description |
+|---------|-------------|
+| [Explorer decorations](decorations.md) | Provides customization for the folder/file colors and badges in the Explorer panel |
 
-Which features are enabled by default depends on the blueprint you chose. See the individual [blueprint](../blueprints/index.md) pages for details.
+## Built-in (Always On)
+
+These features are always active once the workspace is initialized. They do not appear in `features.json` and cannot be disabled.
+
+| Feature | Description |
+|---------|-------------|
+| [Open default file(s)](default-files.md) | Adds a custom entry in the right-click menu of the Explorer panel, which will open multiple files at once side by side |
+| [Dot-Folder hiding](dot-folder-hiding.md) | Hide `.memoria/` and other dot-folders from the Explorer |
 
 ---
 

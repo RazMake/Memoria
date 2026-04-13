@@ -1,6 +1,6 @@
 # Open User Guide
 
-**Command:** `Memoria: Open User Guide`
+**Command:** `Memoria: Open User Guide`  
 **Available:** Always
 
 Opens the built-in user guide inside VS Code's markdown preview. A quick-pick lets you jump straight to the section you need.

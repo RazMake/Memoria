@@ -1,44 +1,35 @@
 # People Manager Notebook
 
-*For managers: meeting notes, 1:1s, team contacts, and project status.*
+This template is meant to help managers organize their meeting notes and create a personal knowledge base.
 
 ## Folder Structure
 
 ```
-📁 00-ToDo/
-   📄 Main.todo          ← default file
-   📄 test.md            ← default file
-📁 01-People/
-📁 02-ToRemember/
-📁 03-MeetingNotes/
-   📁 1-1/
-   📁 Ad-hoc/
-   📁 WOR/
-📁 04-Inbox/
-📁 05-Archive/
+📁 00-Workstreams/        ← All active workstreams
+   📁 Planning/           ← Planning notes, grouped by quarter
+   📁 Team-Evaluations/   ← Individual team members' evaluations
+   📄 MyList.todo         ← The collection of things to do
+📁 01-ToRemember/         ← The personal wiki/knowledge base
+   📁 Trainings/          ← Notes captured from trainings
+   📁 Hiring/             ← The process for hiring
+   📁 Evaluation/         ← Notes about evaluating people
+📁 02-MeetingNotes/       ← All meeting notes to be preserved
+   📁 Team-Members-1-1/   ← Notes based on the team 1-1s
+📁 03-Inbox/              ← Default location for new notes
+📁 04-Archive/            ← Old, unused files are preserved here
 ```
 
 ## Features
 
+### Optional
+
 | Feature | Enabled by Default |
 |---------|--------------------|
 | [Explorer Decorations](../features/decorations.md) | ✅ Yes |
-| [Default Files](../features/default-files.md) | ✅ Yes |
-| [Dot-Folder Hiding](../features/dot-folder-hiding.md) | ✅ Yes |
 
-### Decoration Rules
-
-| Folder | Badge | Color | Tooltip | Propagates |
-|--------|-------|-------|---------|------------|
-| `00-ToDo/` | `TD` | Yellow | Active tasks | Yes |
-| `01-People/` | — | Blue | Team members | Yes |
-| `05-Archive/` | — | Grey | Archived items | No |
-
-### Default Files
-
-| Folder | Files |
-|--------|-------|
-| `00-ToDo/` | `Main.todo`, `test.md` |
+### Always on
+- [Open default file(s)](../features/default-files.md)
+- [Dot-Folder Hiding](../features/dot-folder-hiding.md)
 
 ---
 

@@ -1,6 +1,6 @@
 # Toggle dot-folders
 
-**Command:** `Memoria: Toggle dot-folders`
+**Command:** `Memoria: Toggle dot-folders`  
 **Available:** After workspace is initialized
 
 Hides or shows dot-folders (directories starting with `.`) in the VS Code Explorer. This is useful for keeping configuration folders like `.memoria/` out of sight during normal use.

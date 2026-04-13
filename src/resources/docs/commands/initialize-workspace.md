@@ -1,6 +1,6 @@
 # Initialize workspace
 
-**Command:** `Memoria: Initialize workspace`
+**Command:** `Memoria: Initialize workspace`  
 **Available:** Always
 
 Scaffolds the workspace with a folder structure based on the selected blueprint template. This is the first command you run after installing Memoria.
