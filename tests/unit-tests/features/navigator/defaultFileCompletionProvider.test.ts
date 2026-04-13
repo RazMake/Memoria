@@ -28,6 +28,7 @@ vi.mock("vscode", () => ({
         filterText?: string;
         kind?: number;
         command?: any;
+        range?: any;
         constructor(public label: string, public _kind?: number) {
             this.kind = _kind;
         }
@@ -44,6 +45,14 @@ vi.mock("vscode", () => ({
     MarkdownString: class {
         constructor(public value: string) {}
     },
+    Range: class {
+        constructor(
+            public startLine: number,
+            public startCharacter: number,
+            public endLine: number,
+            public endCharacter: number,
+        ) {}
+    },
     FileType: {
         File: 1,
         Directory: 2,
@@ -52,6 +61,9 @@ vi.mock("vscode", () => ({
     Uri: {
         joinPath: (base: any, ...segments: string[]) => {
             const basePath = base.path.endsWith("/") ? base.path.slice(0, -1) : base.path;
+            if (segments.length === 0) {
+                return { path: basePath, scheme: "file", toString: () => `file://${basePath}` };
+            }
             const joined = basePath + "/" + segments.join("/");
             return { path: joined, scheme: "file", toString: () => `file://${joined}` };
         },
@@ -207,7 +219,7 @@ describe("DefaultFileCompletionProvider", () => {
     // ── Folder key completions ──────────────────────────────────────────
 
     describe("folder key completions", () => {
-        it("should suggest workspace folders in both relative and root-prefixed formats", async () => {
+        it("should suggest root name and immediate folders at the initial level", async () => {
             setWorkspaceFolders("/workspace/MyProject");
             _readDir.mockImplementation(async (uri: any) => {
                 if (uri.path === "/workspace/MyProject") {
@@ -233,17 +245,19 @@ describe("DefaultFileCompletionProvider", () => {
             expect(items).toBeDefined();
             const labels = items!.map((i) => i.label);
 
-            // Relative format
+            // Root name for scoping
+            expect(labels).toContain("MyProject/");
+
+            // Immediate child folders (relative format)
             expect(labels).toContain("00-ToDo/");
             expect(labels).toContain("01-Notes/");
 
-            // Root-prefixed format
-            expect(labels).toContain("MyProject/00-ToDo/");
-            expect(labels).toContain("MyProject/01-Notes/");
+            // Root-prefixed deep paths are NOT shown at initial level
+            expect(labels).not.toContain("MyProject/00-ToDo/");
+            expect(labels).not.toContain("MyProject/01-Notes/");
 
             // Dot-folders excluded
             expect(labels).not.toContain(".git/");
-            expect(labels).not.toContain("MyProject/.git/");
 
             // Files excluded (folders only)
             expect(labels).not.toContain("readme.md");
@@ -279,7 +293,7 @@ describe("DefaultFileCompletionProvider", () => {
             expect(labels).toContain("01-Notes/");
         });
 
-        it("should enumerate nested folders recursively", async () => {
+        it("should show only immediate children (not recursive) at the initial level", async () => {
             setWorkspaceFolders("/workspace/MyProject");
             _readDir.mockImplementation(async (uri: any) => {
                 if (uri.path === "/workspace/MyProject") {
@@ -304,9 +318,68 @@ describe("DefaultFileCompletionProvider", () => {
             );
 
             const labels = items!.map((i) => i.label);
+            // Only immediate children, not recursive
             expect(labels).toContain("A/");
-            expect(labels).toContain("A/B/");
-            expect(labels).toContain("A/B/C/");
+            expect(labels).not.toContain("A/B/");
+            expect(labels).not.toContain("A/B/C/");
+        });
+
+        it("should show next-level children after typing a prefix with /", async () => {
+            setWorkspaceFolders("/workspace/MyProject");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/MyProject/A") {
+                    return [["B", 2], ["C", 2]];
+                }
+                return [];
+            });
+
+            // User has typed "A/" inside the key quotes
+            const text = '{\n  "defaultFiles": {\n    "A/"\n  }\n}';
+            const offset = text.indexOf('A/') + 2; // cursor right after "A/"
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(
+                document as any,
+                position as any,
+            );
+
+            expect(items).toBeDefined();
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("B/");
+            expect(labels).toContain("C/");
+
+            // insertText includes the full path from root of key
+            const bItem = items!.find((i) => i.label === "B/");
+            expect(bItem!.insertText).toBe("A/B/");
+        });
+
+        it("should drill into root-prefixed path after typing root name", async () => {
+            setWorkspaceFolders("/workspace/MyProject");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/MyProject") {
+                    return [["00-ToDo", 2], ["01-Notes", 2]];
+                }
+                return [];
+            });
+
+            // User has typed "MyProject/" inside the key quotes
+            const text = '{\n  "defaultFiles": {\n    "MyProject/"\n  }\n}';
+            const offset = text.indexOf('MyProject/') + 'MyProject/'.length;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(
+                document as any,
+                position as any,
+            );
+
+            expect(items).toBeDefined();
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("00-ToDo/");
+            expect(labels).toContain("01-Notes/");
+
+            const item = items!.find((i) => i.label === "00-ToDo/");
+            expect(item!.insertText).toBe("MyProject/00-ToDo/");
+            expect(item!.detail).toContain("MyProject");
         });
 
         it("should return empty when no workspace is open", async () => {
@@ -345,6 +418,32 @@ describe("DefaultFileCompletionProvider", () => {
 
             for (const item of items!) {
                 expect(item.kind).toBe(19); // CompletionItemKind.Folder
+            }
+        });
+
+        it("should trigger re-suggest for all folder key completions", async () => {
+            setWorkspaceFolders("/workspace/MyProject");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/MyProject") {
+                    return [["Docs", 2]];
+                }
+                return [];
+            });
+
+            const text = '{\n  "defaultFiles": {\n    \n  }\n}';
+            const offset = text.indexOf("{\n    \n") + 6;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(
+                document as any,
+                position as any,
+            );
+
+            for (const item of items!) {
+                expect(item.command).toEqual({
+                    command: "editor.action.triggerSuggest",
+                    title: "Re-trigger completions",
+                });
             }
         });
     });
@@ -661,9 +760,9 @@ describe("DefaultFileCompletionProvider", () => {
             expect(items).toBeDefined();
         });
 
-        it("enumerateFolders catch block: returns empty when readDirectory throws during folder key completions", async () => {
+        it("listImmediateSubfolders catch block: returns empty when readDirectory throws during folder key completions", async () => {
             setWorkspaceFolders("/workspace/X");
-            // Make readDirectory throw to exercise the catch in enumerateFolders.
+            // Make readDirectory throw to exercise the catch in listImmediateSubfolders.
             _readDir.mockRejectedValue(new Error("permission denied"));
 
             const text = '{\n  "defaultFiles": {\n    \n  }\n}';
@@ -672,8 +771,12 @@ describe("DefaultFileCompletionProvider", () => {
 
             const items = await provider.provideCompletionItems(document as any, position as any);
             expect(items).toBeDefined();
-            // No folders enumerated — list is empty (errors are silently swallowed).
-            expect(items).toHaveLength(0);
+            // Root name item is still shown even when readDirectory fails
+            // (root names don't require readDirectory), but no child folders.
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("X/");
+            // No child folder items (readDirectory failed)
+            expect(items!.filter((i) => i.label !== "X/")).toHaveLength(0);
         });
 
         it("getExistingArrayValues returns empty set when the folder key has no array node", async () => {

@@ -1,20 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createOpenDefaultFileCommand } from "../../../src/commands/openDefaultFile";
+import { createOpenDefaultFileCommand, promptToSaveDirtyFiles } from "../../../src/commands/openDefaultFile";
 
 const mockWorkspaceFolders: any[] = [];
+const mockTextDocuments: any[] = [];
 const mockOpenTextDocument = vi.fn();
 const mockShowTextDocument = vi.fn();
+const mockShowQuickPick = vi.fn();
 const mockExecuteCommand = vi.fn();
+const mockTabGroupsClose = vi.fn().mockResolvedValue(true);
+const mockTabGroups: any[] = [];
 
 vi.mock("vscode", () => ({
     workspace: {
         get workspaceFolders() {
             return mockWorkspaceFolders;
         },
+        get textDocuments() {
+            return mockTextDocuments;
+        },
         openTextDocument: (...args: any[]) => mockOpenTextDocument(...args),
+        asRelativePath: (uri: any) => {
+            const p = typeof uri === "string" ? uri : uri.path;
+            return p.replace(/^\/workspace\//, "");
+        },
     },
     window: {
         showTextDocument: (...args: any[]) => mockShowTextDocument(...args),
+        showQuickPick: (...args: any[]) => mockShowQuickPick(...args),
+        tabGroups: {
+            get all() {
+                return mockTabGroups;
+            },
+            close: (...args: any[]) => mockTabGroupsClose(...args),
+        },
     },
     commands: {
         executeCommand: (...args: any[]) => mockExecuteCommand(...args),
@@ -40,6 +58,9 @@ describe("createOpenDefaultFileCommand", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockWorkspaceFolders.length = 0;
+        mockTextDocuments.length = 0;
+        mockTabGroups.length = 0;
+        mockTabGroups.push({ tabs: [] });
         mockManifest = {
             findInitializedRoot: vi.fn().mockResolvedValue(null),
             readDefaultFiles: vi.fn().mockResolvedValue(null),
@@ -130,9 +151,9 @@ describe("createOpenDefaultFileCommand", () => {
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockExecuteCommand).toHaveBeenCalledWith("workbench.action.closeAllEditors");
-        // closeAllEditors must be called before openTextDocument.
-        const closeOrder = mockExecuteCommand.mock.invocationCallOrder[0];
+        expect(mockTabGroupsClose).toHaveBeenCalled();
+        // tabGroups.close must be called before openTextDocument.
+        const closeOrder = mockTabGroupsClose.mock.invocationCallOrder[0];
         const openOrder = mockOpenTextDocument.mock.invocationCallOrder[0];
         expect(closeOrder).toBeLessThan(openOrder);
     });
@@ -308,5 +329,104 @@ describe("createOpenDefaultFileCommand", () => {
 
         // No match for "other-workspace" — should not open anything.
         expect(mockOpenTextDocument).not.toHaveBeenCalled();
+    });
+});
+
+describe("promptToSaveDirtyFiles", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockTextDocuments.length = 0;
+    });
+
+    it("should return true immediately when no documents are dirty", async () => {
+        mockTextDocuments.push({ isDirty: false, uri: { path: "/workspace/clean.ts" } });
+        const result = await promptToSaveDirtyFiles();
+        expect(result).toBe(true);
+        expect(mockShowQuickPick).not.toHaveBeenCalled();
+    });
+
+    it("should show a multi-select QuickPick with dirty files", async () => {
+        const doc1 = { isDirty: true, uri: { path: "/workspace/a.ts" }, save: vi.fn().mockResolvedValue(true) };
+        const doc2 = { isDirty: true, uri: { path: "/workspace/b.ts" }, save: vi.fn().mockResolvedValue(true) };
+        mockTextDocuments.push(doc1, doc2);
+
+        // User picks both — all saved.
+        mockShowQuickPick.mockImplementation(async (items: any[]) => items);
+        const result = await promptToSaveDirtyFiles();
+
+        expect(result).toBe(true);
+        expect(mockShowQuickPick).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ label: "a.ts", picked: true }),
+                expect.objectContaining({ label: "b.ts", picked: true }),
+            ]),
+            expect.objectContaining({ canPickMany: true }),
+        );
+    });
+
+    it("should save checked files and revert unchecked files", async () => {
+        const doc1 = { isDirty: true, uri: { path: "/workspace/save-me.ts" }, save: vi.fn().mockResolvedValue(true) };
+        const doc2 = { isDirty: true, uri: { path: "/workspace/discard-me.ts" }, save: vi.fn().mockResolvedValue(true) };
+        mockTextDocuments.push(doc1, doc2);
+
+        // User only picks doc1.
+        mockShowQuickPick.mockImplementation(async (items: any[]) =>
+            items.filter((i: any) => i.doc === doc1),
+        );
+        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const result = await promptToSaveDirtyFiles();
+        expect(result).toBe(true);
+
+        // doc1 was saved.
+        expect(doc1.save).toHaveBeenCalled();
+        // doc2 was NOT saved — it was reverted to clear dirty state.
+        expect(doc2.save).not.toHaveBeenCalled();
+        expect(mockShowTextDocument).toHaveBeenCalledWith(doc2, { preserveFocus: true, preview: true });
+        expect(mockExecuteCommand).toHaveBeenCalledWith("workbench.action.files.revert");
+    });
+
+    it("should revert all when user unchecks everything", async () => {
+        const doc = { isDirty: true, uri: { path: "/workspace/dirty.ts" }, save: vi.fn() };
+        mockTextDocuments.push(doc);
+
+        // User submits with nothing checked.
+        mockShowQuickPick.mockResolvedValue([]);
+        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const result = await promptToSaveDirtyFiles();
+        expect(result).toBe(true);
+        expect(doc.save).not.toHaveBeenCalled();
+        expect(mockShowTextDocument).toHaveBeenCalledWith(doc, { preserveFocus: true, preview: true });
+        expect(mockExecuteCommand).toHaveBeenCalledWith("workbench.action.files.revert");
+    });
+
+    it("should return false when user cancels the QuickPick", async () => {
+        const doc = { isDirty: true, uri: { path: "/workspace/dirty.ts" }, save: vi.fn() };
+        mockTextDocuments.push(doc);
+
+        // User presses Escape — returns undefined.
+        mockShowQuickPick.mockResolvedValue(undefined);
+
+        const result = await promptToSaveDirtyFiles();
+        expect(result).toBe(false);
+        expect(doc.save).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalled();
+    });
+
+    it("should not show non-dirty documents in the QuickPick", async () => {
+        const dirty = { isDirty: true, uri: { path: "/workspace/dirty.ts" }, save: vi.fn().mockResolvedValue(true) };
+        const clean = { isDirty: false, uri: { path: "/workspace/clean.ts" }, save: vi.fn() };
+        mockTextDocuments.push(dirty, clean);
+
+        mockShowQuickPick.mockImplementation(async (items: any[]) => items);
+
+        await promptToSaveDirtyFiles();
+
+        const items = mockShowQuickPick.mock.calls[0][0];
+        expect(items).toHaveLength(1);
+        expect(items[0].label).toBe("dirty.ts");
     });
 });

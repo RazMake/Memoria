@@ -63,8 +63,17 @@ export function createOpenDefaultFileCommand(
             return;
         }
 
+        // Prompt to save unsaved changes before closing editors.
+        const shouldProceed = await promptToSaveDirtyFiles();
+        if (!shouldProceed) {
+            return;
+        }
+
         // Close all existing editors before opening the default files.
-        await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+        // Use tabGroups API to close tabs without prompting for unsaved files
+        // (selected files were already saved by promptToSaveDirtyFiles).
+        const allTabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs);
+        await vscode.window.tabGroups.close(allTabs);
 
         // Open each file side by side, skipping any that are missing.
         // File paths are relative to the matched folder, not to the workspace root.
@@ -84,4 +93,56 @@ export function createOpenDefaultFileCommand(
             }
         }
     };
+}
+
+/**
+ * If any open text documents have unsaved changes, shows a multi-select
+ * QuickPick so the user can choose which files to save. Checked files are
+ * saved, unchecked files will be discarded. Returns `true` to proceed, `false`
+ * if the user cancelled.
+ */
+export async function promptToSaveDirtyFiles(): Promise<boolean> {
+    const dirtyDocs = vscode.workspace.textDocuments.filter((d) => d.isDirty);
+    if (dirtyDocs.length === 0) {
+        return true;
+    }
+
+    interface DirtyFileItem extends vscode.QuickPickItem {
+        doc: vscode.TextDocument;
+    }
+
+    const items: DirtyFileItem[] = dirtyDocs.map((doc) => ({
+        label: vscode.workspace.asRelativePath(doc.uri),
+        picked: true,
+        doc,
+    }));
+
+    const picked = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        title: "Save changes before closing?",
+        placeHolder: "Checked files will be saved, unchecked files will be discarded",
+    });
+
+    // User pressed Escape / cancelled the QuickPick.
+    if (!picked) {
+        return false;
+    }
+
+    const toSave = new Set(picked.map((p) => p.doc));
+
+    // Save checked files.
+    await Promise.all(
+        dirtyDocs.filter((doc) => toSave.has(doc)).map((doc) => doc.save()),
+    );
+
+    // Revert unchecked files so they are no longer dirty — this prevents
+    // the built-in "Save changes?" dialog when tabs are closed afterwards.
+    for (const doc of dirtyDocs) {
+        if (!toSave.has(doc)) {
+            await vscode.window.showTextDocument(doc, { preserveFocus: true, preview: true });
+            await vscode.commands.executeCommand("workbench.action.files.revert");
+        }
+    }
+
+    return true;
 }
