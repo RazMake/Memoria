@@ -71,6 +71,40 @@ describe("matchesFilter", () => {
         });
     });
 
+    describe("glob folder filters (name with *)", () => {
+        it("should match a dot-folder at the root", () => {
+            expect(matchesFilter(".*/", ".memoria")).toBe(true);
+        });
+
+        it("should match a dot-folder nested under a parent", () => {
+            expect(matchesFilter(".*/", "Parent/.git")).toBe(true);
+        });
+
+        it("should not match a folder that does not start with a dot", () => {
+            expect(matchesFilter(".*/", "00-ToDo")).toBe(false);
+        });
+
+        it("should not match a file that starts with a dot but has an extension", () => {
+            // The filter is a folder filter — it only checks the last segment name.
+            // ".gitignore" starts with "." so it WILL match ".*" — which is intentional
+            // because provideFileDecoration has no way to distinguish files from folders.
+            expect(matchesFilter(".*/", ".gitignore")).toBe(true);
+        });
+
+        it("should match with propagate on dot-folder descendants", () => {
+            expect(matchesFilter(".*/", ".memoria/decorations.json", true)).toBe(true);
+        });
+
+        it("should not match descendants without propagate", () => {
+            expect(matchesFilter(".*/", ".memoria/decorations.json", false)).toBe(false);
+        });
+
+        it("should support a prefix glob like test*/", () => {
+            expect(matchesFilter("test*/", "testing")).toBe(true);
+            expect(matchesFilter("test*/", "archive")).toBe(false);
+        });
+    });
+
     describe("wildcard extension filters (*.ext)", () => {
         it("should match a file with the specified extension", () => {
             expect(matchesFilter("*.todo", "00-ToDo/Main.todo")).toBe(true);

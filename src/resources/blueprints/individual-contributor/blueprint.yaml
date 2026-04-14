@@ -4,12 +4,17 @@ description: "A personal knowledge base for developers and PMs."
 version: "1.0.0"
 
 workspace:
-  - name: "00-ToDo/"
+  - name: "00-Workstreams/"
     children:
-      - name: "Main.todo"
+      - name: "Dev-Designs"
+      - name: "MyList.todo"
         default: "relative"
   - name: "01-ToRemember/"
+    children:
+      - name: "Trainings"
   - name: "02-MeetingNotes/"
+    children:
+      - name: "1-1"
   - name: "03-Inbox/"
   - name: "04-Archive/"
 
@@ -19,11 +24,34 @@ features:
     description: "Badges and colors in the VS Code Explorer"
     enabledByDefault: true
     rules:
-      - filter: "00-ToDo/"
+      - filter: ".*/"
+        color: "terminal.ansiBrightBlack"
+      - filter: "Dev-Designs/"
+        color: "charts.purple"
+        badge: "🪛"
+        tooltip: "Dev design documents, grouped by quarter."
+        propagate: true
+      - filter: "00-Workstreams/"
+        color: "terminal.ansiMagenta"
+        badge: "📋"
+        tooltip: "Information about current workstreams, todos, etc."
+        propagate: true
+      - filter: "01-ToRemember/"
         color: "charts.yellow"
-        badge: "TD"
-        tooltip: "Active tasks"
+        badge: "🧠"
+        tooltip: "Personal knowledge base."
+        propagate: true
+      - filter: "02-MeetingNotes/"
+        color: "terminal.ansiBrightYellow"
+        tooltip: "Meeting notes to be preserved for later references."
+        propagate: true
+      - filter: "03-Inbox/"
+        color: "charts.red"
+        badge: "📭"
+        tooltip: "New, unprocessed notes."
         propagate: true
       - filter: "04-Archive/"
-        color: "charts.grey"
-        tooltip: "Archived items"
+        color: "terminal.ansiBrightBlack"
+        badge: "⌛"
+        tooltip: "Personal knowledge base."
+        propagate: true

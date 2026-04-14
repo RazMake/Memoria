@@ -31,18 +31,20 @@ features:
     description: "Badges and colors in the VS Code Explorer"
     enabledByDefault: true
     rules:
+      - filter: ".*/"
+        color: "terminal.ansiBrightBlack"
       - filter: "Planning/"
-        color: "charts.yellow"
+        color: "charts.purple"
         badge: "📅"
         tooltip: "Planning notes, by quarter."
         propagate: true
       - filter: "Team-Evaluations/"
-        color: "charts.yellow"
+        color: "terminal.ansiBrightCyan"
         badge: "✏️"
         tooltip: "Team continuous evaluation notes."
         propagate: true
       - filter: "00-Workstreams/"
-        color: "charts.yellow"
+        color: "terminal.ansiMagenta"
         badge: "📋"
         tooltip: "Information about current workstreams, todos, etc."
         propagate: true
@@ -51,29 +53,33 @@ features:
         tooltip: "Notes on the hiring process, with examples."
         propagate: true
       - filter: "Evaluation/"
-        color: "charts.yellow"
+        color: "gitDecoration.modifiedResourceForeground"
         tooltip: "Details and templates used for team members' evaluation."
         propagate: true
       - filter: "01-ToRemember/"
-        color: "charts.yellow"
+        color: "terminal.ansiBrightYellow"
         badge: "🧠"
         tooltip: "Personal knowledge base."
         propagate: true
       - filter: "Team-Members-1-1/"
-        color: "charts.yellow"
+        color: "gitDecoration.submoduleResourceForeground"
         tooltip: "Notes from 1:1 meetings with team members."
         propagate: true
       - filter: "02-MeetingNotes/"
-        color: "charts.yellow"
+        color: "charts.green"
         tooltip: "Meeting notes to be preserved for later references."
         propagate: true
       - filter: "03-Inbox/"
-        color: "charts.yellow"
+        color: "charts.red"
         badge: "📭"
         tooltip: "New, unprocessed notes."
         propagate: true
       - filter: "05-Archive/"
-        color: "charts.yellow"
+        color: "terminal.ansiBrightBlack"
         badge: "⌛"
         tooltip: "Personal knowledge base."
+        propagate: true
+      - filter: "ReInitializationCleanup/"
+        color: "terminal.ansiBrightBlack"
+        tooltip: "Backup of files from the previous scaffolding."
         propagate: true

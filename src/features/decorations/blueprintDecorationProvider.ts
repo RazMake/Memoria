@@ -96,12 +96,25 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
  *                     (provideFileDecoration does not receive file-type information).
  *                     When `propagate` is true, any item whose path includes a segment
  *                     equal to FolderName is matched (folder itself + all descendants).
+ *   "Glob*Name/"    — like folder filters but the name may contain `*` wildcards.
+ *                     For example `".*&#47;"` matches any dot-folder (`.memoria`, `.git`, etc.).
  *   "*.ext"         — matches any item whose filename ends with ".ext".
  *   "exact/path"    — exact workspace-relative path match.
  */
 export function matchesFilter(filter: string, relativePath: string, propagate = false): boolean {
     if (filter.endsWith("/")) {
         const name = filter.slice(0, -1);
+
+        if (name.includes("*")) {
+            const pattern = simpleGlobToRegex(name);
+            if (propagate) {
+                return relativePath.split("/").some((seg) => pattern.test(seg));
+            }
+            const lastSlash = relativePath.lastIndexOf("/");
+            const lastSegment = lastSlash >= 0 ? relativePath.slice(lastSlash + 1) : relativePath;
+            return pattern.test(lastSegment);
+        }
+
         if (propagate) {
             // Check if any segment equals the filter name.
             // Segments are delimited by "/" — so name must appear between "/" boundaries
@@ -140,4 +153,13 @@ function buildDecoration(rule: DecorationRule): vscode.FileDecoration | undefine
         rule.tooltip,
         rule.color ? new vscode.ThemeColor(rule.color) : undefined
     );
+}
+
+/**
+ * Converts a simple glob (only `*` wildcards) into a RegExp anchored to match the full string.
+ * All regex-special characters except `*` are escaped; each `*` becomes `.*`.
+ */
+function simpleGlobToRegex(glob: string): RegExp {
+    const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("^" + escaped.replace(/\*/g, ".*") + "$");
 }
