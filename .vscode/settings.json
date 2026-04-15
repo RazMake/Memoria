@@ -8,6 +8,7 @@
   "chat.tools.terminal.autoApprove": {
     "npm run build": true,
     "npm install": true,
-    "npm audit": true
+    "npm audit": true,
+    "npm test": true
   }
 }
