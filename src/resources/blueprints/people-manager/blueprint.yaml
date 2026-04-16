@@ -20,10 +20,6 @@ workspace:
       - name: "Team-Members-1-1/"
   - name: "03-Inbox/"
   - name: "05-Archive/"
-    children:
-      - name: "00-Workstreams/"
-      - name: "01-ToRemember/"
-      - name: "02-MeetingNotes/"
 
 features:
   - id: "decorations"
@@ -79,7 +75,7 @@ features:
         badge: "⌛"
         tooltip: "Personal knowledge base."
         propagate: true
-      - filter: "ReInitializationCleanup/"
+      - filter: "WorkspaceInitializationBackups/"
         color: "terminal.ansiBrightBlack"
         tooltip: "Backup of files from the previous scaffolding."
         propagate: true

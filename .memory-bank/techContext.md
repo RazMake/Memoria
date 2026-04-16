@@ -58,7 +58,7 @@ src/                    — Extension source (entry: extension.ts)
   resources/blueprints/ — Bundled blueprint YAML + seed files
 tests/
   unit-tests/           — Vitest unit tests (mirror src/ structure)
-    blueprints/         — blueprintParser, blueprintRegistry, fileScaffold, manifestManager, blueprintEngine, reinitConflictResolver
+    blueprints/         — blueprintParser, blueprintRegistry, fileScaffold, manifestManager, blueprintEngine, workspaceInitConflictResolver
     commands/           — initializeWorkspace, toggleDotFolders
     features/decorations/ — blueprintDecorationProvider
     packageJson.test.ts   — contract tests for command declarations

@@ -5,11 +5,9 @@ import * as vscode from "vscode";
 import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
-import { SKIP_FILE } from "./fileScaffold";
-import { computeFileHash } from "./hashUtils";
 import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, OverwriteChoice, DefaultFileMap } from "./types";
-import type { ReinitConflictResolver } from "./reinitConflictResolver";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap } from "./types";
+import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
 export class BlueprintEngine {
@@ -59,7 +57,7 @@ export class BlueprintEngine {
 
     /**
      * Re-initializes a workspace root from the named blueprint, applying conflict resolution:
-     * - Extra folders (on disk but absent from the new blueprint) are moved to ReInitializationCleanup/
+     * - Extra folders (on disk but absent from the new blueprint) are moved to WorkspaceInitializationBackups/
      *   if the user opts for cleanup.
      * - User-modified files are only overwritten with the user's explicit consent.
      * - Unmodified files are silently overwritten with the latest blueprint version.
@@ -71,7 +69,7 @@ export class BlueprintEngine {
     async reinitialize(
         workspaceRoot: vscode.Uri,
         blueprintId: string,
-        resolver: ReinitConflictResolver
+        resolver: WorkspaceInitConflictResolver
     ): Promise<void> {
         const currentManifest = await this.manifest.readManifest(workspaceRoot);
         if (!currentManifest) {
@@ -79,46 +77,38 @@ export class BlueprintEngine {
         }
 
         const newDefinition = await this.registry.getBlueprintDefinition(blueprintId);
-        const plan = await resolver.resolveConflicts(workspaceRoot, currentManifest, newDefinition);
 
-        // Move folders the user chose to clean up into ReInitializationCleanup/.
-        if (plan.foldersToCleanup.length > 0) {
-            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup");
-            await this.fs.createDirectory(cleanupRoot);
-            // Parallel renames — destinations are distinct so order is irrelevant.
-            await Promise.all(plan.foldersToCleanup.map(async (folder) => {
-                const src = vscode.Uri.joinPath(workspaceRoot, folder);
-                const dest = vscode.Uri.joinPath(cleanupRoot, folder);
-                await this.fs.rename(src, dest, { overwrite: false });
-            }));
-        }
-
-        const { fileManifest, skippedPaths } = await this.scaffold.scaffoldTree(
+        const plan = await resolver.resolveConflicts(
             workspaceRoot,
-            newDefinition.workspace,
-            this.buildReinitSeedCallback(workspaceRoot, plan, resolver, blueprintId)
+            currentManifest,
+            newDefinition,
+            (relativePath) => this.registry.getSeedFileContent(blueprintId, relativePath)
         );
 
-        // For skipped files, record the current on-disk hash so future re-inits treat them correctly.
-        // Use cached hashes from the conflict resolution phase to avoid re-reading the same files.
-        for (const relativePath of skippedPaths) {
-            const cachedHash = plan.currentFileHashes[relativePath];
-            if (cachedHash !== undefined) {
-                if (cachedHash !== null) {
-                    fileManifest[relativePath] = cachedHash;
-                }
-                // null means file was deleted — omit from manifest.
-                continue;
-            }
-            // Fallback for files not hashed during conflict analysis (e.g. new files the user skipped).
-            const fileUri = vscode.Uri.joinPath(workspaceRoot, ...relativePath.split("/"));
-            try {
-                const content = await this.fs.readFile(fileUri);
-                fileManifest[relativePath] = computeFileHash(content);
-            } catch {
-                // File was deleted by the user — omit from manifest.
-            }
+        if (!plan) {
+            return; // user cancelled at a QuickPick
         }
+
+        // Phase D — Execute.
+        // Move folders the user chose to clean up into WorkspaceInitializationBackups/.
+        if (plan.foldersToCleanup.length > 0) {
+            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups");
+            await this.fs.createDirectory(cleanupRoot);
+            await Promise.all(
+                plan.foldersToCleanup.map(async (folder) => {
+                    const src = vscode.Uri.joinPath(workspaceRoot, folder);
+                    const dest = vscode.Uri.joinPath(cleanupRoot, folder);
+                    await this.fs.rename(src, dest, { overwrite: false });
+                })
+            );
+        }
+
+        // Scaffold all blueprint files unconditionally — conflicts already resolved.
+        const { fileManifest } = await this.scaffold.scaffoldTree(
+            workspaceRoot,
+            newDefinition.workspace,
+            (relativePath) => this.registry.getSeedFileContent(blueprintId, relativePath)
+        );
 
         const updatedManifest: BlueprintManifest = {
             blueprintId: newDefinition.id,
@@ -140,88 +130,11 @@ export class BlueprintEngine {
 
         const existingFeaturesConfig = await this.manifest.readFeatures(workspaceRoot);
         await this.manifest.writeFeatures(workspaceRoot, mergeFeaturesConfig(newDefinition.features, existingFeaturesConfig));
-    }
 
-    /**
-     * Builds the seed-content callback for re-initialization scaffolding.
-     * Tracks folder-scope overwrite decisions so the user is prompted at most once per scope.
-     * Modified files that the user approves for overwrite are backed up to
-     * ReInitializationCleanup/ before being replaced.
-     */
-    private buildReinitSeedCallback(
-        workspaceRoot: vscode.Uri,
-        plan: ReinitPlan,
-        resolver: ReinitConflictResolver,
-        blueprintId: string
-    ): (relativePath: string) => Promise<Uint8Array | null | typeof SKIP_FILE> {
-        const yesAllFolders = new Set<string>();
-        const yesAllRecursiveFolders = new Set<string>();
-
-        return async (relativePath: string): Promise<Uint8Array | null | typeof SKIP_FILE> => {
-            const isModified = plan.modifiedBlueprintFiles.has(relativePath);
-
-            if (isModified) {
-                const parentFolder = relativePath.includes("/")
-                    ? relativePath.substring(0, relativePath.lastIndexOf("/"))
-                    : "";
-
-                let coveredByRecursive = false;
-                for (const f of yesAllRecursiveFolders) {
-                    if (parentFolder === f || parentFolder.startsWith(f + "/")) {
-                        coveredByRecursive = true;
-                        break;
-                    }
-                }
-                if (coveredByRecursive) {
-                    await this.backupFile(workspaceRoot, relativePath);
-                    return this.registry.getSeedFileContent(blueprintId, relativePath);
-                }
-
-                if (yesAllFolders.has(parentFolder)) {
-                    await this.backupFile(workspaceRoot, relativePath);
-                    return this.registry.getSeedFileContent(blueprintId, relativePath);
-                }
-
-                const choice: OverwriteChoice = await resolver.promptFileOverwrite(relativePath);
-                if (choice === "no") {
-                    return SKIP_FILE;
-                }
-                if (choice === "yes-folder") {
-                    yesAllFolders.add(parentFolder);
-                } else if (choice === "yes-folder-recursive") {
-                    yesAllRecursiveFolders.add(parentFolder);
-                }
-                // "yes" or expanded scope — back up and fall through to overwrite
-                await this.backupFile(workspaceRoot, relativePath);
-            }
-
-            return this.registry.getSeedFileContent(blueprintId, relativePath);
-        };
-    }
-
-    /**
-     * Copies a modified file to ReInitializationCleanup/ before it is overwritten,
-     * preserving its relative path. Non-fatal — errors are logged via telemetry
-     * so they can be investigated without blocking the reinit flow.
-     */
-    private async backupFile(workspaceRoot: vscode.Uri, relativePath: string): Promise<void> {
-        try {
-            const segments = relativePath.split("/");
-            const src = vscode.Uri.joinPath(workspaceRoot, ...segments);
-            const dest = vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup", ...segments);
-
-            // Ensure parent directories exist for the backup destination.
-            const destParent = segments.length > 1
-                ? vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup", ...segments.slice(0, -1))
-                : vscode.Uri.joinPath(workspaceRoot, "ReInitializationCleanup");
-            await this.fs.createDirectory(destParent);
-
-            await this.fs.copy(src, dest, { overwrite: true });
-        } catch (err) {
-            this.telemetry.logError("reinit.backupFailed", {
-                path: relativePath,
-                error: (err as Error).message,
-            });
+        // Phase E — Open diff editors for files the user wants to merge manually.
+        if (plan.filesToDiff.length > 0) {
+            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups");
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, plan.filesToDiff);
         }
     }
 }

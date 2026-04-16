@@ -241,7 +241,7 @@ describe("ManifestManager", () => {
     describe("backupMemoriaDir", () => {
         const newRoot = { path: "/newRoot" } as any;
 
-        it("should copy all files from old .memoria/ to newRoot/ReInitializationCleanup/.memoria/", async () => {
+        it("should copy all files from old .memoria/ to newRoot/WorkspaceInitializationBackups/.memoria/", async () => {
             mockReadDirectory.mockResolvedValue([
                 ["blueprint.json", 1],
                 ["decorations.json", 1],
@@ -252,17 +252,17 @@ describe("ManifestManager", () => {
             const failed = await manager.backupMemoriaDir(workspaceRoot, newRoot);
             expect(failed).toEqual([]);
             expect(mockCreateDirectory).toHaveBeenCalledWith(
-                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria" })
+                expect.objectContaining({ path: "/newRoot/WorkspaceInitializationBackups/.memoria" })
             );
             expect(mockCopy).toHaveBeenCalledTimes(2);
             expect(mockCopy).toHaveBeenCalledWith(
                 expect.objectContaining({ path: "/workspace/.memoria/blueprint.json" }),
-                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria/blueprint.json" }),
+                expect.objectContaining({ path: "/newRoot/WorkspaceInitializationBackups/.memoria/blueprint.json" }),
                 { overwrite: true }
             );
             expect(mockCopy).toHaveBeenCalledWith(
                 expect.objectContaining({ path: "/workspace/.memoria/decorations.json" }),
-                expect.objectContaining({ path: "/newRoot/ReInitializationCleanup/.memoria/decorations.json" }),
+                expect.objectContaining({ path: "/newRoot/WorkspaceInitializationBackups/.memoria/decorations.json" }),
                 { overwrite: true }
             );
         });

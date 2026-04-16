@@ -4,7 +4,7 @@ import { BlueprintRegistry } from "./blueprints/blueprintRegistry";
 import { ManifestManager } from "./blueprints/manifestManager";
 import { FileScaffold } from "./blueprints/fileScaffold";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
-import { ReinitConflictResolver } from "./blueprints/reinitConflictResolver";
+import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
 import { getWorkspaceRoots, getRootFolderName, classifyFolderKey } from "./blueprints/workspaceUtils";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
@@ -39,7 +39,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const manifest = new ManifestManager(vscode.workspace.fs);
     const scaffold = new FileScaffold(vscode.workspace.fs);
     const engine = new BlueprintEngine(registry, manifest, scaffold, vscode.workspace.fs, telemetry);
-    const resolver = new ReinitConflictResolver(vscode.workspace.fs);
+    const resolver = new WorkspaceInitConflictResolver(vscode.workspace.fs);
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
     const featureManager = new FeatureManager(manifest);
@@ -194,7 +194,7 @@ function registerCommands(
     registry: BlueprintRegistry,
     manifest: ManifestManager,
     telemetry: DeferredTelemetryLogger,
-    resolver: ReinitConflictResolver,
+    resolver: WorkspaceInitConflictResolver,
     featureManager: FeatureManager,
     onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
 ): void {
@@ -417,7 +417,7 @@ async function checkForBlueprintUpdates(
     manifest: ManifestManager,
     registry: BlueprintRegistry,
     engine: BlueprintEngine,
-    resolver: ReinitConflictResolver,
+    resolver: WorkspaceInitConflictResolver,
     featureManager: FeatureManager
 ): Promise<void> {
     if (!initializedRoot) {

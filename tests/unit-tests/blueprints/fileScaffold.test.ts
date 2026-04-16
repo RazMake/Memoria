@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { FileScaffold, SKIP_FILE } from "../../../src/blueprints/fileScaffold";
+import { FileScaffold } from "../../../src/blueprints/fileScaffold";
 import type { WorkspaceEntry } from "../../../src/blueprints/types";
 
 const mockCreateDirectory = vi.fn();
 const mockWriteFile = vi.fn();
+const mockStat = vi.fn();
+const mockRename = vi.fn();
 const mockJoinPath = vi.fn((base: any, ...segments: string[]) => {
     const cleanSegments = segments.map((s) => s.replace(/\/$/, ""));
     return { path: [base.path, ...cleanSegments].join("/") };
@@ -14,16 +16,24 @@ vi.mock("vscode", () => ({
         fs: {
             createDirectory: (...args: any[]) => mockCreateDirectory(...args),
             writeFile: (...args: any[]) => mockWriteFile(...args),
+            stat: (...args: any[]) => mockStat(...args),
+            rename: (...args: any[]) => mockRename(...args),
         },
     },
     Uri: {
         joinPath: (...args: any[]) => mockJoinPath(...args),
+    },
+    FileType: {
+        File: 1,
+        Directory: 2,
     },
 }));
 
 const mockFs = {
     createDirectory: (...args: any[]) => mockCreateDirectory(...args),
     writeFile: (...args: any[]) => mockWriteFile(...args),
+    stat: (...args: any[]) => mockStat(...args),
+    rename: (...args: any[]) => mockRename(...args),
 } as any;
 
 const rootUri = { path: "/workspace" } as any;
@@ -34,6 +44,8 @@ describe("FileScaffold", () => {
         vi.clearAllMocks();
         mockCreateDirectory.mockResolvedValue(undefined);
         mockWriteFile.mockResolvedValue(undefined);
+        mockStat.mockRejectedValue(new Error("FileNotFound"));
+        mockRename.mockResolvedValue(undefined);
     });
 
     describe("scaffoldTree", () => {
@@ -102,35 +114,50 @@ describe("FileScaffold", () => {
             expect(keys[0]).not.toContain("Folder/");
         });
 
-        it("should return an empty fileManifest and empty skippedPaths when no file entries exist", async () => {
+        it("should return an empty fileManifest when no file entries exist", async () => {
             const scaffold = new FileScaffold(mockFs);
             const result = await scaffold.scaffoldTree(rootUri, [], noSeedContent);
             expect(result.fileManifest).toEqual({});
-            expect(result.skippedPaths).toEqual([]);
         });
+    });
 
-        it("should not write a file when the seed callback returns SKIP_FILE", async () => {
-            const entries: WorkspaceEntry[] = [{ name: "skipped.md", isFolder: false }];
-            const scaffold = new FileScaffold(mockFs);
-            const result = await scaffold.scaffoldTree(rootUri, entries, async () => SKIP_FILE);
-            expect(mockWriteFile).not.toHaveBeenCalled();
-            expect(result.skippedPaths).toContain("skipped.md");
-            expect(result.fileManifest).toEqual({});
-        });
+    describe("folder-file collision", () => {
+        it("should back up a file obstructing a folder path and then create the folder", async () => {
+            mockStat.mockResolvedValueOnce({ type: 1 }); // FileType.File
 
-        it("should include non-skipped files in fileManifest and skipped files in skippedPaths", async () => {
-            const entries: WorkspaceEntry[] = [
-                { name: "written.md", isFolder: false },
-                { name: "skipped.md", isFolder: false },
-            ];
+            const entries: WorkspaceEntry[] = [{ name: "Folder/", isFolder: true }];
             const scaffold = new FileScaffold(mockFs);
-            const result = await scaffold.scaffoldTree(
-                rootUri,
-                entries,
-                async (path) => (path === "skipped.md" ? SKIP_FILE : null)
+            await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
+
+            expect(mockCreateDirectory).toHaveBeenCalledTimes(2);
+            expect(mockCreateDirectory).toHaveBeenNthCalledWith(1, { path: "/workspace/WorkspaceInitializationBackups" });
+            expect(mockRename).toHaveBeenCalledWith(
+                { path: "/workspace/Folder" },
+                { path: "/workspace/WorkspaceInitializationBackups/Folder" },
+                { overwrite: false }
             );
-            expect(Object.keys(result.fileManifest)).toEqual(["written.md"]);
-            expect(result.skippedPaths).toEqual(["skipped.md"]);
+            expect(mockCreateDirectory).toHaveBeenNthCalledWith(2, { path: "/workspace/Folder" });
+        });
+
+        it("should not back up when no entry exists at the folder path", async () => {
+            // mockStat already rejects by default — simulates path not found.
+            const entries: WorkspaceEntry[] = [{ name: "Folder/", isFolder: true }];
+            const scaffold = new FileScaffold(mockFs);
+            await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
+
+            expect(mockRename).not.toHaveBeenCalled();
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+        });
+
+        it("should not back up when a directory already exists at the folder path", async () => {
+            mockStat.mockResolvedValueOnce({ type: 2 }); // FileType.Directory
+
+            const entries: WorkspaceEntry[] = [{ name: "Folder/", isFolder: true }];
+            const scaffold = new FileScaffold(mockFs);
+            await scaffold.scaffoldTree(rootUri, entries, noSeedContent);
+
+            expect(mockRename).not.toHaveBeenCalled();
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
         });
     });
 

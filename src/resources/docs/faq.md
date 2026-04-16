@@ -12,7 +12,7 @@ Yes. Memoria supports multi-root workspaces. The `.memoria/` configuration folde
 
 ### Will Memoria modify files I've already created?
 
-No. During initialization, Memoria only creates folders and files that don't already exist. During reinitalization (blueprint update), conflicts with existing files are resolved interactively — you choose whether to keep your version or accept the updated one.
+No. During initialization, Memoria only creates folders and files that don't already exist. During reinitialization (blueprint update), all blueprint files are written fresh, but your modified versions are always backed up to `WorkspaceInitializationBackups/` first — and you can open a diff editor for any file you want to merge manually.
 
 ---
 
@@ -49,12 +49,12 @@ Decoration colors are defined in the blueprint template and use VS Code theme co
 
 ### Memoria says a blueprint update is available — what happens if I accept?
 
-Memoria compares your installed blueprint version with the latest one bundled in the extension. If you accept the update:
+Memoria compares your installed blueprint version with the latest one bundled in the extension. If you accept the update, Memoria guides you through two quick steps:
 
-- New folders and files are added
-- Files you haven't modified are updated silently
-- Files you've modified trigger a conflict resolution dialog
-- Your configuration is updated to the new version
+1. **Extra folders** — A checklist shows folders that the new blueprint doesn't include. All are kept by default; uncheck any you want moved to `WorkspaceInitializationBackups/`.
+2. **Modified files** — A checklist shows all files with conflicts (ones you edited, or new blueprint files that clash with files you created). All are overwritten — check any you want to review in a diff editor after reinit.
+
+Every conflicting file is backed up to `WorkspaceInitializationBackups/` before being overwritten, so nothing is lost. Your configuration is updated to the new version.
 
 ### Can I skip a blueprint update?
 

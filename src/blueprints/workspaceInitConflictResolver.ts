@@ -16,7 +16,7 @@ import type {
     WorkspaceEntry,
 } from "./types";
 
-export class ReinitConflictResolver {
+export class WorkspaceInitConflictResolver {
     constructor(
         private readonly fs: typeof vscode.workspace.fs
     ) {}
@@ -35,10 +35,8 @@ export class ReinitConflictResolver {
         newDefinition: BlueprintDefinition,
         getSeedContent: (relativePath: string) => Promise<Uint8Array | null>
     ): Promise<ReinitPlan | undefined> {
-        const isDifferentBlueprint = currentManifest.blueprintId !== newDefinition.id;
-
         // Phase A: Categorize all blueprint files — parallel I/O, no UI.
-        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition, isDifferentBlueprint);
+        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition);
         const flatFiles = this.flattenWorkspaceFiles(newDefinition.workspace);
 
         const mergeResults = await Promise.all(
@@ -120,9 +118,16 @@ export class ReinitConflictResolver {
     }
 
     /**
-     * Opens VS Code diff editors for the given file paths in batches of 10.
-     * Left side: backup in WorkspaceInitializationBackups/ (read-only, the user's old version).
-     * Right side: new blueprint file in the workspace root (editable).
+     * Opens VS Code merge editors for the given file paths in batches of 10.
+     * Attempts to use the 3-way merge editor (with accept/discard buttons per hunk).
+     * Falls back to the standard diff editor if the merge editor command is unavailable
+     * (vscode.openMergeEditor is an internal command that may not always be registered).
+     *
+     * Merge editor layout:
+     *   Base + input1: backup in WorkspaceInitializationBackups/ (old user version).
+     *   Input2 + output: new blueprint file in the workspace root.
+     * Standard diff layout:
+     *   Left: backup (old), Right: workspace file (new blueprint, editable).
      */
     async openDiffEditors(
         workspaceRoot: vscode.Uri,
@@ -136,10 +141,20 @@ export class ReinitConflictResolver {
                 batch.map(async (relativePath) => {
                     const segments = relativePath.split("/");
                     const fileName = segments[segments.length - 1];
-                    const leftUri = vscode.Uri.joinPath(cleanupRoot, ...segments);
-                    const rightUri = vscode.Uri.joinPath(workspaceRoot, ...segments);
-                    const title = `Merge: ${fileName} (old ↔ new)`;
-                    await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title);
+                    const backupUri = vscode.Uri.joinPath(cleanupRoot, ...segments);
+                    const workspaceUri = vscode.Uri.joinPath(workspaceRoot, ...segments);
+                    try {
+                        await vscode.commands.executeCommand("vscode.openMergeEditor", {
+                            base: backupUri,
+                            input1: { uri: backupUri, title: "Your Version" },
+                            input2: { uri: workspaceUri, title: "New Blueprint" },
+                            output: workspaceUri,
+                        });
+                    } catch {
+                        // Merge editor unavailable — fall back to the standard diff editor.
+                        const title = `Merge: ${fileName} (old ↔ new)`;
+                        await vscode.commands.executeCommand("vscode.diff", backupUri, workspaceUri, title);
+                    }
                 })
             );
         }
@@ -193,8 +208,7 @@ export class ReinitConflictResolver {
 
     private async findExtraFolders(
         workspaceRoot: vscode.Uri,
-        newDefinition: BlueprintDefinition,
-        allFoldersAreExtra: boolean
+        newDefinition: BlueprintDefinition
     ): Promise<string[]> {
         const entries = await this.fs.readDirectory(workspaceRoot);
         const blueprintTopLevelFolders = new Set(
@@ -209,7 +223,6 @@ export class ReinitConflictResolver {
             .filter(([name, type]) => {
                 if (type !== vscode.FileType.Directory) return false;
                 if (excludedFolders.has(name)) return false;
-                if (allFoldersAreExtra) return true;
                 return !blueprintTopLevelFolders.has(name);
             })
             .map(([name]) => name);

@@ -48,14 +48,14 @@ export class ManifestManager {
     }
 
     /**
-     * Copies all files from oldRoot/.memoria/ into newRoot/ReInitializationCleanup/.memoria/
+     * Copies all files from oldRoot/.memoria/ into newRoot/WorkspaceInitializationBackups/.memoria/
      * so the user can recover them after .memoria/ is deleted.
      * Returns the list of relative paths that failed to copy (empty on full success).
      */
     async backupMemoriaDir(oldRoot: vscode.Uri, newRoot: vscode.Uri): Promise<string[]> {
         const failedPaths: string[] = [];
         const srcDir = this.memoriaDir(oldRoot);
-        const destDir = vscode.Uri.joinPath(newRoot, "ReInitializationCleanup", ".memoria");
+        const destDir = vscode.Uri.joinPath(newRoot, "WorkspaceInitializationBackups", ".memoria");
 
         let entries: [string, vscode.FileType][];
         try {

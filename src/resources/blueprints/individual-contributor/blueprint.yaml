@@ -6,12 +6,12 @@ version: "1.0.0"
 workspace:
   - name: "00-Workstreams/"
     children:
-      - name: "Dev-Designs"
+      - name: "Dev-Designs/"
       - name: "MyList.todo"
         default: "relative"
   - name: "01-ToRemember/"
     children:
-      - name: "Trainings"
+      - name: "Trainings/"
   - name: "02-MeetingNotes/"
     children:
       - name: "1-1"

@@ -136,34 +136,24 @@ export interface BlueprintInfo {
 }
 
 /**
- * The user's choice when prompted about a user-modified file during re-initialization.
- * Controls whether the blueprint version overwrites the user's changes.
- */
-export type OverwriteChoice = "yes" | "yes-folder" | "yes-folder-recursive" | "no";
-
-/**
  * Result of conflict analysis before re-initialization begins.
- * Folder cleanup decisions are captured here; per-file overwrite decisions
- * are made interactively during the re-init scaffold pass.
+ * Produced by WorkspaceInitConflictResolver.resolveConflicts() after both QuickPicks complete.
  */
 export interface ReinitPlan {
-    /** Relative paths of extra folders the user chose to move to ReInitializationCleanup/. */
+    /** All top-level on-disk folders absent from the new blueprint (input to folder picker). */
+    extraFolders: string[];
+    /** Subset of extraFolders the user unchecked — these will be moved to WorkspaceInitializationBackups/. */
     foldersToCleanup: string[];
-    /** Blueprint file paths whose stored hash matches the on-disk content (safe to overwrite silently). */
-    unmodifiedBlueprintFiles: string[];
-    /** Blueprint file paths whose on-disk content differs from the stored hash (user has modified them). */
-    modifiedBlueprintFiles: ReadonlySet<string>;
-    /** Cached on-disk hashes computed during conflict analysis — avoids re-reading files in the engine. */
-    currentFileHashes: Record<string, string | null>;
+    /** Relative paths of conflicting files (input to file merge picker). All will be overwritten. */
+    toMergeList: string[];
+    /** Subset of toMergeList the user checked — diff editors will open for these after reinit. */
+    filesToDiff: string[];
 }
 
 /**
- * Extended return type from scaffoldTree — separates created files from explicitly skipped files.
- * Skipped files are those the user chose not to overwrite during re-initialization.
+ * Return type from scaffoldTree — maps every written file to its SHA-256 hash.
  */
 export interface ScaffoldResult {
     /** Relative path → SHA-256 hash for every file that was created or overwritten. */
     fileManifest: Record<string, string>;
-    /** Relative paths of files that were skipped (not created or overwritten). */
-    skippedPaths: string[];
 }

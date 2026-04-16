@@ -23,11 +23,14 @@ When you initialize a workspace with a blueprint:
 
 ## Blueprint Updates
 
-**Memoria** checks for blueprint version updates when VS Code starts. If a newer version of your blueprint is available, you'll be prompted to reinitialize. During reinitalization:
+**Memoria** checks for blueprint version updates when VS Code starts. If a newer version of your blueprint is available, you'll be prompted to reinitialize. During reinitialization:
 
 - New folders and files from the updated blueprint are added
-- Existing files you've modified are preserved (_conflicts are resolved interactively_)
+- Every conflicting file (modified or newly clashing) is backed up to `WorkspaceInitializationBackups/` before being overwritten
+- You choose which conflicting files to open in a diff editor for manual merging
 - Configuration files are updated to the new version
+
+See [Initialize workspace](../commands/initialize-workspace.md#reinitialization-conflict-resolution) for a full walkthrough.
 
 ---
 

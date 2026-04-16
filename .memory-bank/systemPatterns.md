@@ -23,7 +23,7 @@ extension.ts (activation, DI wiring, versioning check)
       ├── workspaceUtils.ts       — shared getWorkspaceRoots()
       ├── fileScaffold.ts         — creates folders/files via vscode.workspace.fs
       ├── blueprintEngine.ts      — thin orchestrator (init + reinit flows)
-      └── reinitConflictResolver.ts — conflict resolution UI (folder cleanup, file overwrite prompts)
+      └── workspaceInitConflictResolver.ts — conflict resolution UI (folder cleanup, file overwrite prompts)
 ```
 
 ## Key Design Patterns
@@ -35,7 +35,7 @@ Command handlers are created by factory functions (`createInitializeWorkspaceCom
 - All classes take dependencies via constructor injection
 - `typeof vscode.workspace.fs` is the FS abstraction — unit tests pass mock, E2E uses real `vscode.workspace.fs`
 - `BlueprintEngine` takes `fs` separately from `FileScaffold` — engine uses its own `fs` for reinit cleanup ops, scaffold keeps its `fs` private
-- `ReinitConflictResolver` imports `computeFileHash` directly (no callback injection needed)
+- `WorkspaceInitConflictResolver` imports `computeFileHash` directly (no callback injection needed)
 - `ManifestManager` does NOT wrap `computeFileHash` — callers import from `hashUtils` directly
 
 ### Shared Utilities
@@ -76,7 +76,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 ## Testing Conventions
 - vscode module is fully mocked in all unit tests via `vi.mock("vscode", ...)`
 - Each test file re-declares mock functions at module scope
-- reinitConflictResolver tests use real `computeFileHash` from hashUtils (not fake hashes)
+- workspaceInitConflictResolver tests use real `computeFileHash` from hashUtils (not fake hashes)
 - `tests/unit-tests/packageJson.test.ts` — **contract tests** enforce that every command in `package.json` has a `commandPalette` entry with a `when: "memoria.workspaceInitialized"` guard. If a command should genuinely always be visible (like `initializeWorkspace`), add it to the `ALWAYS_VISIBLE` set in that test file — this makes the exemption explicit and reviewable.
 
 ## Optimization Patterns
@@ -111,7 +111,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 ## Component Relationships
 - `extension.ts` creates all collaborators and wires them together; also runs `checkForBlueprintUpdates()` on activation
 - `BlueprintEngine` depends on `BlueprintRegistry`, `ManifestManager`, `FileScaffold`
-- `initializeWorkspace` command depends on `BlueprintEngine`, `BlueprintRegistry`, `ManifestManager`, `ReinitConflictResolver`
+- `initializeWorkspace` command depends on `BlueprintEngine`, `BlueprintRegistry`, `ManifestManager`, `WorkspaceInitConflictResolver`
 - `toggleDotFolders` command depends on `ManifestManager`
 - `BlueprintDecorationProvider` depends on `ManifestManager` (reads decorations.json, discovers root)
 - `BlueprintParser` is pure (no vscode dependency) — used only by `BlueprintRegistry`

@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import type { BlueprintEngine } from "../blueprints/blueprintEngine";
 import type { BlueprintRegistry } from "../blueprints/blueprintRegistry";
 import type { ManifestManager } from "../blueprints/manifestManager";
-import type { ReinitConflictResolver } from "../blueprints/reinitConflictResolver";
+import type { WorkspaceInitConflictResolver } from "../blueprints/workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
 export function createInitializeWorkspaceCommand(
@@ -14,7 +14,7 @@ export function createInitializeWorkspaceCommand(
     registry: BlueprintRegistry,
     manifest: ManifestManager,
     telemetry: TelemetryEmitter,
-    resolver: ReinitConflictResolver,
+    resolver: WorkspaceInitConflictResolver,
     // Called after every successful initialization so callers can update any
     // state that depends on the workspace being initialized (e.g. context keys
     // that drive command visibility). Injected rather than hard-coded so this
@@ -72,7 +72,7 @@ export function createInitializeWorkspaceCommand(
 
         // In multi-root workspaces, only one root may have .memoria/ at a time.
         // If a different root is already initialized, back up its .memoria/ files to
-        // ReInitializationCleanup/.memoria/ in the new root, then delete it.
+        // WorkspaceInitializationBackups/.memoria/ in the new root, then delete it.
         // Only .memoria/ is deleted — managed workspace folders are NOT removed to
         // avoid confusing users into thinking those folders are controlled by the extension.
         if (folders.length > 1) {
