@@ -23,6 +23,9 @@ The core design challenge is reliable two-way sync. We propose a **single-writer
 - When completion originates in the collector, propagate the `[x]` + completion date back to the source file.
 - **Preserve the original Markdown syntax of task bodies verbatim** in the collector — including inline formatting (bold/italic/code/strike), inline/reference-style links, images, inline HTML, fenced code blocks, tables, and nested sub-bullets.
 - **Rewrite relative image/link paths** on render (source-dir-relative → collector-dir-relative) so images and links resolve correctly in the collector; reverse-rewrite on collector→source propagation.
+- **Sync triggered by file save** (`onDidSaveTextDocument`), not by every keystroke or file-change event. Saves are the natural commit-point for user intent; change-events would fire on every keystroke and autosave-intermediate states.
+- **Sync never leaves files dirty.** After applying a `WorkspaceEdit`, the engine explicitly saves the file — unless the file already had unsaved changes before the engine touched it, in which case the edit merges into the dirty buffer and the file is left dirty (preserving the user's intent to review before saving).
+- **Collector reordering is user-owned.** The user may reorder tasks within the collector's `# Active` and `# Completed` sections; the engine preserves that order across subsequent syncs. Reordering has no effect on source files.
 - Command `Memoria: Sync Tasks` for a full workspace sync.
 - Optional async sync on startup (enabled by default, non-blocking).
 - Multi-root safe.
@@ -47,7 +50,7 @@ The core design challenge is reliable two-way sync. We propose a **single-writer
     "syncOnStartup": true,
     "include": ["**/*.md"],
     "exclude": ["**/node_modules/**", "**/.git/**", "**/.memoria/**"],
-    "debounceMs": 1000
+    "debounceMs": 300
   }
   ```
 - The resolved `collectorPath` is read from the blueprint manifest (persisted in `.memoria/`) at engine startup and cached on the in-memory `TaskIndex`. It is NOT duplicated into `task-collector.json`.
@@ -183,7 +186,7 @@ This is the same technique git uses to detect line moves/renames and works well 
 
 ### 4.4 Collector file format — also marker-free
 
-Since the collector is owned by the reconciler, we render it deterministically from the index. **No `<!-- src -->` or `<!-- done -->` comments in the body.** Each task's source and completion date live in the sidecar; the collector presents them as a clean, human-readable suffix line that renders naturally in Markdown:
+Since the collector is owned by the reconciler, we render it from the index **preserving the user's ordering** (stored in `collectorOrder`). New source-originated tasks are appended at the end of their respective section; the user may then freely reorder them. **No `<!-- src -->` or `<!-- done -->` comments in the body.** Each task's source and completion date live in the sidecar; the collector presents them as a clean, human-readable suffix line that renders naturally in Markdown:
 
 ```markdown
 # Active
@@ -260,40 +263,50 @@ The autolink to `example.com` is untouched (absolute URL); both relative paths a
 
 **Fingerprint interaction.** Fingerprints (§4.2) are computed over the **source body** (pre-rewrite). The collector body is a *view* produced from the source body by the rewriter; the rewriter is deterministic and pure, so regenerating the collector from the index produces byte-identical output.
 
-### 4.5 Reconciler: serialized work queue
+### 4.5 Reconciler: serialized work queue (save-triggered)
 
-A single `SyncQueue` owns all read/write operations. Every trigger — file change, command, startup — enqueues a job; jobs run strictly one-at-a-time.
+A single `SyncQueue` owns all read/write operations. Every trigger — **file save**, command, startup — enqueues a job; jobs run strictly one-at-a-time.
+
+**Trigger: `onDidSaveTextDocument`** — the engine subscribes to `vscode.workspace.onDidSaveTextDocument` (NOT `onDidChangeTextDocument` or `FileSystemWatcher`). A save is the natural commit-point for user intent: it avoids firing on every keystroke, avoids intermediate autosave states, and guarantees the file is persisted before reconcile reads it. The `memoria.syncTasks` command and the startup hook also enqueue jobs directly.
 
 ```
 jobs: FIFO queue of { kind: 'source'|'collector'|'full', uri?, timestamp }
 ```
 
-- Rapid duplicate jobs for the same URI are coalesced via a **1000 ms** debounce before enqueue (configurable via `debounceMs` in `task-collector.json`; matches VS Code's default autosave delay).
+- Rapid duplicate jobs for the same URI are coalesced via a **300 ms** debounce before enqueue (configurable via `debounceMs` in `task-collector.json`). The debounce is shorter than the previous 1000 ms design because saves are already less frequent than change events; 300 ms handles `Save All` bursts.
 - Queue is drained by a single async loop. No concurrent file I/O.
 - If the queue is idle, it sleeps until signalled.
 
-*Rationale:* Two-way sync with multiple watchers is the textbook setup for races. A serialized queue collapses the concurrency model to "one op at a time", eliminating interleaving races entirely. The cost is latency (hundreds of ms), which is acceptable for task sync.
+*Rationale:* Save-triggered sync avoids the complexity of debouncing rapid change events and intermediate states. A serialized queue collapses the concurrency model to "one op at a time", eliminating interleaving races entirely. The cost is latency (hundreds of ms), which is acceptable for task sync.
 
 ### 4.6 Self-write suppression
 
-Every write performed by the reconciler records the expected post-write content hash for the file in a `pendingWrites: Map<uri, Set<sha256>>`. The watcher callback consults this map:
+The engine saves files after applying `WorkspaceEdit`s (see §4.7). Those saves fire `onDidSaveTextDocument` again, which would re-trigger reconciliation. To break the loop, every save performed by the engine records the expected post-save content hash in a `pendingWrites: Map<uri, Set<sha256>>`. The save-event handler consults this map:
 
-1. Change event fires → read file → hash.
+1. Save event fires → read document content → hash.
 2. If hash is in `pendingWrites[uri]` → discard entry, **drop the event**.
 3. Else → enqueue reconcile job.
 
-Entries in `pendingWrites` that are not consumed within a bounded window (e.g. 5s) are evicted by a timer sweep, so a never-arriving watcher event cannot permanently shadow later real edits.
+Entries in `pendingWrites` that are not consumed within a bounded window (e.g. 5 s) are evicted by a timer sweep, so a never-arriving save event cannot permanently shadow later real edits.
 
-*Rationale:* Avoids the classic infinite feedback loop ("we write → watcher fires → we reconcile → we write again"). Using content hashes (not just a timer) handles the case where a user edit lands during our own write.
+*Rationale:* Avoids the classic infinite feedback loop ("we write → we save → save event fires → we reconcile → we write again"). Using content hashes (not just a timer) handles the case where a user save lands with the same bytes as an engine save.
 
-### 4.7 Writes: always `WorkspaceEdit`
+### 4.7 Writes: `WorkspaceEdit` + explicit save
 
 All file mutations — source and collector — go through `vscode.WorkspaceEdit`. This works uniformly whether the target document is open+dirty, open+clean, or closed on disk. Raw `fs.writeFile` is never used for tracked files.
 
-- Edit application uses `{ isRefactoring: false }` and checks the returned boolean. On `false` (stale view / conflict), the job re-reads the file and retries up to 3 times with exponential backoff, then surfaces an error toast and aborts this reconcile cycle (state stays consistent because the index is not persisted until the write succeeds).
-- The engine never calls `TextDocument.save()` — it lets the user save when they want. Written content is persisted by VS Code's edit-flushing mechanism on close/save, and our authoritative store is always the index plus what's on disk at query time.
+- Edit application uses `{ isRefactoring: false }` and checks the returned boolean. On `false` (stale view / conflict), the job **re-reads and re-parses the target file** to obtain fresh line ranges, then retries up to 3 times with exponential backoff. If all retries fail, it surfaces an error toast and aborts this reconcile cycle (state stays consistent because the index is not persisted until the write succeeds).
 
-*Rationale:* Removes the open/closed branching, avoids clobbering dirty buffers, and lets VS Code do the text-range bookkeeping.
+**Dirty-state contract — sync never leaves files dirty:**
+
+1. Before applying a `WorkspaceEdit` to a file, the engine records whether the document is currently dirty (`TextDocument.isDirty`).
+2. Apply the `WorkspaceEdit`.
+3. **If the file was NOT dirty before the edit**, the engine calls `TextDocument.save()` immediately. The resulting `onDidSaveTextDocument` event is suppressed via §4.6.
+4. **If the file WAS already dirty** (the user had unsaved changes), the edit merges into the dirty buffer but the engine does **NOT** save. The user's unsaved state is preserved; they save when ready.
+
+This guarantees that a sync cycle never creates new unsaved-change indicators (● in the tab title) on files that were previously clean.
+
+*Rationale:* `WorkspaceEdit` removes the open/closed branching and avoids clobbering dirty buffers. Explicit save after engine edits ensures the user never sees unexpected dirty indicators from background sync. Skipping save on already-dirty files respects the user's in-progress work.
 
 ### 4.8 Per-job logic
 
@@ -319,13 +332,14 @@ All file mutations — source and collector — go through `vscode.WorkspaceEdit
 1. *(user-edit only)* Parse collector → `TaskBlock[]` split by `# Active` / `# Completed`; extract italic suffix continuation lines per §4.4 before fingerprinting.
 2. *(user-edit only)* Align against `collectorOrder` + index entries (per §4.3).
 3. For each aligned entry where the user edit diverges from the index:
-   - If `source` is set, push changes to source via `WorkspaceEdit`:
-     - Text edit → **reverse-rewrite relative image/link paths** in the edited body (collector-relative → source-relative, per §4.4.1), then replace the source task's body range with the result. Markdown formatting and all other body content round-trip verbatim.
-     - `[ ] → [x]` → flip the source checkbox. Completion date lives only in the index/collector — **we do not write dates into source files**.
-     - `[x] → [ ]` → flip back.
+   - **Text edit** (fingerprint changed): if `source` is set, push changes to source via `WorkspaceEdit` — **reverse-rewrite relative image/link paths** in the edited body (collector-relative → source-relative, per §4.4.1), then replace the source task's body range with the result. Markdown formatting and all other body content round-trip verbatim. Save the source file per §4.7 dirty-state contract.
+   - `[ ] → [x]` → flip the source checkbox. Completion date lives only in the index/collector — **we do not write dates into source files**. Save source per §4.7.
+   - `[x] → [ ]` → flip back. Save source per §4.7.
    - If `source` is null (manual), only update the index.
-4. **Aging pass** — see §4.9.
-5. Re-render collector body deterministically from index. Update `collectorOrder` atomically with the write. Persist `tasks-index.json`; apply the collector `WorkspaceEdit`.
+   - **Reorder only** (task moved to a different position but fingerprint and checkbox unchanged): update `collectorOrder` only. **No source write.** Reordering in the collector is a collector-local layout concern.
+4. **Aging pass** — see §4.9. Source files modified by aging are saved per §4.7.
+5. **Dirty-collector guard (renderOnly only):** before writing, check if the collector document is currently dirty. If yes, **skip the collector write entirely** — the user is actively editing, and their next save will trigger a `reconcile(collector)` via the user-edit path, which handles alignment correctly. The index is still persisted (it was updated from the source pass), so the next reconcile has fresh data.
+6. Re-render collector body from index, **preserving the ordering in `collectorOrder`**. New tasks (not yet in `collectorOrder`) are appended at the end of their respective section (`# Active` or `# Completed`). Update `collectorOrder` atomically with the write. Persist `tasks-index.json`; apply the collector `WorkspaceEdit`; save the collector per §4.7 dirty-state contract.
 
 **`fullSync()`**
 
@@ -359,7 +373,7 @@ No tasks are lost; IDs are preserved.
 
 ### 4.11 Cross-file cascades
 
-After `reconcile(collectorUri)` writes to one or more source files, those writes are registered in `pendingWrites` so the watcher events they produce are dropped. No re-entry into `reconcile(source)` occurs for engine-driven writes. User edits that happen to produce the same bytes as an engine write are handled by the 5s eviction sweep in §4.6 — their subsequent edits (with different bytes) flow through normally.
+After `reconcile(collectorUri)` writes to one or more source files (and saves them per §4.7), those saves fire `onDidSaveTextDocument`. The events are suppressed via `pendingWrites` (§4.6) so no re-entry into `reconcile(source)` occurs for engine-driven writes. User saves that happen to produce the same bytes as an engine save are handled by the 5 s eviction sweep in §4.6 — their subsequent saves (with different bytes) flow through normally.
 
 ### 4.12 Startup
 
@@ -390,12 +404,12 @@ Subscribe to `vscode.workspace.onDidChangeWorkspaceFolders`. Added roots contrib
 
 | Scenario | Handling |
 |---|---|
-| Two MD files save simultaneously | Queue serializes; both reconciled in order. |
+| Two MD files saved simultaneously | Queue serializes; both reconciled in order. |
 | User saves collector while reconciler is mid-flush | `WorkspaceEdit` returns `false` on stale view → re-enqueue with fresh read. |
-| Reconciler write triggers own watcher | Hash in `pendingWrites` → event dropped; entries evicted after 5s. |
-| User edits source during reconcile, completes same task in collector | Queue order decides; edits are line-scoped via `WorkspaceEdit`, so VS Code merges cleanly. |
-| Dirty editor | Always `WorkspaceEdit` — no byte-level overwrite, ever. |
-| Rapid-fire saves (autosave loop) | 1000 ms debounce collapses into one job. |
+| Reconciler save triggers own `onDidSaveTextDocument` | Hash in `pendingWrites` → event dropped; entries evicted after 5 s. |
+| User saves source during reconcile, completes same task in collector | Queue order decides; edits are line-scoped via `WorkspaceEdit`, so VS Code merges cleanly. |
+| Dirty editor | `WorkspaceEdit` merges into dirty buffer; engine skips save (§4.7 step 4). User's unsaved state preserved. |
+| Rapid `Save All` | 300 ms debounce collapses into one job per file. |
 | Collector deleted by user | Next `reconcile(collector, renderOnly)` recreates it from index. |
 | Source file renamed / moved | `onDidRenameFiles` handler rewrites the index; IDs preserved (§4.10). |
 | Same task text in two files | Distinct IDs (alignment is per-source-file). |
@@ -405,6 +419,13 @@ Subscribe to `vscode.workspace.onDidChangeWorkspaceFolders`. Added roots contrib
 | Index file corrupted or missing | First-run semantics with bootstrap recovery; sources untouched. See §4.16. |
 | Workspace close mid-sync | Queue abandons in-flight; next startup's full sync reconciles from disk. |
 | Workspace folder added / removed mid-session | `onDidChangeWorkspaceFolders` handler adjusts watchers + index (§4.14). |
+| User reorders tasks in collector | `collectorOrder` updated; source files untouched. Next render preserves new order. |
+| Manual task added in collector | Assigned `collectorOwned: true`; survives all source reconciles; position preserved in `collectorOrder`. |
+| Source sync wants to re-render collector but user has unsaved collector edits | `renderOnly` skips collector write entirely (§4.8 step 5). Index already persisted; user's next save triggers full reconcile. |
+| Engine edits + saves a clean file | File saved immediately; `onDidSaveTextDocument` suppressed via `pendingWrites`. No dirty indicator shown. |
+| User keeps typing in source after save, before reconcile runs | Reconciler reads `TextDocument.getText()` (latest in-memory state). Reconcile operates on current content, not stale on-disk snapshot. If buffer is now dirty, engine skips save (§4.7 step 4). |
+| Source line ranges shift between parse and WorkspaceEdit application | `applyEdit` returns `false`; retry re-parses the source for fresh ranges (§4.7). Up to 3 retries with exponential backoff. |
+| Collector save arrives while engine is mid-write to a source | Queue serializes. The collector reconcile job enqueued by the save waits until the current job completes. |
 
 ### 4.16 Bootstrap / re-init recovery
 
@@ -472,12 +493,12 @@ Because identity lives only in `.memoria/tasks-index.json`, deleting the cache (
 
 **Phase 2 — Sync engine (single-root, happy path)**  *depends on Phase 1*
 
-7. `syncQueue.ts` — enqueue / 1000 ms debounce / coalesce / drain loop.
-8. `pendingWrites.ts` — hash suppression with 5s eviction sweep.
-9. `taskWriter.ts` — `WorkspaceEdit`-only writes with retry (§4.7); invokes `pathRewriter.reverse` when propagating collector edits to source.
-10. `taskCollectorFeature.ts` — register with `FeatureManager`; set up `FileSystemWatcher`s for include/exclude; collector watcher; document event subscriptions.
+7. `syncQueue.ts` — enqueue / 300 ms debounce / coalesce / drain loop.
+8. `pendingWrites.ts` — hash suppression with 5 s eviction sweep.
+9. `taskWriter.ts` — `WorkspaceEdit`-only writes with retry (§4.7); dirty-state tracking + explicit save; invokes `pathRewriter.reverse` when propagating collector edits to source.
+10. `taskCollectorFeature.ts` — register with `FeatureManager`; subscribe to `onDidSaveTextDocument` for include/exclude matching; collector save listener; document event subscriptions.
 11. Per-job logic (`reconcile(source)`, `reconcile(collector)`, batched `renderOnly` collector pass, `fullSync`).
-12. Unit tests for queue (ordering, debounce, coalescing) and writer (retry, stale-edit handling, collector→source reverse path rewrite, pass-through for hand-typed paths that don't match a known collector-rewrite form) via Vitest fake timers + mocked `vscode.workspace`.
+12. Unit tests for queue (ordering, debounce, coalescing) and writer (retry, stale-edit handling, dirty-state save/skip, self-write suppression integration, collector→source reverse path rewrite, pass-through for hand-typed paths that don't match a known collector-rewrite form) via Vitest fake timers + mocked `vscode.workspace`.
 
 **Phase 3 — Commands, config, startup**  *parallel with Phase 4*
 
@@ -528,7 +549,7 @@ Because identity lives only in `.memoria/tasks-index.json`, deleting the cache (
 - Path rewriter — round-trip: `reverse(forward(path, src, col), col, src) === path` for every rewrite-candidate path.
 - Path rewriter — reference definitions on continuation lines: `[id]: ./rel.md "title"` rewrites the path, preserves the title.
 - Collector formatter: round-trip stability (re-emit is byte-identical when sources are unchanged); renders inline HTML / tables / fenced code / nested bullets verbatim aside from the documented path rewrites.
-- Queue: FIFO order, 1000 ms debounce collapses bursts, coalescing drops duplicate pending URIs, `renderOnly` collector jobs coalesce.
+- Queue: FIFO order, 300 ms debounce collapses bursts, coalescing drops duplicate pending URIs, `renderOnly` collector jobs coalesce.
 - Reconcile diff: insert, remove, text-edit, `[ ]→[x]`, `[x]→[ ]`.
 - Reconcile(collector) → source: edited image/link paths in the collector are **reverse-rewritten** before the source `WorkspaceEdit` is built; hand-typed paths that don't match a known collector-rewrite form pass through verbatim.
 - Aging: entries older than retention cause source rewrite to `- **Done**: body` with body Markdown preserved verbatim; rewrite skipped when source fingerprint has drifted; manual (collectorOwned) entries dropped without source edit.
@@ -536,26 +557,141 @@ Because identity lives only in `.memoria/tasks-index.json`, deleting the cache (
 - Rename: `onDidRenameFiles` synth event remaps `index.tasks[*].source` and `sourceOrders` keys atomically.
 
 **Automated (E2E, @vscode/test-cli)**
-- Init blueprint → `taskCollector` feature listed, enabled, collector file + `task-collector.json` present.
-- Add `- [ ] foo` in a source → collector `# Active` gains entry; source remains byte-identical (no ID markers).
-- Tick `[x]` in source → collector entry moves to `# Completed` with today's date in italic suffix; source still byte-identical apart from the user's `[x]`.
-- Tick `[x]` in collector → source's `[ ]` flips to `[x]` (via `WorkspaceEdit`), exactly one source write registered (no watcher loop).
-- Markdown fidelity: author a source task with inline `**bold**`, `` `code` ``, an inline HTML `<kbd>` span, a fenced code block, a pipe table, and a nested `- child` bullet → all constructs appear byte-identical (modulo path rewrites) in the collector; editing unrelated text in the collector and saving propagates back to source without mangling any of them.
-- Image path rewrite: create `docs/deep/notes.md` with `- [ ] See ![x](./img/x.png)` and an actual image at `docs/deep/img/x.png`; after sync, the collector shows `![x](../docs/deep/img/x.png)` and a Markdown preview of the collector renders the image. Edit the alt text in the collector → source line becomes `- [ ] See ![new-alt](./img/x.png)` (path reverse-rewritten back to source-relative).
-- Absolute/scheme URLs untouched end-to-end: a source task with `[site](https://example.com)` and `[abs](/docs/x.md)` appears identically in the collector.
-- Aging with injected clock: complete a task, advance clock past `completedRetentionDays`, run `memoria.syncTasks` → source line becomes `- **Done**: body`, index entry gone, subsequent sync does NOT resurrect a task from the same line.
-- Delete collector file → next `memoria.syncTasks` recreates it from index.
-- Rename source file via `vscode.workspace.fs.rename` → `# Completed` suffixes show new path; no tasks become manual.
-- Multi-root: tasks from both roots appear in the initialized root's collector with correct `Source:` paths in `# Completed`.
-- Re-init flow: populate collector + index, re-init with a different blueprint → `WorkspaceInitializationBackups/.memoria/tasks-index.json` is present, re-init command's promise resolves *before* rescan completes; after rescan, bindings intact, zero entries demoted to manual.
-- Backup folder ignored for discovery: place `WorkspaceInitializationBackups/foo.md` with tasks → `memoria.syncTasks` does not ingest them; watcher on that path does not fire reconciles.
-- Feature toggle off → watchers disposed, collector + index preserved; toggle on → fullSync kicks in.
+
+All E2E tests run in a real VS Code extension host with a temporary workspace. Helper utilities: `writeSource(relPath, content)` writes + saves a Markdown file; `readCollector()` reads the collector file; `readSource(relPath)` reads a source; `syncAndWait()` runs `memoria.syncTasks` and awaits the queue drain; `isDirty(uri)` checks the document's dirty state. An injected clock is used for aging tests.
+
+**Category A — Blueprint & feature lifecycle**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| A1 | Init creates collector + config | Init workspace with IC blueprint. | `00-Tasks/All-Tasks.md` exists with `# Active` / `# Completed` headings; `.memoria/task-collector.json` exists with defaults; `taskCollector` listed and enabled in `features.json`. |
+| A2 | Feature toggle off disposes watchers | Toggle `taskCollector` off via `Manage Features`. Add `- [ ] new` in a source, save. | Collector unchanged; no sync triggered. |
+| A3 | Feature toggle on triggers full sync | Toggle `taskCollector` back on. | Collector gains the task from A2 after the startup-style fullSync. |
+| A4 | Startup sync (syncOnStartup=true) | Pre-populate a source with tasks, activate extension. | After activation settles, collector contains the pre-existing tasks. |
+
+**Category B — Source → collector sync (basic)**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| B1 | New task appears in collector | Write `- [ ] Buy milk` in `notes.md`, save. | Collector `# Active` contains `- [ ] Buy milk`. Source file byte-identical (no markers). |
+| B2 | Multiple tasks from one file | Write 3 tasks in `notes.md`, save. | All 3 appear in collector `# Active`, in source order. |
+| B3 | Tasks from multiple files | Write tasks in `notes.md` and `ideas.md`, save both. | All tasks appear in collector. |
+| B4 | Task removed from source | Delete a task line from `notes.md`, save. | Task removed from collector on next sync. |
+| B5 | Task text edited in source | Change `- [ ] Buy milk` to `- [ ] Buy oat milk` in source, save. | Collector reflects the new text; same identity (not duplicated). |
+| B6 | Source checkbox → [x] | Change `[ ]` to `[x]` in source, save. | Task moves from `# Active` to `# Completed` with `_Completed YYYY-MM-DD_` suffix. Source unchanged beyond user's `[x]`. |
+| B7 | Source checkbox → [ ] (un-complete) | Change `[x]` back to `[ ]` in source, save. | Task moves back to `# Active`; completion date cleared. |
+| B8 | Source file not dirty after sync | Write a task in source, save → sync updates collector. | Source `isDirty` = false after sync. Collector `isDirty` = false after sync. |
+
+**Category C — Collector → source sync**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| C1 | Edit task text in collector | Edit a source-bound task's text in collector, save collector. | Source file reflects the edit. Source `isDirty` = false after sync. |
+| C2 | Complete task in collector | Change `[ ]` to `[x]` for a source-bound task in collector, save. | Source's `[ ]` flips to `[x]`. Source saved (not dirty). Exactly one source save (no feedback loop). |
+| C3 | Un-complete task in collector | Change `[x]` to `[ ]` in collector `# Completed`, save. | Source flips back to `[ ]`. Task moves to `# Active`. |
+| C4 | Collector edit does not dirty clean files | Source `notes.md` is clean (saved). Edit its task in collector, save. | After sync: `notes.md` is saved (not dirty). Collector is saved (not dirty). |
+| C5 | Collector edit preserves already-dirty file | Open `notes.md`, make an unsaved edit (file is dirty). Edit its task in collector, save collector. | Engine applies `WorkspaceEdit` to dirty `notes.md` but does NOT save it. `notes.md` remains dirty with both the user's edit and the engine's edit merged. |
+
+**Category D — Manual (collector-only) tasks**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| D1 | Add manual task in collector | Type `- [ ] Manual task` in collector `# Active`, save. | Task persists in collector after next sync. Index has `collectorOwned: true`. |
+| D2 | Manual task survives source sync | Add manual task in collector, then add+save a new task in source. | Both manual task AND source task present in collector. Manual task not overridden or displaced. |
+| D3 | Complete manual task | Check `[x]` on manual task in collector, save. | Moves to `# Completed` with `_Completed YYYY-MM-DD_`. No source file affected. |
+| D4 | Manual task position preserved | Add manual task between two source tasks, save. Next source sync runs. | Manual task remains in its position between the two source tasks. |
+
+**Category E — Collector reordering**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| E1 | Reorder active tasks | Move task B above task A in collector `# Active`, save. | Order preserved after next sync. Source files unchanged. |
+| E2 | Reorder survives source sync | Reorder tasks in collector, save. Then edit a source file and save. | Collector re-renders preserving user's ordering. New source task appended at end. |
+| E3 | Reorder does not propagate to source | Reorder two tasks from the same source file in the collector, save. | Source file's task order unchanged. |
+| E4 | Interleave source and manual tasks | Place manual tasks between source tasks in collector, save. Source sync runs. | Interleaved order preserved. |
+
+**Category F — Dirty-state guarantee**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| F1 | Source save → collector saved | Add task in source, save. | After sync: collector `isDirty` = false. |
+| F2 | Collector save → source saved | Edit source-bound task in collector, save. | After sync: source `isDirty` = false. |
+| F3 | Engine skips save on already-dirty file | Open source, type unsaved text (dirty). Run `memoria.syncTasks`. | Source stays dirty. Engine edits merged but not saved. |
+| F4 | Full sync leaves all files clean | Pre-populate 3 source files with tasks (all saved/clean). Run `memoria.syncTasks`. | After sync: all 3 source files `isDirty` = false. Collector `isDirty` = false. |
+| F5 | No feedback loop from engine saves | Add task in source, save → sync writes+saves collector → collector save event fires. | Self-write suppression prevents re-reconcile. Only one reconcile cycle observed (verified via telemetry or spy). |
+
+**Category G — Markdown fidelity**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| G1 | Inline formatting preserved | Source task: `- [ ] Review **bold** and *italic* and ~~strike~~ and \`code\``. Save, sync. | Collector body byte-identical (modulo path rewrites). |
+| G2 | Multi-line task with continuation | Source task with 6-space-indented continuation lines. Save, sync. | Continuation lines appear in collector, properly indented. |
+| G3 | Fenced code block in task body | Source task with a ` ```ts ``` ` block on continuation lines. Save, sync. | Code block appears verbatim in collector. |
+| G4 | Pipe table in task body | Source task with GFM pipe table on continuation lines. Save, sync. | Table appears verbatim in collector. |
+| G5 | Inline HTML preserved | Source task with `<kbd>Ctrl</kbd>` and `<sub>x</sub>`. Save, sync. | HTML tags appear verbatim in collector. |
+| G6 | Nested sub-bullets | Source task with `- child` bullets at indent ≥ HANG. Save, sync. | Sub-bullets appear in collector as continuation lines. |
+| G7 | Round-trip: edit in collector preserves formatting | Edit unrelated text in a rich-Markdown task via collector, save. | Source task body preserved — formatting, code blocks, tables, HTML not mangled. |
+
+**Category H — Relative path rewriting**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| H1 | Image path rewritten source→collector | `docs/deep/notes.md`: `- [ ] See ![x](./img/x.png)`. Save, sync. | Collector shows `![x](../docs/deep/img/x.png)`. |
+| H2 | Link path rewritten | Source task with `[readme](../README.md)`. Save, sync. | Collector path recomputed relative to collector dir. |
+| H3 | Absolute URL not rewritten | Source task with `[site](https://example.com)`. Save, sync. | Collector shows identical `https://example.com`. |
+| H4 | Workspace-absolute path not rewritten | Source task with `[abs](/docs/x.md)`. Save, sync. | Collector shows identical `/docs/x.md`. |
+| H5 | Fragment-only not rewritten | Source task with `[section](#heading)`. Save, sync. | Collector shows identical `#heading`. |
+| H6 | Path inside fenced code not rewritten | Source task with `![](./img.png)` inside a ` ``` ` block. Save, sync. | Path unchanged — code fences are verbatim. |
+| H7 | Reverse rewrite: collector→source | Edit image alt text in collector, save. | Source gets path reverse-rewritten back to source-relative form. |
+| H8 | Round-trip identity | `reverse(forward(path)) === path` for all rewrite-candidate relative paths end-to-end. | Source path restored exactly after collector round-trip. |
+
+**Category I — Aging (completion → archive)**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| I1 | Aged task rewritten in source | Complete a task (source `[x]`), advance clock past `completedRetentionDays`, run `syncTasks`. | Source line becomes `- **Done**: body`. Index entry dropped. Source saved (not dirty). |
+| I2 | Archived task not resurrected | After I1, run `syncTasks` again. | `- **Done**: body` line ignored by parser; no new task in collector. |
+| I3 | Manual completed task aged out | Complete a manual task, advance clock. Run `syncTasks`. | Manual task dropped from index + collector. No source affected. |
+| I4 | Aging skipped when source diverged | Complete task, advance clock. Edit the task body in source before next sync. | Aging rewrite skipped (fingerprint mismatch). Entry retained. |
+| I5 | Aging saves source file | Aging rewrites a clean source file. | Source saved (not dirty) after rewrite. |
+
+**Category J — File rename / move**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| J1 | Rename source file | Rename `notes.md` → `renamed.md` via `vscode.workspace.fs.rename`. | Index paths updated; task IDs preserved; `# Completed` suffixes show new path. |
+| J2 | No tasks become manual after rename | After J1, run `syncTasks`. | All tasks still bound to source (none demoted to `collectorOwned`). |
+
+**Category K — Exclusions & edge cases**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| K1 | Backup folder ignored | Place `WorkspaceInitializationBackups/foo.md` with `- [ ] task`. Run `syncTasks`. | Task NOT ingested into collector. |
+| K2 | Collector file not self-ingested | Collector already has tasks. Run `syncTasks`. | No duplicate entries; collector not parsed as a source. |
+| K3 | Collector deleted → recreated | Delete `00-Tasks/All-Tasks.md`. Run `syncTasks`. | Collector recreated from index with all known tasks. |
+| K4 | `.memoria/` excluded from scanning | Place `.memoria/scratch.md` with `- [ ] task`. Run `syncTasks`. | Task NOT ingested. |
+
+**Category L — Re-init & bootstrap recovery**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| L1 | Re-init backs up tasks-index.json | Populate index, then re-init with different blueprint. | `WorkspaceInitializationBackups/.memoria/tasks-index.json` present. |
+| L2 | Re-init preserves bindings | After L1, wait for fullSync. | All task bindings intact; zero entries demoted to manual. |
+| L3 | Fresh init (no index) builds from sources | Delete `tasks-index.json`. Run `syncTasks`. | Index rebuilt from source files; collector re-rendered correctly. |
+
+**Category M — Multi-root workspace**
+
+| # | Test case | Steps | Expected outcome |
+|---|-----------|-------|------------------|
+| M1 | Tasks from all roots in collector | Add tasks in files from root A and root B. Save, sync. | Collector in initialized root contains tasks from both roots. |
+| M2 | Completed tasks show source path | Complete a task from root B. | `# Completed` suffix shows correct relative path from collector to root B source. |
 
 **Manual**
-- Open collector and a source in side-by-side editors; edit both simultaneously; verify `WorkspaceEdit` merging preserves both users' intents.
-- Rapid-save loop on a source file — verify one reconcile per debounce window, no disk thrash.
-- Autosave with `afterDelay` at default 1000 ms — confirm sync still batches correctly.
+- Open collector and a source in side-by-side editors; edit both simultaneously; verify `WorkspaceEdit` merging preserves both users' intents and dirty-state contract holds.
+- Rapid-save loop on a source file — verify one reconcile per debounce window, no disk thrash, all files end up saved (not dirty).
+- Autosave with `afterDelay` — confirm sync fires on the autosave event and that engine saves don't trigger redundant cycles.
 - Visual: open the collector in VS Code's Markdown preview; confirm that images from deeply-nested sources render correctly (i.e. relative-path rewriting produced valid URLs from the collector's perspective).
+- Reorder tasks in collector, save, verify ordering preserved after source edits.
 
 ---
 
@@ -571,8 +707,11 @@ Because identity lives only in `.memoria/tasks-index.json`, deleting the cache (
 - **Relative path rewriting**: inline images, inline links, and reference-style definitions with relative paths are rewritten on render (source-dir-relative → collector-dir-relative) and reverse-rewritten on collector→source propagation. Absolute URLs, schemes (`https:`, `mailto:`, `data:`), protocol-relative, fragment-only, and workspace-absolute paths pass through unchanged. Rewriting is fence-aware (skipped inside fenced code blocks).
 - **Fingerprint is over raw body bytes**, including Markdown syntax characters. Formatting-only edits appear as rewords and are re-bound by positional alignment (§4.3), not normalized away.
 - **Source of truth**: filesystem + index. Disk is authoritative; index is the "last known layout" + binding ledger.
-- **Serialization model**: single async queue with 1000 ms debounce (matches VS Code autosave default).
+- **Sync trigger**: `onDidSaveTextDocument` — saves are the natural commit-point for user intent. Change events and file-system watchers are not used.
+- **Serialization model**: single async queue with 300 ms debounce (handles `Save All` bursts; saves are already less frequent than keystrokes).
 - **Writes**: always `vscode.WorkspaceEdit`, never raw `fs.writeFile`. Works uniformly open/closed/dirty.
+- **Dirty-state contract**: after applying a `WorkspaceEdit`, the engine saves the file immediately — unless it was already dirty before the edit. Sync never creates new unsaved-change indicators on previously-clean files.
+- **Collector reordering is user-owned.** `collectorOrder` in the index reflects the user's chosen layout. The engine preserves it across syncs. New tasks are appended at the end of their section. Reordering has zero effect on source files.
 - **Completed retention default**: 7 days, configurable via `.memoria/task-collector.json`.
 - **Settings storage**: per-workspace `.memoria/task-collector.json` (consistent with other Memoria features) for runtime knobs only. Feature on/off lives in `features.json` only — single source of truth. **`collectorPath` is owned by the blueprint**, not by `task-collector.json`; changing it requires re-init with a different blueprint.
 - **Scope**: `**/*.md` by default; configurable. Hard-coded non-overridable exclusions: `**/WorkspaceInitializationBackups/**` and the collector file itself.
