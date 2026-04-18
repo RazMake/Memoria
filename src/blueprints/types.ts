@@ -3,6 +3,7 @@
 // scaffold, manifest manager, and engine — keeping each component loosely coupled.
 
 import * as vscode from "vscode";
+import type { TaskCollectorConfig } from "../features/taskCollector/types";
 
 /** Allowed values for the `default` field on a workspace entry. */
 export type DefaultScope = "relative" | "includingRoot";
@@ -51,8 +52,15 @@ export interface DecorationsFeatureEntry extends FeatureEntry {
     rules: DecorationRule[];
 }
 
+/** A task collector feature — aggregates Markdown tasks into a blueprint-owned collector file. */
+export interface TaskCollectorFeatureEntry extends FeatureEntry {
+    id: "taskCollector";
+    collectorPath: string;
+    config: TaskCollectorConfig;
+}
+
 /** Discriminated union of all known feature types. Expand as new features are added. */
-export type BlueprintFeature = DecorationsFeatureEntry;
+export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry;
 
 /**
  * Default files split by scope, as returned by `resolveDefaultFiles()`.
@@ -95,6 +103,10 @@ export interface FeaturesConfig {
 }
 
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
+export interface TaskCollectorManifestConfig {
+    collectorPath: string;
+}
+
 export interface BlueprintManifest {
     blueprintId: string;
     blueprintVersion: string;
@@ -102,6 +114,7 @@ export interface BlueprintManifest {
     initializedAt: string;
     lastReinitAt: string | null;
     fileManifest: Record<string, string>;
+    taskCollector?: TaskCollectorManifestConfig;
 }
 
 /**

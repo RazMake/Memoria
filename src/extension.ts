@@ -11,11 +11,14 @@ import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
 import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { createOpenDefaultFileCommand } from "./commands/openDefaultFile";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
+import { createSyncTasksCommand } from "./commands/syncTasks";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
 import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
 import { DefaultFileCompletionProvider, DEFAULT_FILES_JSON_SELECTOR } from "./features/navigator/defaultFileCompletionProvider";
 import { FeatureManager } from "./features/featureManager";
+import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
+import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
 const reporterFactory: TelemetryReporterFactory = (connectionString) => {
@@ -42,10 +45,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const resolver = new WorkspaceInitConflictResolver(vscode.workspace.fs);
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
+    const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
+    const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri);
     const featureManager = new FeatureManager(manifest);
     featureManager.register("decorations", (root, enabled) =>
         decorationProvider.refresh(root, enabled, getWorkspaceRoots())
     );
+    featureManager.register("taskCollector", async (root, enabled) => {
+        await taskCollectorFeature.refresh(root, enabled, getWorkspaceRoots());
+    });
 
     // Register the decoration provider eagerly so VS Code is already listening when
     // refresh() fires the change event — otherwise the first fire is wasted.
@@ -66,6 +74,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             '"',
             '/',
         ),
+        TodoEditorProvider.register(context, todoEditorProvider),
     );
 
     // Discover the initialized root once and share it across all startup operations
@@ -102,9 +111,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registerDefaultFileWatcher(context, workspaceRoot, roots, manifest, defaultFileWatcherHolder);
     };
 
-    registerFileWatchers(context, roots, manifest, featureManager);
+    registerFileWatchers(context, roots, manifest, featureManager, initializedRoot, defaultFileWatcherHolder);
     registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
-    registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, onWorkspaceInitialized);
+    registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, taskCollectorFeature, onWorkspaceInitialized);
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -133,9 +142,11 @@ function registerFileWatchers(
     context: vscode.ExtensionContext,
     roots: vscode.Uri[],
     manifest: ManifestManager,
-    featureManager: FeatureManager
+    featureManager: FeatureManager,
+    initializedRoot: vscode.Uri | null,
+    defaultFileWatcherHolder: DefaultFileWatcherHolder
 ): void {
-    let lastKnownRoot: string | null = null;
+    let lastKnownRoot: string | null = initializedRoot?.toString() ?? null;
 
     const recheckInitialization = async (): Promise<void> => {
         const currentRoot = await manifest.findInitializedRoot(roots);
@@ -146,6 +157,8 @@ function registerFileWatchers(
         lastKnownRoot = currentRootStr;
         await updateWorkspaceInitializedContext(currentRoot);
         await featureManager.refresh(currentRoot);
+        await updateDefaultFileContext(currentRoot, roots, manifest);
+        registerDefaultFileWatcher(context, currentRoot, roots, manifest, defaultFileWatcherHolder);
     };
 
     // Watch every root — not just the first — so multi-root workspaces are fully covered.
@@ -196,6 +209,7 @@ function registerCommands(
     telemetry: DeferredTelemetryLogger,
     resolver: WorkspaceInitConflictResolver,
     featureManager: FeatureManager,
+    taskCollectorFeature: TaskCollectorFeature,
     onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
 ): void {
     context.subscriptions.push(
@@ -221,6 +235,10 @@ function registerCommands(
         vscode.commands.registerCommand(
             "memoria.openDefaultFile",
             createOpenDefaultFileCommand(manifest)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.syncTasks",
+            createSyncTasksCommand(taskCollectorFeature, telemetry)
         )
     );
 }

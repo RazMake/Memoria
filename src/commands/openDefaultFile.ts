@@ -85,8 +85,10 @@ export function createOpenDefaultFileCommand(
                 ...filePath.split("/")
             );
             try {
-                const doc = await vscode.workspace.openTextDocument(fileUri);
-                await vscode.window.showTextDocument(doc, { viewColumn: nextColumn, preview: false });
+                await vscode.commands.executeCommand("vscode.open", fileUri, {
+                    viewColumn: nextColumn,
+                    preview: false,
+                });
                 nextColumn++;
             } catch {
                 // File does not exist on disk — skip silently.

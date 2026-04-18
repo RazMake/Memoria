@@ -6,7 +6,7 @@ import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, TaskCollectorFeatureEntry } from "./types";
 import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -29,6 +29,7 @@ export class BlueprintEngine {
      */
     async initialize(workspaceRoot: vscode.Uri, blueprintId: string): Promise<void> {
         const definition = await this.registry.getBlueprintDefinition(blueprintId);
+        const taskCollector = extractTaskCollectorFeature(definition.features);
 
         const { fileManifest } = await this.scaffold.scaffoldTree(
             workspaceRoot,
@@ -42,6 +43,7 @@ export class BlueprintEngine {
             initializedAt: new Date().toISOString(),
             lastReinitAt: null,
             fileManifest,
+            taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
         };
 
         await this.manifest.writeManifest(workspaceRoot, manifest);
@@ -53,6 +55,9 @@ export class BlueprintEngine {
         }
         await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(definition.features) });
         await this.manifest.writeFeatures(workspaceRoot, buildFeaturesConfig(definition.features));
+        if (taskCollector) {
+            await this.manifest.writeTaskCollectorConfig(workspaceRoot, taskCollector.config);
+        }
     }
 
     /**
@@ -77,6 +82,7 @@ export class BlueprintEngine {
         }
 
         const newDefinition = await this.registry.getBlueprintDefinition(blueprintId);
+        const taskCollector = extractTaskCollectorFeature(newDefinition.features);
 
         const plan = await resolver.resolveConflicts(
             workspaceRoot,
@@ -87,6 +93,13 @@ export class BlueprintEngine {
 
         if (!plan) {
             return; // user cancelled at a QuickPick
+        }
+
+        const backupFailures = await this.manifest.backupMemoriaDir(workspaceRoot, workspaceRoot);
+        if (backupFailures.length > 0) {
+            this.telemetry.logError("taskCollector.reinitBackupFailed", {
+                failedPaths: backupFailures.join(","),
+            });
         }
 
         // Phase D — Execute.
@@ -117,6 +130,7 @@ export class BlueprintEngine {
             initializedAt: currentManifest.initializedAt,
             lastReinitAt: new Date().toISOString(),
             fileManifest,
+            taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
         };
 
         await this.manifest.writeManifest(workspaceRoot, updatedManifest);
@@ -130,6 +144,10 @@ export class BlueprintEngine {
 
         const existingFeaturesConfig = await this.manifest.readFeatures(workspaceRoot);
         await this.manifest.writeFeatures(workspaceRoot, mergeFeaturesConfig(newDefinition.features, existingFeaturesConfig));
+        if (taskCollector) {
+            await this.manifest.writeTaskCollectorConfig(workspaceRoot, taskCollector.config);
+        }
+        await this.manifest.deleteTaskIndex(workspaceRoot);
 
         // Phase E — Open diff editors for files the user wants to merge manually.
         if (plan.filesToDiff.length > 0) {
@@ -176,6 +194,11 @@ export function buildFeaturesConfig(features: BlueprintFeature[]): FeaturesConfi
 export function extractDecorationRules(features: BlueprintFeature[]): DecorationRule[] {
     const decorations = features.find((f) => f.id === "decorations");
     return decorations ? decorations.rules : [];
+}
+
+export function extractTaskCollectorFeature(features: BlueprintFeature[]): TaskCollectorFeatureEntry | null {
+    const feature = features.find((entry): entry is TaskCollectorFeatureEntry => entry.id === "taskCollector");
+    return feature ?? null;
 }
 
 /**

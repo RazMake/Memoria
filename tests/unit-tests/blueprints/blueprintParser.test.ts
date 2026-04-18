@@ -296,6 +296,41 @@ describe("parseFeatures", () => {
         ]);
         expect(features[0].enabledByDefault).toBe(false);
     });
+
+    it("should parse a valid taskCollector feature with defaults", () => {
+        const features = parseFeatures([
+            {
+                id: "taskCollector",
+                name: "Task Collector",
+                description: "Sync Markdown tasks",
+                enabledByDefault: true,
+                collectorPath: "00-Tasks/All-Tasks.md",
+            },
+        ]);
+
+        expect(features[0]).toEqual(expect.objectContaining({
+            id: "taskCollector",
+            collectorPath: "00-Tasks/All-Tasks.md",
+            config: expect.objectContaining({
+                completedRetentionDays: 7,
+                syncOnStartup: true,
+                include: ["**/*.md"],
+                exclude: ["**/node_modules/**", "**/.git/**", "**/.memoria/**"],
+                debounceMs: 300,
+            }),
+        }));
+    });
+
+    it("should throw when taskCollector collectorPath is missing", () => {
+        expect(() => parseFeatures([
+            {
+                id: "taskCollector",
+                name: "Task Collector",
+                description: "Sync Markdown tasks",
+                enabledByDefault: true,
+            },
+        ])).toThrow('"collectorPath"');
+    });
 });
 
 describe("resolveDefaultFiles", () => {

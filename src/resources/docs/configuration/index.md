@@ -13,6 +13,7 @@ When you initialize a workspace, Memoria creates a `.memoria/` folder at the wor
 | [default-files.json](default-files-json.md) | Stores the map between folders and their list of default files (_to open from right-click menu_) |
 | [decorations.json](decorations-json.md) | Defines Explorer decoration rules (_setting colors and badges for folders/files_) |
 | [dotfolders.json](dotfolders-json.md) | Tracks managed `files.exclude` entries |
+| [task-collector.json](task-collector-json.md) | Runtime configuration for the Task Collector feature (_retention, scan patterns, debounce_) |
 
 ---
 

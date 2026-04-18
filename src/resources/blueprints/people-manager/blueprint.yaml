@@ -8,7 +8,7 @@ workspace:
     children:
       - name: "Planning/"
       - name: "Team-Evaluations/"
-      - name: "MyList.todo"
+      - name: "AllTasks.todo.md"
         default: "includingRoot"
   - name: "01-ToRemember/"
     children:
@@ -22,6 +22,11 @@ workspace:
   - name: "05-Archive/"
 
 features:
+  - id: "taskCollector"
+    name: "Task Collector"
+    description: "Aggregate and sync tasks from markdown files in the workspace into a single place."
+    enabledByDefault: true
+    collectorPath: "00-Workstreams/AllTasks.todo.md"
   - id: "decorations"
     name: "Explorer Decorations"
     description: "Badges and colors in the VS Code Explorer"

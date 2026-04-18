@@ -8,6 +8,7 @@
 
 import * as vscode from "vscode";
 import type { BlueprintManifest, DefaultFilesConfig, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
+import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -137,6 +138,32 @@ export class ManifestManager {
         await this.writeJson(this.featuresUri(workspaceRoot), config);
     }
 
+    async readTaskCollectorConfig(workspaceRoot: vscode.Uri): Promise<TaskCollectorConfig | null> {
+        return this.readJson<TaskCollectorConfig>(this.taskCollectorConfigUri(workspaceRoot));
+    }
+
+    async writeTaskCollectorConfig(workspaceRoot: vscode.Uri, config: TaskCollectorConfig): Promise<void> {
+        await this.ensureMemoriaDir(workspaceRoot);
+        await this.writeJson(this.taskCollectorConfigUri(workspaceRoot), config);
+    }
+
+    async readTaskIndex(workspaceRoot: vscode.Uri): Promise<StoredTaskIndex | null> {
+        return this.readJson<StoredTaskIndex>(this.taskIndexUri(workspaceRoot));
+    }
+
+    async writeTaskIndex(workspaceRoot: vscode.Uri, index: StoredTaskIndex): Promise<void> {
+        await this.ensureMemoriaDir(workspaceRoot);
+        await this.writeJson(this.taskIndexUri(workspaceRoot), index);
+    }
+
+    async deleteTaskIndex(workspaceRoot: vscode.Uri): Promise<void> {
+        try {
+            await this.fs.delete(this.taskIndexUri(workspaceRoot));
+        } catch {
+            // tasks-index.json may not exist yet.
+        }
+    }
+
     private manifestUri(root: vscode.Uri): vscode.Uri {
         return vscode.Uri.joinPath(root, ".memoria", "blueprint.json");
     }
@@ -155,6 +182,14 @@ export class ManifestManager {
 
     private featuresUri(root: vscode.Uri): vscode.Uri {
         return vscode.Uri.joinPath(root, ".memoria", "features.json");
+    }
+
+    private taskCollectorConfigUri(root: vscode.Uri): vscode.Uri {
+        return vscode.Uri.joinPath(root, ".memoria", "task-collector.json");
+    }
+
+    private taskIndexUri(root: vscode.Uri): vscode.Uri {
+        return vscode.Uri.joinPath(root, ".memoria", "tasks-index.json");
     }
 
     private memoriaDir(root: vscode.Uri): vscode.Uri {

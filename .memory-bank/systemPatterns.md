@@ -12,8 +12,13 @@ extension.ts (activation, DI wiring, versioning check)
   │   └── manageFeatures.ts       — factory function → command handler
   ├── features/
   │   ├── featureManager.ts       — feature toggle orchestrator
-  │   └── decorations/
-  │       └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
+  │   ├── decorations/
+  │   │   └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
+  │   └── todoEditor/
+  │       ├── types.ts                — UITask, ToWebviewMessage, ToExtensionMessage
+  │       ├── documentSerializer.ts   — pure parse/mutate functions for .todo.md
+  │       ├── todoEditorProvider.ts   — CustomTextEditorProvider, webview lifecycle
+  │       └── webview/main.ts         — browser-side UI (IIFE bundle → dist/webview.js)
   └── blueprints/
       ├── types.ts                — shared data contracts (interfaces only)
       ├── blueprintParser.ts      — YAML → BlueprintDefinition (pure, no vscode)
@@ -115,6 +120,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - `toggleDotFolders` command depends on `ManifestManager`
 - `BlueprintDecorationProvider` depends on `ManifestManager` (reads decorations.json, discovers root)
 - `BlueprintParser` is pure (no vscode dependency) — used only by `BlueprintRegistry`
+- `TodoEditorProvider` depends on `ManifestManager` (reads task index), `documentSerializer` (parse/mutate .todo.md), `taskParser` (parse source files for write-back), `taskWriter.replaceLineRange` (source file edits). Registered/disposed dynamically via `FeatureManager` callback for `taskCollector`. Webview communicates via message protocol (`ToWebviewMessage`/`ToExtensionMessage`).
 
 ## BlueprintDecorationProvider Pattern
 - Registered via `vscode.window.registerFileDecorationProvider` in `extension.ts`

@@ -9,6 +9,7 @@ Use the **Manage features** command to enable or disable these. Which features a
 | Feature | Description |
 |---------|-------------|
 | [Explorer decorations](decorations.md) | Provides customization for the folder/file colors and badges in the Explorer panel |
+| [Task Collector](task-collector.md) | Aggregates all Markdown tasks across workspace files into a single collector file and keeps them in two-way sync |
 
 ## Built-in (Always On)
 

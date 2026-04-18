@@ -8,6 +8,7 @@ Memoria provides the following commands, all accessible from the **Command Palet
 | [Toggle dot-folders](toggle-dot-folders.md) | Hide or show dot-folders in the Explorer | After Initialization|
 | [Manage features](manage-features.md) | Enable or disable optional blueprint features | After Initialization|
 | [Open default file(s)](open-default-files.md) | Open pre-configured files for a folder | Folder context menu |
+| [Sync Tasks](sync-tasks.md) | Trigger a full Task Collector sync across all workspace Markdown files | After Initialization |
 | [Open User Guide](open-user-guide.md) | Browse the built-in documentation | Always |
 
 ---

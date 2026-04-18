@@ -12,11 +12,14 @@
 - **Test coverage**: 263 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
 - **Context key**: `memoria.workspaceInitialized` checks all workspace roots (not just first)
 - **Structural/perf improvements**: Cached reinit hashes, multi-root file watchers, parallel hash reads, extracted activate() helpers, removed dead ManifestManager.computeFileHash wrapper
+- **Task Collector feature**: Two-way sync of Markdown tasks (`- [ ]`/`- [x]`) between source files and a blueprint-defined collector file. Save-triggered sync via `SyncQueue`, self-write suppression via `PendingWrites`, Myers-style alignment for rename-safe task identity, relative path rewriting for images/links, completed-task aging and pruning, manual (collector-only) tasks, `Memoria: Sync Tasks` command. Documented in user guide.
+- **Custom Todo Editor**: `CustomTextEditorProvider` for `*.todo.md` files — visual task board with drag-and-drop reordering, checkbox completion/un-completion (optimistic UI), add/edit task popups, source file navigation, and collapsible completed section. Feature-gated via `taskCollector` toggle. Webview powered by `markdown-it` for task body rendering. Source file write-back for collected tasks. Documented in user guide.
 
 ## What's Left (Not Implemented)
 - **`.vscodeignore`**: Not yet created (needed for publishing)
-- **Publishing**: `publisher` field in package.json is still `TODO_PUBLISHER_ID`
+- **Publishing**: `publisher` field set to `RazMake`
 - **TelemetryReporter → TelemetryLogger adapter**: Needed when a connection string is configured pre-publish
+- **`patch-package`**: Istanbul crash patch not persisted across `npm install`
 
 ## Current Status
 Version 0.0.1, not publicly released. All three phases complete and verified.

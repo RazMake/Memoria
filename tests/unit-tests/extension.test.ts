@@ -32,6 +32,7 @@ vi.mock("vscode", () => ({
             dispose: vi.fn(),
         })),
         registerFileDecorationProvider: vi.fn(() => ({ dispose: vi.fn() })),
+        registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
     },
     languages: {
         registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
@@ -123,6 +124,7 @@ describe("extension", () => {
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.initializeWorkspace", expect.any(Function));
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.toggleDotFolders", expect.any(Function));
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.manageFeatures", expect.any(Function));
+        expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.syncTasks", expect.any(Function));
     });
 
     it("deactivate returns void", async () => {

@@ -5,7 +5,10 @@
             "name": "Run Extension",
             "type": "extensionHost",
             "request": "launch",
-            "args": ["--extensionDevelopmentPath=${workspaceFolder}/src"],
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}/src",
+                "--profile-temp"
+            ],
             "outFiles": ["${workspaceFolder}/src/dist/**/*.js"],
             "preLaunchTask": "Memoria: Build extension"
         },

@@ -3,6 +3,7 @@
 // Validation happens at parse time (fail-fast before any filesystem operations touch the workspace).
 
 import { parse } from "yaml";
+import { DEFAULT_TASK_COLLECTOR_CONFIG } from "../features/taskCollector/taskIndex";
 import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope } from "./types";
 
 const VALID_DEFAULT_SCOPES: ReadonlySet<string> = new Set<DefaultScope>(["relative", "includingRoot"]);
@@ -152,10 +153,93 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
                     enabledByDefault: entry["enabledByDefault"] as boolean,
                     rules: parseDecorationRules(entry["rules"]),
                 };
+            case "taskCollector":
+                return {
+                    id,
+                    name: entry["name"] as string,
+                    description: entry["description"] as string,
+                    enabledByDefault: entry["enabledByDefault"] as boolean,
+                    collectorPath: parseCollectorPath(entry["collectorPath"], index),
+                    config: {
+                        completedRetentionDays: parseOptionalNumber(
+                            entry["completedRetentionDays"],
+                            DEFAULT_TASK_COLLECTOR_CONFIG.completedRetentionDays,
+                            index,
+                            "completedRetentionDays"
+                        ),
+                        syncOnStartup: parseOptionalBoolean(
+                            entry["syncOnStartup"],
+                            DEFAULT_TASK_COLLECTOR_CONFIG.syncOnStartup,
+                            index,
+                            "syncOnStartup"
+                        ),
+                        include: parseOptionalStringArray(
+                            entry["include"],
+                            DEFAULT_TASK_COLLECTOR_CONFIG.include,
+                            index,
+                            "include"
+                        ),
+                        exclude: parseOptionalStringArray(
+                            entry["exclude"],
+                            DEFAULT_TASK_COLLECTOR_CONFIG.exclude,
+                            index,
+                            "exclude"
+                        ),
+                        debounceMs: parseOptionalNumber(
+                            entry["debounceMs"],
+                            DEFAULT_TASK_COLLECTOR_CONFIG.debounceMs,
+                            index,
+                            "debounceMs"
+                        ),
+                    },
+                };
             default:
                 throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
         }
     });
+}
+
+function parseCollectorPath(raw: unknown, index: number): string {
+    if (typeof raw !== "string" || !raw.trim()) {
+        throw new Error(`Feature entry at index ${index}: "collectorPath" must be a non-empty string.`);
+    }
+
+    const normalized = raw.replace(/\\/g, "/");
+    if (normalized.startsWith("/") || normalized.endsWith("/")) {
+        throw new Error(`Feature entry at index ${index}: "collectorPath" must be a relative file path.`);
+    }
+
+    return normalized;
+}
+
+function parseOptionalBoolean(raw: unknown, fallback: boolean, index: number, field: string): boolean {
+    if (raw === undefined) {
+        return fallback;
+    }
+    if (typeof raw !== "boolean") {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a boolean.`);
+    }
+    return raw;
+}
+
+function parseOptionalNumber(raw: unknown, fallback: number, index: number, field: string): number {
+    if (raw === undefined) {
+        return fallback;
+    }
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a non-negative number.`);
+    }
+    return raw;
+}
+
+function parseOptionalStringArray(raw: unknown, fallback: string[], index: number, field: string): string[] {
+    if (raw === undefined) {
+        return [...fallback];
+    }
+    if (!Array.isArray(raw) || raw.some((value) => typeof value !== "string" || !value)) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be an array of non-empty strings.`);
+    }
+    return [...raw];
 }
 
 /**

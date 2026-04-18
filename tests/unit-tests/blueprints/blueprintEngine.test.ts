@@ -45,6 +45,27 @@ const managerDefinition: BlueprintDefinition = {
 
 const scaffoldResult = { fileManifest: { "Folder/file.md": "sha256:abc" } };
 
+const taskCollectorDefinition: BlueprintDefinition = {
+    ...mockDefinition,
+    features: [
+        ...mockDefinition.features,
+        {
+            id: "taskCollector",
+            name: "Task Collector",
+            description: "Sync Markdown tasks",
+            enabledByDefault: true,
+            collectorPath: "00-Tasks/All-Tasks.md",
+            config: {
+                completedRetentionDays: 7,
+                syncOnStartup: true,
+                include: ["**/*.md"],
+                exclude: ["**/.memoria/**"],
+                debounceMs: 300,
+            },
+        },
+    ],
+};
+
 describe("BlueprintEngine", () => {
     const workspaceRoot = { path: "/workspace" } as any;
 
@@ -66,7 +87,10 @@ describe("BlueprintEngine", () => {
             writeDefaultFiles: vi.fn().mockResolvedValue(undefined),
             writeDecorations: vi.fn().mockResolvedValue(undefined),
             writeFeatures: vi.fn().mockResolvedValue(undefined),
+            writeTaskCollectorConfig: vi.fn().mockResolvedValue(undefined),
             readFeatures: vi.fn().mockResolvedValue(null),
+            backupMemoriaDir: vi.fn().mockResolvedValue([]),
+            deleteTaskIndex: vi.fn().mockResolvedValue(undefined),
         };
         mockScaffold = {
             scaffoldTree: vi.fn().mockResolvedValue(scaffoldResult),
@@ -223,6 +247,24 @@ describe("BlueprintEngine", () => {
             await engine.initialize(workspaceRoot, "individual-contributor");
 
             expect(mockRegistry.getSeedFileContent).toHaveBeenCalledWith("individual-contributor", "Folder/file.md");
+        });
+
+        it("should write task collector config and collector path when the blueprint defines the feature", async () => {
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(taskCollectorDefinition);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+
+            await engine.initialize(workspaceRoot, "individual-contributor");
+
+            expect(mockManifest.writeTaskCollectorConfig).toHaveBeenCalledWith(
+                workspaceRoot,
+                taskCollectorDefinition.features[1].config
+            );
+            expect(mockManifest.writeManifest).toHaveBeenCalledWith(
+                workspaceRoot,
+                expect.objectContaining({
+                    taskCollector: { collectorPath: "00-Tasks/All-Tasks.md" },
+                })
+            );
         });
     });
 
@@ -433,6 +475,20 @@ describe("BlueprintEngine", () => {
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             const writtenManifest = mockManifest.writeManifest.mock.calls[0][1];
             expect(writtenManifest.defaultFiles).toBeUndefined();
+        });
+
+        it("should back up .memoria and reset tasks-index during reinit", async () => {
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(taskCollectorDefinition);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+
+            expect(mockManifest.backupMemoriaDir).toHaveBeenCalledWith(workspaceRoot, workspaceRoot);
+            expect(mockManifest.deleteTaskIndex).toHaveBeenCalledWith(workspaceRoot);
+            expect(mockManifest.writeTaskCollectorConfig).toHaveBeenCalledWith(
+                workspaceRoot,
+                taskCollectorDefinition.features[1].config
+            );
         });
 
     });

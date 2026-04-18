@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ManifestManager } from "../../../src/blueprints/manifestManager";
 import type { BlueprintManifest, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "../../../src/blueprints/types";
+import type { StoredTaskIndex, TaskCollectorConfig } from "../../../src/features/taskCollector/types";
 
 const mockStat = vi.fn();
 const mockReadFile = vi.fn();
@@ -191,6 +192,63 @@ describe("ManifestManager", () => {
             expect(mockCreateDirectory).toHaveBeenCalledOnce();
             const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
             expect(written).toEqual(config);
+        });
+    });
+
+    describe("readTaskCollectorConfig / writeTaskCollectorConfig", () => {
+        const config: TaskCollectorConfig = {
+            completedRetentionDays: 7,
+            syncOnStartup: true,
+            include: ["**/*.md"],
+            exclude: ["**/.memoria/**"],
+            debounceMs: 300,
+        };
+
+        it("should return null when task-collector.json is not found", async () => {
+            mockReadFile.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readTaskCollectorConfig(workspaceRoot)).toBeNull();
+        });
+
+        it("should write task collector config to task-collector.json", async () => {
+            const manager = new ManifestManager(mockFs);
+            await manager.writeTaskCollectorConfig(workspaceRoot, config);
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+            const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
+            expect(written).toEqual(config);
+        });
+    });
+
+    describe("readTaskIndex / writeTaskIndex / deleteTaskIndex", () => {
+        const index: StoredTaskIndex = {
+            version: 1,
+            collectorPath: "00-Tasks/All-Tasks.md",
+            tasks: {},
+            collectorOrder: { active: [], completed: [] },
+            sourceOrders: {},
+        };
+
+        it("should return null when tasks-index.json is not found", async () => {
+            mockReadFile.mockRejectedValue(new Error("not found"));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readTaskIndex(workspaceRoot)).toBeNull();
+        });
+
+        it("should write task index to tasks-index.json", async () => {
+            const manager = new ManifestManager(mockFs);
+            await manager.writeTaskIndex(workspaceRoot, index);
+            expect(mockCreateDirectory).toHaveBeenCalledOnce();
+            const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
+            expect(written).toEqual(index);
+        });
+
+        it("should delete tasks-index.json when requested", async () => {
+            mockDelete.mockResolvedValue(undefined);
+            const manager = new ManifestManager(mockFs);
+            await manager.deleteTaskIndex(workspaceRoot);
+            expect(mockDelete).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/.memoria/tasks-index.json" })
+            );
         });
     });
 

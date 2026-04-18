@@ -72,7 +72,7 @@ describe("createOpenDefaultFileCommand", () => {
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler();
         expect(mockManifest.findInitializedRoot).not.toHaveBeenCalled();
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 
     it("should do nothing when no workspace is open", async () => {
@@ -80,7 +80,7 @@ describe("createOpenDefaultFileCommand", () => {
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         await handler(folderUri);
         expect(mockManifest.findInitializedRoot).not.toHaveBeenCalled();
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 
     it("should do nothing when folder is not under any workspace root", async () => {
@@ -90,7 +90,7 @@ describe("createOpenDefaultFileCommand", () => {
         const folderUri = { path: "/unknown/00-ToDo" } as any;
         await handler(folderUri);
         expect(mockManifest.findInitializedRoot).not.toHaveBeenCalled();
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 
     it("should do nothing when no initialized root is found", async () => {
@@ -100,7 +100,7 @@ describe("createOpenDefaultFileCommand", () => {
         const handler = createOpenDefaultFileCommand(mockManifest);
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         await handler(folderUri);
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 
     it("should do nothing when default-files.json has no defaultFiles", async () => {
@@ -111,7 +111,7 @@ describe("createOpenDefaultFileCommand", () => {
         const handler = createOpenDefaultFileCommand(mockManifest);
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         await handler(folderUri);
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 
     it("should open the correct default file when invoked with a folder URI", async () => {
@@ -122,18 +122,17 @@ describe("createOpenDefaultFileCommand", () => {
             "01-Notes/": ["Index.md"],
         });
 
-        const fakeDoc = { uri: { path: "/workspace/00-ToDo/Main.todo" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockOpenTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" })
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+            { viewColumn: 1, preview: false },
         );
-        expect(mockShowTextDocument).toHaveBeenCalledWith(fakeDoc, { viewColumn: 1, preview: false });
     });
 
     it("should close all existing editors before opening default files", async () => {
@@ -143,18 +142,16 @@ describe("createOpenDefaultFileCommand", () => {
             "00-ToDo/": ["Main.todo"],
         });
 
-        const fakeDoc = { uri: { path: "/workspace/00-ToDo/Main.todo" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
         expect(mockTabGroupsClose).toHaveBeenCalled();
-        // tabGroups.close must be called before openTextDocument.
+        // tabGroups.close must be called before vscode.open.
         const closeOrder = mockTabGroupsClose.mock.invocationCallOrder[0];
-        const openOrder = mockOpenTextDocument.mock.invocationCallOrder[0];
+        const openOrder = mockExecuteCommand.mock.invocationCallOrder[0];
         expect(closeOrder).toBeLessThan(openOrder);
     });
 
@@ -166,16 +163,16 @@ describe("createOpenDefaultFileCommand", () => {
             "01-Notes/": ["Index.md"],
         });
 
-        const fakeDoc = { uri: { path: "/workspace/01-Notes/Index.md" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/workspace/01-Notes" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockOpenTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ path: "/workspace/01-Notes/Index.md" })
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/01-Notes/Index.md" }),
+            expect.anything(),
         );
     });
 
@@ -186,21 +183,18 @@ describe("createOpenDefaultFileCommand", () => {
             "00-ToDo/": ["Main.todo", "Work.todo"],
         });
 
-        const fakeDoc1 = { uri: { path: "/workspace/00-ToDo/Main.todo" } };
-        const fakeDoc2 = { uri: { path: "/workspace/00-ToDo/Work.todo" } };
-        mockOpenTextDocument
-            .mockResolvedValueOnce(fakeDoc1)
-            .mockResolvedValueOnce(fakeDoc2);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockOpenTextDocument).toHaveBeenCalledTimes(2);
-        expect(mockShowTextDocument).toHaveBeenCalledTimes(2);
-        expect(mockShowTextDocument).toHaveBeenNthCalledWith(1, fakeDoc1, { viewColumn: 1, preview: false });
-        expect(mockShowTextDocument).toHaveBeenNthCalledWith(2, fakeDoc2, { viewColumn: 2, preview: false });
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(2);
+        expect(vsCodeOpenCalls[0][2]).toEqual({ viewColumn: 1, preview: false });
+        expect(vsCodeOpenCalls[1][2]).toEqual({ viewColumn: 2, preview: false });
     });
 
     it("should skip missing files and open the rest", async () => {
@@ -210,19 +204,18 @@ describe("createOpenDefaultFileCommand", () => {
             "00-ToDo/": ["Missing.todo", "Main.todo"],
         });
 
-        const fakeDoc = { uri: { path: "/workspace/00-ToDo/Main.todo" } };
-        mockOpenTextDocument
+        mockExecuteCommand
             .mockRejectedValueOnce(new Error("File not found"))
-            .mockResolvedValueOnce(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+            .mockResolvedValueOnce(undefined);
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockOpenTextDocument).toHaveBeenCalledTimes(2);
-        expect(mockShowTextDocument).toHaveBeenCalledTimes(1);
-        expect(mockShowTextDocument).toHaveBeenCalledWith(fakeDoc, { viewColumn: 1, preview: false });
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(2);
     });
 
     it("should do nothing when all files are missing", async () => {
@@ -232,14 +225,16 @@ describe("createOpenDefaultFileCommand", () => {
             "00-ToDo/": ["Missing1.todo", "Missing2.todo"],
         });
 
-        mockOpenTextDocument.mockRejectedValue(new Error("File not found"));
+        mockExecuteCommand.mockRejectedValue(new Error("File not found"));
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
-        expect(mockOpenTextDocument).toHaveBeenCalledTimes(2);
-        expect(mockShowTextDocument).not.toHaveBeenCalled();
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(2);
     });
 
     it("should open default file from a non-initialized root using the initialized root's config", async () => {
@@ -251,9 +246,7 @@ describe("createOpenDefaultFileCommand", () => {
             "00-ToDo/": ["Main.todo"],
         });
 
-        const fakeDoc = { uri: { path: "/other-workspace/00-ToDo/Main.todo" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/other-workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
@@ -262,8 +255,10 @@ describe("createOpenDefaultFileCommand", () => {
         // Config is read from the initialized root.
         expect(mockManifest.readDefaultFiles).toHaveBeenCalledWith(workspaceRoot);
         // File is opened from the owning root, not the initialized root.
-        expect(mockOpenTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ path: "/other-workspace/00-ToDo/Main.todo" })
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/other-workspace/00-ToDo/Main.todo" }),
+            expect.anything(),
         );
     });
 
@@ -275,19 +270,22 @@ describe("createOpenDefaultFileCommand", () => {
             "workspace/00-ToDo/": ["Work.todo"],
         });
 
-        const fakeDoc = { uri: { path: "/workspace/00-ToDo/Work.todo" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         const folderUri = { path: "/workspace/00-ToDo" } as any;
         const handler = createOpenDefaultFileCommand(mockManifest);
         await handler(folderUri);
 
         // Root-prefixed key "workspace/00-ToDo/" should be used, not "00-ToDo/".
-        expect(mockOpenTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ path: "/workspace/00-ToDo/Work.todo" })
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Work.todo" }),
+            expect.anything(),
         );
-        expect(mockOpenTextDocument).toHaveBeenCalledTimes(1);
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(1);
     });
 
     it("should use relative key when no root-prefixed key matches", async () => {
@@ -299,9 +297,7 @@ describe("createOpenDefaultFileCommand", () => {
             "workspace/00-ToDo/": ["Work.todo"],
         });
 
-        const fakeDoc = { uri: { path: "/other-workspace/00-ToDo/Main.todo" } };
-        mockOpenTextDocument.mockResolvedValue(fakeDoc);
-        mockShowTextDocument.mockResolvedValue(undefined);
+        mockExecuteCommand.mockResolvedValue(undefined);
 
         // Right-click in other-workspace — no root-prefixed key for "other-workspace".
         const folderUri = { path: "/other-workspace/00-ToDo" } as any;
@@ -309,8 +305,10 @@ describe("createOpenDefaultFileCommand", () => {
         await handler(folderUri);
 
         // Falls back to relative key "00-ToDo/".
-        expect(mockOpenTextDocument).toHaveBeenCalledWith(
-            expect.objectContaining({ path: "/other-workspace/00-ToDo/Main.todo" })
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/other-workspace/00-ToDo/Main.todo" }),
+            expect.anything(),
         );
     });
 
@@ -328,7 +326,7 @@ describe("createOpenDefaultFileCommand", () => {
         await handler(folderUri);
 
         // No match for "other-workspace" — should not open anything.
-        expect(mockOpenTextDocument).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
 });
 
