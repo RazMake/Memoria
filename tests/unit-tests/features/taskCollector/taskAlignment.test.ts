@@ -76,5 +76,86 @@ describe("taskAlignment", () => {
             expect(result.matchedIdsByNewIndex).toEqual(["a", null, "b", "c"]);
             expect(result.deletedIds).toEqual([]);
         });
+
+        it("should report deleted tasks in deletedIds", () => {
+            const oldItems = [
+                { id: "a", body: "Alpha", checked: false, fingerprint: computeTaskFingerprint("Alpha") },
+                { id: "b", body: "Beta", checked: false, fingerprint: computeTaskFingerprint("Beta") },
+                { id: "c", body: "Charlie", checked: false, fingerprint: computeTaskFingerprint("Charlie") },
+            ];
+            const newItems = [
+                { body: "Alpha", checked: false, fingerprint: computeTaskFingerprint("Alpha") },
+                { body: "Charlie", checked: false, fingerprint: computeTaskFingerprint("Charlie") },
+            ];
+
+            const result = alignTasks(oldItems, newItems);
+
+            expect(result.matchedIdsByNewIndex).toEqual(["a", "c"]);
+            expect(result.deletedIds).toContain("b");
+            expect(result.deletedIds).toHaveLength(1);
+        });
+
+        it("should report all tasks as deleted when new list is empty", () => {
+            const oldItems = [
+                { id: "x", body: "Foo", checked: false, fingerprint: computeTaskFingerprint("Foo") },
+                { id: "y", body: "Bar", checked: false, fingerprint: computeTaskFingerprint("Bar") },
+            ];
+
+            const result = alignTasks(oldItems, []);
+
+            expect(result.matchedIdsByNewIndex).toEqual([]);
+            expect(result.deletedIds).toContain("x");
+            expect(result.deletedIds).toContain("y");
+        });
+
+        it("should assign null IDs to all tasks when old list is empty", () => {
+            const newItems = [
+                { body: "New task 1", checked: false, fingerprint: computeTaskFingerprint("New task 1") },
+                { body: "New task 2", checked: false, fingerprint: computeTaskFingerprint("New task 2") },
+            ];
+
+            const result = alignTasks([], newItems);
+
+            expect(result.matchedIdsByNewIndex).toEqual([null, null]);
+            expect(result.deletedIds).toEqual([]);
+        });
+
+        it("should handle empty old and new sequences", () => {
+            const result = alignTasks([], []);
+
+            expect(result.matchedIdsByNewIndex).toEqual([]);
+            expect(result.deletedIds).toEqual([]);
+        });
+
+        it("should match a single unchanged task by fingerprint", () => {
+            const oldItems = [
+                { id: "solo", body: "Solo task", checked: false, fingerprint: computeTaskFingerprint("Solo task") },
+            ];
+            const newItems = [
+                { body: "Solo task", checked: false, fingerprint: computeTaskFingerprint("Solo task") },
+            ];
+
+            const result = alignTasks(oldItems, newItems);
+
+            expect(result.matchedIdsByNewIndex).toEqual(["solo"]);
+            expect(result.deletedIds).toEqual([]);
+        });
+
+        it("should handle deletion combined with reorder", () => {
+            const oldItems = [
+                { id: "a", body: "Alpha", checked: false, fingerprint: computeTaskFingerprint("Alpha") },
+                { id: "b", body: "Beta", checked: false, fingerprint: computeTaskFingerprint("Beta") },
+                { id: "c", body: "Charlie", checked: false, fingerprint: computeTaskFingerprint("Charlie") },
+            ];
+            const newItems = [
+                { body: "Charlie", checked: false, fingerprint: computeTaskFingerprint("Charlie") },
+                { body: "Alpha", checked: false, fingerprint: computeTaskFingerprint("Alpha") },
+            ];
+
+            const result = alignTasks(oldItems, newItems);
+
+            expect(result.matchedIdsByNewIndex).toEqual(["c", "a"]);
+            expect(result.deletedIds).toContain("b");
+        });
     });
 });

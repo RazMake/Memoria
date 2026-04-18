@@ -1,7 +1,25 @@
+// Bidirectional markdown link path rewriter for the task collector.
+//
+// When a task is harvested from a source file into the collector, relative paths
+// in the task body (links, images, reference definitions) must be adjusted because
+// the collector lives in a different directory. forward() rewrites source→collector;
+// reverse() rewrites collector→source.
+//
+// Ordinal tracking in reverse() allows selective rewriting: only paths that were
+// actually rewritten by forward() are candidates for reverse() — this prevents
+// double-rewriting paths that the user added directly in the collector.
+//
+// Paths are rewritten only when they are relative (no scheme, not absolute).
+// Fenced code blocks are passed through unchanged to avoid corrupting code samples.
 import path from "node:path";
+import { normalizePath } from "../../utils/path";
 
+// Matches any URI scheme (http://, mailto:, vscode://, etc.) so that absolute URLs
+// are skipped — only relative paths without a scheme are rewritten.
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+\-.]*:/;
-const FENCE_RE = /^([`~]{3,})/;
+// Detects the opening of a fenced code block (``` or ~~~) so its contents are
+// passed through unchanged and code samples are never corrupted by path rewriting.
+const FENCE_RE = /^([`~]{3,})/;;
 
 interface ProcessOptions {
     transform: (value: string) => string;
@@ -30,6 +48,11 @@ export function reverse(
     }).body;
 }
 
+// Walks every line of the task body, rewriting relative markdown link destinations.
+// Each rewritable link is assigned a monotonically increasing ordinal number.
+// reverse() uses the ordinals collected by a prior forward() pass as an allowlist:
+// only links that were rewritten by forward() are candidates for rewriting back —
+// this prevents double-rewriting links the user added directly in the collector.
 function processBody(body: string, options: ProcessOptions): { body: string; ordinals: Set<number> } {
     const lines = body.split("\n");
     const result: string[] = [];
@@ -218,10 +241,6 @@ function splitPathSuffix(rawPath: string): { pathPart: string; suffix: string } 
         pathPart: rawPath.slice(0, index),
         suffix: rawPath.slice(index),
     };
-}
-
-function normalizePath(value: string): string {
-    return value.replace(/\\/g, "/");
 }
 
 function isRewriteCandidate(value: string): boolean {

@@ -40,14 +40,18 @@ export class ConsoleTelemetrySender implements vscode.TelemetrySender {
  * the concrete vscode.TelemetryLogger so they stay decoupled from initialization timing.
  */
 export interface TelemetryEmitter {
-    logUsage(eventName: string, data?: Record<string, any>): void;
-    logError(eventName: string, data?: Record<string, any>): void;
+    logUsage(eventName: string, data?: Record<string, string | number | boolean>): void;
+    logError(eventName: string, data?: Record<string, string | number | boolean>): void;
 }
 
 /**
  * Wraps a TelemetryLogger that is initialized asynchronously. Calls to logUsage()
  * are silently dropped until initialize() is called — this lets activation kick off
  * telemetry setup in a microtask without blocking the critical path.
+ *
+ * Events are silently dropped (not queued) because telemetry is non-critical.
+ * Queuing would add complexity and memory overhead for minimal benefit — the window
+ * between extension activation and logger initialization is extremely brief (one microtask).
  */
 export class DeferredTelemetryLogger implements TelemetryEmitter {
     private logger: vscode.TelemetryLogger | undefined;
@@ -56,11 +60,11 @@ export class DeferredTelemetryLogger implements TelemetryEmitter {
         this.logger = logger;
     }
 
-    logUsage(eventName: string, data?: Record<string, any>): void {
+    logUsage(eventName: string, data?: Record<string, string | number | boolean>): void {
         this.logger?.logUsage(eventName, data);
     }
 
-    logError(eventName: string, data?: Record<string, any>): void {
+    logError(eventName: string, data?: Record<string, string | number | boolean>): void {
         this.logger?.logError(eventName, data);
     }
 }
@@ -79,6 +83,11 @@ export interface CreateTelemetryOptions {
  * - Without: returns a TelemetryLogger that logs to a local OutputChannel.
  *
  * Both respect VS Code's telemetry.telemetryLevel user setting automatically.
+ *
+ * The TelemetryReporter is created via a factory injection rather than a direct import
+ * because `@vscode/extension-telemetry` is a CJS-only package that uses `require()`.
+ * A dynamic `require()` inside the lazy factory prevents esbuild from trying to bundle
+ * it as an ESM module, avoiding CJS/ESM interop issues at build time.
  */
 export function createTelemetry(
     options: CreateTelemetryOptions

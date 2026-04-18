@@ -14,6 +14,9 @@ export function ageInDays(doneDate: string, now: Date): number {
     return Math.floor((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - doneAt) / MS_PER_DAY);
 }
 
+// Completed tasks are retained for completedRetentionDays so the user can review recent
+// history in the collector and undo accidental completions. After the retention window
+// expires, they are removed from the collector and the source file during the aging pass.
 export function isTaskExpired(entry: TaskIndexEntry, retentionDays: number, now: Date): boolean {
     if (!entry.completed || !entry.doneDate) {
         return false;

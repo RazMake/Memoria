@@ -73,6 +73,8 @@ export function createInitializeWorkspaceCommand(
         // In multi-root workspaces, only one root may have .memoria/ at a time.
         // If a different root is already initialized, back up its .memoria/ files to
         // WorkspaceInitializationBackups/.memoria/ in the new root, then delete it.
+        // Backing up (rather than deleting outright) preserves the user's existing
+        // configuration — they can manually restore it if they switch roots again.
         // Only .memoria/ is deleted — managed workspace folders are NOT removed to
         // avoid confusing users into thinking those folders are controlled by the extension.
         if (folders.length > 1) {

@@ -104,7 +104,9 @@
         "compile:tests": "tsc -p ../tests/e2e-tests/tsconfig.json",
         "pretest:integration": "npm run build && npm run compile:tests",
         "test:integration": "vscode-test",
-        "package": "vsce package --out ../publish/"
+        "package": "vsce package --out ../publish/",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint . --ext .ts"
     },
     "dependencies": {
         "@vscode/codicons": "^0.0.45",

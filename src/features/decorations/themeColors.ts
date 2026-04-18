@@ -1,5 +1,12 @@
 // Catalog of VS Code built-in theme color IDs with approximate hex values (Dark+ theme).
 // Used by the completion and color-preview providers for decorations.json.
+//
+// WHY hex values are approximated from Dark+: VS Code does not expose the resolved RGB
+// value of a theme color token at extension runtime. Hardcoding Dark+ approximations is
+// the only practical way to show inline swatches. Exact values vary by the user's active
+// color theme, but the approximations are close enough for the nearest-color lookup used
+// in provideColorPresentations — the well-separated colors in the catalog mean a small
+// offset rarely picks the wrong name.
 
 /** A VS Code built-in theme color with an approximate hex representation. */
 export interface ThemeColorEntry {
@@ -112,7 +119,11 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     };
 }
 
-/** Find the theme color closest to the given 0-255 RGB values (Euclidean distance). */
+/** Find the theme color closest to the given 0-255 RGB values (Euclidean distance).
+ * WHY Euclidean RGB distance: simple and fast; perceptual accuracy is not critical
+ * here because the catalog contains a small set of well-separated named colors, so
+ * the nearest match is almost always unambiguously correct regardless of the metric.
+ */
 export function findClosestThemeColor(r: number, g: number, b: number): ThemeColorEntry {
     let best = THEME_COLORS[0];
     let bestDist = Infinity;

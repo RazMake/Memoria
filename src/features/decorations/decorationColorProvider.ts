@@ -1,6 +1,10 @@
 // DocumentColorProvider for .memoria/decorations.json — shows inline color
 // swatches next to theme color identifiers and maps picked colors back to the
 // closest theme color name.
+//
+// WHY: VS Code's color picker activates when a DocumentColorProvider returns a
+// ColorInformation for the cursor range. Wiring this to decorations.json lets
+// the user visually browse and pick decoration colors without leaving the JSON editor.
 
 import * as vscode from "vscode";
 import { parseTree, findNodeAtLocation, type Node } from "jsonc-parser";
@@ -8,6 +12,7 @@ import { THEME_COLOR_MAP, hexToRgb, findClosestThemeColor } from "./themeColors"
 
 export class DecorationColorProvider implements vscode.DocumentColorProvider {
     provideDocumentColors(document: vscode.TextDocument): vscode.ColorInformation[] {
+        try {
         const text = document.getText();
         const root = parseTree(text);
         if (!root) {
@@ -53,6 +58,11 @@ export class DecorationColorProvider implements vscode.DocumentColorProvider {
         }
 
         return colors;
+        } catch {
+            // Color swatches are a nice-to-have; a malformed decorations.json should
+            // not surface as an unhandled rejection.
+            return [];
+        }
     }
 
     provideColorPresentations(

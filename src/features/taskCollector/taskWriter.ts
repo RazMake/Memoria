@@ -1,3 +1,8 @@
+// TaskWriter wraps VS Code WorkspaceEdit with two concerns that plain WorkspaceEdit cannot handle:
+//   1. PendingWrites integration — registers every write so the onDidSave handler can ignore
+//      self-triggered saves and avoid infinite reconciliation loops.
+//   2. Retry logic — VS Code WorkspaceEdit can fail if the document changes concurrently with
+//      the edit attempt; retrying recovers from transient conflicts without surfacing errors.
 import * as vscode from "vscode";
 import { PendingWrites } from "./pendingWrites";
 import type { TaskBlock } from "./types";
@@ -51,6 +56,9 @@ export class TaskWriter {
             }
 
             const applied = await vscode.workspace.applyEdit(edit, { isRefactoring: false });
+            // applyEdit returns false when VS Code cannot apply the edit, which can happen if
+            // the document was modified concurrently. Looping retries the full read-compute-write
+            // cycle so the mutation is based on the latest document state.
             if (!applied) {
                 continue;
             }

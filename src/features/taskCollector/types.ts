@@ -43,6 +43,11 @@ export interface TaskCollectorConfig {
     debounceMs: number;
 }
 
+/** One tracked task entry in the index.
+ *  - `collectorOwned` — true when the task was added directly in the collector document
+ *    rather than harvested from a source file; such tasks have no source path.
+ *  - `agingSkipCount` — incremented each time the aging pass cannot locate the task
+ *    in its source file. After 5 skips the task is removed to prevent accumulation. */
 export interface TaskIndexEntry {
     id: string;
     source: string | null;
@@ -62,6 +67,10 @@ export interface CollectorOrder {
     completed: string[];
 }
 
+/** Persisted task index (`.memoria/tasks-index.json`).
+ *  Maps short random task IDs to their entries and records the canonical ordering
+ *  of tasks in both the collector document and each source file. Versioned to allow
+ *  future schema migrations. */
 export interface StoredTaskIndex {
     version: 1;
     collectorPath: string;
@@ -86,6 +95,12 @@ export interface AlignmentResult {
     newIndices: number[];
 }
 
+/** Describes a single unit of work for the sync queue.
+ *  - `"full"`      — re-scan all tracked sources and rewrite the collector; used on startup
+ *                    and after deletes or workspace folder changes.
+ *  - `"source"`    — re-parse a single source file and update the index + collector.
+ *  - `"collector"` — read collector edits back into the index (renderOnly=false) or just
+ *                    re-render the collector from the index (renderOnly=true). */
 export interface SyncJob {
     kind: "source" | "collector" | "full";
     uri?: string;

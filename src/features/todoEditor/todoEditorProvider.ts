@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { randomBytes } from "node:crypto";
 import MarkdownIt from "markdown-it";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const taskLists = require("markdown-it-task-lists");
@@ -10,6 +11,9 @@ import { parseTaskBlocks } from "../taskCollector/taskParser";
 import { forward } from "../taskCollector/pathRewriter";
 import { replaceLineRange } from "../taskCollector/taskWriter";
 
+// A CustomTextEditor is used instead of a plain WebviewPanel so that VS Code's
+// built-in file save/dirty tracking, undo/redo stack, and tab management work
+// automatically — the extension does not need to reimplement any of that.
 export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     private static readonly viewType = "memoria.todoEditor";
     private readonly md: MarkdownIt;
@@ -91,6 +95,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             if (!workspaceRoot) return;
             const stored = await this.manifest.readTaskIndex(workspaceRoot);
             if (stored) {
+                // Build a body→source reverse map for O(1) lookup when rendering tasks,
+                // avoiding an O(n) index scan per task in pushUpdate.
                 sourceByBody = new Map();
                 for (const entry of Object.values(stored.tasks)) {
                     if (entry.source) {
@@ -158,6 +164,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 newText,
             );
             await vscode.workspace.applyEdit(edit);
+            // Explicit save() triggers onDidSave in TaskCollector, which runs
+            // reconcileCollector to ingest collector edits — this is the intended data flow.
             await document.save();
         };
 
@@ -182,6 +190,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                         const resolved = resolveTask(id, doc);
                         if (resolved) reordered.push(resolved.task);
                     }
+                    // Guard against stale IDs: if any ID failed to resolve the list will
+                    // be shorter than doc.active, and applying it would silently drop tasks.
                     if (reordered.length === doc.active.length) {
                         doc.active = reordered;
                         await applyEdit(serializeDocument(doc));
@@ -385,6 +395,9 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     }
 }
 
+// Propagates task body edits from the collector file back to the original source file.
+// The collector is a view of collected tasks; the source file is the authoritative location,
+// so both must stay in sync when the user edits a task in the Todo Editor.
 async function writeBackToSource(
     workspaceRoot: vscode.Uri,
     sourceRelativePath: string,
@@ -418,6 +431,9 @@ async function writeBackToSource(
     }
 }
 
+// Marks a deleted task as "(Removed)" in the source file rather than deleting it outright.
+// Non-destructive: the user may have meaningful context around the task in the source
+// that should be preserved for manual review and cleanup.
 async function markRemovedInSource(
     workspaceRoot: vscode.Uri,
     sourceRelativePath: string,
@@ -447,7 +463,7 @@ async function markRemovedInSource(
     }
 }
 
-const SUBTASK_CHECKBOX_RE = /- \[[ xX]\]/g;
+const SUBTASK_CHECKBOX_RE = /- \[[ xX]\]/;
 const SUBTASK_COMPLETED_RE = /^\s*_Completed \d{4}-\d{2}-\d{2}_$/;
 
 function toggleNthCheckbox(body: string, index: number, date: string): string {
@@ -456,7 +472,6 @@ function toggleNthCheckbox(body: string, index: number, date: string): string {
 
     for (let i = 0; i < lines.length; i++) {
         const match = SUBTASK_CHECKBOX_RE.exec(lines[i]);
-        SUBTASK_CHECKBOX_RE.lastIndex = 0;
         if (!match) continue;
 
         if (count++ !== index) continue;
@@ -473,7 +488,6 @@ function toggleNthCheckbox(body: string, index: number, date: string): string {
             while (insertAt < lines.length
                 && !SUBTASK_CHECKBOX_RE.test(lines[insertAt])
                 && !SUBTASK_COMPLETED_RE.test(lines[insertAt])) {
-                SUBTASK_CHECKBOX_RE.lastIndex = 0;
                 insertAt++;
             }
             lines.splice(insertAt, 0, dateLine);
@@ -484,7 +498,6 @@ function toggleNthCheckbox(body: string, index: number, date: string): string {
             let dateLineIdx = -1;
             for (let j = i + 1; j < lines.length; j++) {
                 if (SUBTASK_CHECKBOX_RE.test(lines[j])) {
-                    SUBTASK_CHECKBOX_RE.lastIndex = 0;
                     break;
                 }
                 if (SUBTASK_COMPLETED_RE.test(lines[j])) {
@@ -520,10 +533,6 @@ function getHtmlForWebview(webview: vscode.Webview, nonce: string, scriptUri: vs
 }
 
 function getNonce(): string {
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let nonce = "";
-    for (let i = 0; i < 32; i++) {
-        nonce += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return nonce;
+    // CSP nonces must be unguessable — use cryptographically secure random bytes.
+    return randomBytes(24).toString("base64url");
 }

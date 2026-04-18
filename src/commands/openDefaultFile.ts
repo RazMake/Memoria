@@ -77,6 +77,9 @@ export function createOpenDefaultFileCommand(
 
         // Open each file side by side, skipping any that are missing.
         // File paths are relative to the matched folder, not to the workspace root.
+        // Each file is opened in its own editor column so related files are visible
+        // side by side. The default file feature is designed as a "workspace layout reset"
+        // — opening a curated set of files arranged for a specific folder's workflow.
         let nextColumn = vscode.ViewColumn.One;
         for (const filePath of targetFiles) {
             const fileUri = vscode.Uri.joinPath(

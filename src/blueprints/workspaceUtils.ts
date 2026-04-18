@@ -23,6 +23,10 @@ export function getRootFolderName(rootUri: { path: string }): string {
  * Root-specific keys have a first segment that matches a workspace root name
  * and a remaining folder path after the prefix (e.g. "ProjectA/00-ToDo/").
  * Relative keys match any root (e.g. "00-ToDo/").
+ *
+ * Drives multi-root default-file resolution in both extension.ts (on activation) and
+ * the openDefaultFile command, so the correct file opens regardless of which workspace
+ * root is active.
  */
 export function classifyFolderKey(
     key: string,

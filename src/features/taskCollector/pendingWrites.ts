@@ -1,3 +1,6 @@
+// Tracks writes this extension has made so that the onDidSave handler can skip
+// re-processing files the extension itself just saved. Without this, each write
+// would trigger reconcileSource/reconcileCollector in an infinite loop.
 import { computeFileHash } from "../../blueprints/hashUtils";
 
 const encoder = new TextEncoder();

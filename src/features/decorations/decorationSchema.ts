@@ -1,6 +1,11 @@
 // Field metadata for DecorationRule — typed as Record<keyof DecorationRule, FieldMeta>
 // so the compiler breaks the build if a field is added/removed from the interface
 // without updating this map.
+//
+// WHY this schema map exists: it is the single source of truth for completion metadata
+// (field names, types, descriptions, required flags). The TypeScript type assertion
+// Record<keyof DecorationRule, ...> ensures the map stays in sync with the
+// DecorationRule interface — a missing or extra key is a compile error, not a runtime gap.
 
 import type { DecorationRule } from "../../blueprints/types";
 

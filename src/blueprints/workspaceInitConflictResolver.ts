@@ -35,8 +35,10 @@ export class WorkspaceInitConflictResolver {
         newDefinition: BlueprintDefinition,
         getSeedContent: (relativePath: string) => Promise<Uint8Array | null>
     ): Promise<ReinitPlan | undefined> {
+        const isDifferentBlueprint = currentManifest.blueprintId !== newDefinition.id;
+
         // Phase A: Categorize all blueprint files — parallel I/O, no UI.
-        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition);
+        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition, isDifferentBlueprint);
         const flatFiles = this.flattenWorkspaceFiles(newDefinition.workspace);
 
         const mergeResults = await Promise.all(
@@ -164,6 +166,10 @@ export class WorkspaceInitConflictResolver {
      * Checks a single blueprint file path for conflicts.
      * If a conflict exists, backs up the on-disk file to WorkspaceInitializationBackups/.
      * Returns the relative path if a conflict was found, or null if not.
+     *
+     * Backup happens here (Phase A), before the user sees any UI, because the alternative —
+     * backing up during Phase D after user confirmation — would interleave backup and scaffold
+     * operations, making partial-failure recovery harder to reason about.
      */
     private async categorizeFile(
         workspaceRoot: vscode.Uri,
@@ -208,7 +214,8 @@ export class WorkspaceInitConflictResolver {
 
     private async findExtraFolders(
         workspaceRoot: vscode.Uri,
-        newDefinition: BlueprintDefinition
+        newDefinition: BlueprintDefinition,
+        allFoldersAreExtra: boolean
     ): Promise<string[]> {
         const entries = await this.fs.readDirectory(workspaceRoot);
         const blueprintTopLevelFolders = new Set(
@@ -256,7 +263,10 @@ export class WorkspaceInitConflictResolver {
             await this.fs.createDirectory(destParent);
             await this.fs.copy(src, dest, { overwrite: true });
         } catch {
-            // Non-fatal — backup failures do not block reinit.
+            // Non-fatal — backup failures must not block re-initialization. The user has
+            // already committed to reinitializing at this point, so silently skipping a
+            // backup is preferable to aborting the entire operation. Losing a backup is
+            // recoverable (the user can check git history); aborting mid-reinit is not.
         }
     }
 }

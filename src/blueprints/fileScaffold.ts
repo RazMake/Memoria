@@ -6,8 +6,14 @@
 
 import * as vscode from "vscode";
 import { computeFileHash } from "./hashUtils";
+import { normalizePath } from "../utils/path";
 import type { WorkspaceEntry, ScaffoldResult } from "./types";
 
+/**
+ * Creates the workspace folder/file tree defined by a blueprint and returns a manifest of
+ * every file written (path → SHA-256 hash). Exists as a separate class so the engine can
+ * inject a mock fs in unit tests without touching real files.
+ */
 export class FileScaffold {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
     private readonly fs: typeof vscode.workspace.fs;
@@ -69,7 +75,7 @@ export class FileScaffold {
 
     private validateEntryName(name: string): void {
         // Reject any entry that contains path traversal segments.
-        const normalized = name.replace(/\\/g, "/");
+        const normalized = normalizePath(name);
         if (normalized.split("/").some((segment) => segment === "..")) {
             throw new Error(`Blueprint entry name "${name}" contains a path traversal segment ("..") and is not allowed.`);
         }
@@ -86,7 +92,7 @@ export class FileScaffold {
 
     private toRelativePath(rootUri: vscode.Uri, targetUri: vscode.Uri): string {
         const rootPath = rootUri.path.endsWith("/") ? rootUri.path : rootUri.path + "/";
-        return targetUri.path.slice(rootPath.length).replace(/\\/g, "/");
+        return normalizePath(targetUri.path.slice(rootPath.length));
     }
 
     /**

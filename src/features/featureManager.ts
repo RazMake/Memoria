@@ -1,6 +1,10 @@
 // Lightweight coordinator that connects feature toggle state (.memoria/features.json)
-// with feature implementations. Each feature registers a refresh callback; FeatureManager
-// reads the persisted state and dispatches enabled/disabled to each callback.
+// with feature implementations.
+//
+// WHY FeatureManager exists: it decouples extension.ts from knowing which specific
+// features exist. Each feature registers a lifecycle callback once during activation;
+// FeatureManager reads the persisted features.json config and dispatches enable/disable
+// to each callback, so adding a new feature requires no changes to extension.ts.
 
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";

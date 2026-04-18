@@ -26,7 +26,19 @@ const reporterFactory: TelemetryReporterFactory = (connectionString) => {
     return new TelemetryReporter(connectionString);
 };
 
-// Extension entry point — called once when the activation event fires.
+/**
+ * Extension entry point — called once by VS Code when the activation event fires.
+ *
+ * Key design decisions:
+ * - Telemetry is deferred to a microtask (non-blocking) so it cannot delay the critical
+ *   activation path; DeferredTelemetryLogger silently drops the rare event fired before
+ *   the logger is ready.
+ * - Context updates, feature refresh, and default-file context are run in parallel via
+ *   Promise.all — they are independent and combining them avoids multiple sequential
+ *   round-trips to the file system.
+ * - File watchers are registered after features are refreshed to ensure decoration and
+ *   feature providers are already active before any watcher fires.
+ */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     // Telemetry is initialized asynchronously so it does not block the activation
     // critical path. DeferredTelemetryLogger silently drops events until the real
@@ -146,6 +158,9 @@ function registerFileWatchers(
     initializedRoot: vscode.Uri | null,
     defaultFileWatcherHolder: DefaultFileWatcherHolder
 ): void {
+    // Tracks the previously seen initialized root. Used to short-circuit recheckInitialization()
+    // when the filesystem watcher fires but the initialized root has not actually changed —
+    // this avoids redundant feature refreshes on unrelated file-system events.
     let lastKnownRoot: string | null = initializedRoot?.toString() ?? null;
 
     const recheckInitialization = async (): Promise<void> => {
@@ -284,6 +299,9 @@ async function updateDefaultFileContext(
         if (defaultFiles) {
             const rootNameSet = new Set(allRoots.map(getRootFolderName));
 
+            // Each root×key combination requires a file-system stat. These checks are
+            // independent so they are collected into an array and awaited in parallel,
+            // reducing total latency from O(n) sequential to O(1) (one round trip).
             const checks: Promise<void>[] = [];
 
             for (const [key, filePaths] of Object.entries(defaultFiles)) {
@@ -343,10 +361,12 @@ async function updateDefaultFileContext(
 }
 
 /**
- * Watches .memoria/default-files.json so the context keys and individual file watchers
- * stay in sync when the config is edited externally.
- * Also watches the individual default files so context keys update on create/delete.
- * Stores the current watcher disposables so they can be replaced on re-initialization.
+ * Holds the active default-file watcher so it can be replaced on re-initialization.
+ *
+ * An object wrapper is used (instead of a bare `let` variable) so that
+ * `registerDefaultFileWatcher` can update `current` in place — the caller passes
+ * the holder once and always sees the latest disposable without needing to track
+ * the previous value itself.
  */
 interface DefaultFileWatcherHolder { current: vscode.Disposable | undefined; }
 function registerDefaultFileWatcher(
@@ -429,6 +449,11 @@ function registerDefaultFileWatcher(
  *
  * Runs silently (no-op) when: the workspace is not initialized, the blueprint id is no
  * longer bundled, or the stored version is current.
+ *
+ * Called with `void` + `.catch()` in activate() because showInformationMessage() with
+ * action buttons blocks until the user responds — awaiting it would delay command
+ * registration and initial decoration rendering. Errors are swallowed because the
+ * update check is best-effort and must never prevent the extension from starting.
  */
 async function checkForBlueprintUpdates(
     initializedRoot: vscode.Uri | null,
@@ -486,6 +511,9 @@ async function checkForBlueprintUpdates(
 /**
  * Returns true when `bundled` is a strictly newer SemVer than `stored`.
  * Handles only numeric major.minor.patch — pre-release suffixes are not compared.
+ *
+ * Exported so unit tests can exercise version-comparison logic in isolation,
+ * without activating the full extension.
  */
 export function isNewerVersion(bundled: string, stored: string): boolean {
     const parse = (v: string): [number, number, number] => {

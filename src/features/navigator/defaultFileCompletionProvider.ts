@@ -1,4 +1,10 @@
 // Context-aware CompletionItemProvider for .memoria/default-files.json.
+//
+// WHY this provider exists: default-files.json paths must reference actual workspace
+// folders and files. Without IDE-level completions the user must type paths manually,
+// which is error-prone and requires them to memorise the exact folder/file names.
+// This provider reads the live workspace structure so completions always reflect reality.
+//
 // Uses jsonc-parser to determine cursor position within the JSON tree and offers:
 // - "defaultFiles" key at the top level
 // - Workspace folder paths as keys inside "defaultFiles"
@@ -20,6 +26,8 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
         document: vscode.TextDocument,
         position: vscode.Position,
     ): Promise<vscode.CompletionItem[] | undefined> {
+        // Async filesystem reads are performed here (rather than using a stale cache)
+        // so that completions always reflect the actual current workspace structure.
         const text = document.getText();
         const offset = document.offsetAt(position);
         const location = getLocation(text, offset);

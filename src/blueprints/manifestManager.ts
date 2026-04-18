@@ -16,7 +16,11 @@ const encoder = new TextEncoder();
 export class ManifestManager {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
     private readonly fs: typeof vscode.workspace.fs;
-    /** Tracks which .memoria/ dirs have been ensured this session to avoid redundant createDirectory calls. */
+    /**
+     * Tracks which .memoria/ dirs have been ensured this session to avoid redundant
+     * createDirectory calls. vscode.workspace.fs.createDirectory() throws if the directory
+     * already exists on some filesystems, so caching ensures we only call it once per root.
+     */
     private readonly ensuredDirs = new Set<string>();
 
     constructor(fs: typeof vscode.workspace.fs) {
@@ -160,7 +164,8 @@ export class ManifestManager {
         try {
             await this.fs.delete(this.taskIndexUri(workspaceRoot));
         } catch {
-            // tasks-index.json may not exist yet.
+            // tasks-index.json may not exist yet — this is expected on first init and safe to
+            // ignore. Re-init always rebuilds the index from scratch, so a missing file is fine.
         }
     }
 
@@ -210,6 +215,8 @@ export class ManifestManager {
             const bytes = await this.fs.readFile(uri);
             return JSON.parse(decoder.decode(bytes)) as T;
         } catch {
+            // Returns null for both "file not found" (expected) and JSON parse errors
+            // (unexpected but non-fatal — log would be ideal but we have no output channel here).
             return null;
         }
     }

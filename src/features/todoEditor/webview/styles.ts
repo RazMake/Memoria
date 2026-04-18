@@ -118,10 +118,10 @@ export function injectStyles(): void {
     overflow-wrap: break-word;
 }
 .task-body p {
-    margin: 0 0 4px;
+    margin: 0;
 }
-.task-body p:last-child {
-    margin-bottom: 0;
+.task-body p + p {
+    margin-top: 1em;
 }
 .task-body ul.contains-task-list {
     list-style: none;

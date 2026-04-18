@@ -1,6 +1,11 @@
 // Provides file/folder decorations (badge + color) in the VS Code Explorer based on the
 // decoration rules stored in .memoria/decorations.json.
 //
+// WHY decorations are applied per-file rather than per-directory: VS Code's
+// FileDecorationProvider API works per-resource URI, one at a time. There is no
+// directory-level API; folder decoration propagation to children is opt-in via the
+// `propagate` flag in the decoration options, which this provider honours per-rule.
+//
 // Rules are loaded on demand (via refresh()) and cached in memory. Calling refresh() after
 // init or re-init causes VS Code to re-query all URIs so freshly applied rules take effect
 // immediately without a reload.
@@ -28,6 +33,11 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     /**
      * Reloads decoration rules from .memoria/decorations.json and fires the change event
      * so VS Code re-queries all URIs. Called by FeatureManager after every refresh cycle.
+     *
+     * WHY fireChangeEvent() is called after loading: VS Code caches the last decoration
+     * per URI and will not re-query the provider unless it receives an explicit change
+     * notification. Without firing the event, new rules would have no visible effect
+     * until the Explorer refreshed for an unrelated reason.
      *
      * Rules are read from `initializedRoot` but applied to items under any of the
      * `allRoots` — in a multi-root workspace only one root holds .memoria/ but

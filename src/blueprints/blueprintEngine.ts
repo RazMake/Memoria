@@ -95,6 +95,8 @@ export class BlueprintEngine {
             return; // user cancelled at a QuickPick
         }
 
+        // Back up .memoria/ before re-scaffolding so the user can recover metadata
+        // (task index, feature toggles, etc.) if reinit goes wrong mid-way.
         const backupFailures = await this.manifest.backupMemoriaDir(workspaceRoot, workspaceRoot);
         if (backupFailures.length > 0) {
             this.telemetry.logError("taskCollector.reinitBackupFailed", {

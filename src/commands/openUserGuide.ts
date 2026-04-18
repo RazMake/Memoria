@@ -29,6 +29,9 @@ export function createOpenUserGuideCommand(
     extensionUri: vscode.Uri
 ): (sectionFile?: string) => Promise<void> {
     return async (sectionFile?: string) => {
+        // sectionFile is optional: when provided (e.g. from a deeplink or another command),
+        // the QuickPick is bypassed and that section is opened directly. When omitted,
+        // the user is prompted to choose a section.
         const items = buildItems();
         let targetFile: string;
 

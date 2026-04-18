@@ -27,6 +27,9 @@ export function createManageFeaturesCommand(
             return;
         }
 
+        // Read the current feature config before showing the QuickPick so each item
+        // is pre-checked according to its current enabled state — the user sees which
+        // features are already on or off rather than an unchecked list every time.
         const config = await manifest.readFeatures(workspaceRoot);
         if (!config) {
             vscode.window.showErrorMessage(

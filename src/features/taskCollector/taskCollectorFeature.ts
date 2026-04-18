@@ -1,8 +1,14 @@
+// Orchestrates task synchronization between source markdown files and the collector document.
+// This class is responsible for the full feature lifecycle: starting and stopping the watcher,
+// reacting to file save and rename events, dispatching sync jobs through the queue, reconciling
+// source and collector documents, and running the aging pass. It is the single entry point for
+// all task collector logic within a given workspace activation.
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { minimatch } from "minimatch";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../../telemetry";
+import { normalizePath } from "../../utils/path";
 import { formatDate, isTaskExpired } from "./aging";
 import { alignTaskSequences, computeTaskFingerprint } from "./taskAlignment";
 import { renderCollector } from "./collectorFormatter";
@@ -84,8 +90,10 @@ export class TaskCollectorFeature implements vscode.Disposable {
         this.workspaceRoot = workspaceRoot;
         this.collectorPath = normalizePath(collectorPath);
 
+        // Hydrate the index from disk so task IDs are stable across restarts.
         const storedIndex = await this.manifest.readTaskIndex(workspaceRoot);
         this.index = hydrateTaskIndex(storedIndex, this.collectorPath);
+        // Signal that the first run (no persisted index) needs a full sync to populate the index.
         this.bootstrapPending = storedIndex === null;
         this.pendingWrites = new PendingWrites();
         this.writer = new TaskWriter(this.pendingWrites);
@@ -129,7 +137,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
             try {
                 await currentQueue.drain();
             } catch {
-                // Ignore queue drain failures during teardown.
+                // Teardown failures must not surface to users; the queue is being destroyed anyway.
             }
             currentQueue.dispose();
         }
@@ -161,6 +169,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
         }
 
         if (this.isCollectorUri(document.uri)) {
+            // Errors are caught and reported via telemetry rather than re-thrown — save-event
+            // handlers must not reject; doing so would propagate into VS Code's document save pipeline.
             void this.queue.enqueue({ kind: "collector", uri: document.uri.toString() }).catch((error) => {
                 this.reportError("taskCollector.reconcileFailed", error, true);
             });
@@ -171,6 +181,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
             return;
         }
 
+        // Same fire-and-forget pattern: errors are reported via telemetry and not re-thrown.
         this.queue?.enqueue({ kind: "source", uri: document.uri.toString() }).catch((error) => {
             this.reportError("taskCollector.reconcileFailed", error, true);
         });
@@ -286,6 +297,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
             await this.reconcileSource(source, false);
         }
 
+        // Full sync always writes the collector even if it is dirty — it is the authoritative
+        // refresh that overwrites any pending user edits with the ground-truth from all sources.
         await this.reconcileCollector(true, true);
         this.bootstrapPending = false;
         this.telemetry.logUsage("taskCollector.syncCompleted", {
@@ -316,6 +329,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
         const previousEntries = getTasksForSource(this.index, context.relativePath, context.sourceRoot);
         const previousSnapshots = previousEntries.map((entry) => this.toSourceSnapshot(entry));
         const nextSnapshots = parsed.map((block) => this.toTaskSnapshot(block.body, block.checked));
+        // Alignment assigns each new task a stable ID from the previous snapshot, preventing
+        // phantom duplicate tasks from appearing in the collector when source files are edited.
         const alignment = alignTaskSequences(previousSnapshots, nextSnapshots);
         const today = formatDate(this.now());
         const nowIso = this.now().toISOString();
@@ -396,6 +411,10 @@ export class TaskCollectorFeature implements vscode.Disposable {
     }
 
     private async reconcileCollector(renderOnly: boolean, skipDirtyGuard = false): Promise<void> {
+        // renderOnly=true skips the "read collector edits" pass and only re-renders the collector
+        // from the current index. This separates the write phase from the read phase to avoid
+        // re-entrancy when a source reconciliation needs to update the collector without first
+        // applying (potentially stale) collector edits.
         if (!this.index || !this.writer || !this.collectorPath) {
             return;
         }
@@ -453,6 +472,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
             const previous = matchedId ? this.index.tasks[matchedId] : null;
             const nextCompleted = task.checked;
             const id = matchedId ?? generateTaskId(this.index);
+            // reverse() converts collector-relative link paths back to source-relative paths
+            // before storing the body in the index, so the index always holds source-relative content.
             const bodyForIndex = previous?.source && !previous.collectorOwned
                 ? reverse(task.body, this.collectorPath, previous.source, previous.body)
                 : task.body;
@@ -612,6 +633,10 @@ export class TaskCollectorFeature implements vscode.Disposable {
         pruneOrderReferences(this.index);
     }
 
+    // agingSkipCount tracks how many times the aging pass could not locate a task in its source
+    // file. Tasks that cannot be located are retried rather than removed immediately. After 5
+    // consecutive skips (task is permanently unreachable) the task is removed to prevent
+    // indefinite accumulation of ghost entries in the index.
     private bumpAgingSkip(entry: TaskIndexEntry): void {
         entry.agingSkipCount = (entry.agingSkipCount ?? 0) + 1;
         if ((entry.agingSkipCount ?? 0) >= 5 && this.index) {
@@ -656,6 +681,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         const blocks = parseTaskBlocks(content);
         const previous = getTasksForSource(this.index, entry.source, entry.sourceRoot ?? null);
+        // Re-align on every call because the document may have changed since the index snapshot
+        // was taken — using the live block list ensures we find the task at its current position.
         const alignment = alignTaskSequences(
             previous.map((item) => this.toSourceSnapshot(item)),
             blocks.map((block) => this.toTaskSnapshot(block.body, block.checked)),
@@ -673,6 +700,10 @@ export class TaskCollectorFeature implements vscode.Disposable {
         return null;
     }
 
+    // Three snapshot helpers for the same concept — a task entry converted to a TaskSnapshot —
+    // with different path transforms applied. toSourceSnapshot uses the raw body (source-relative
+    // paths); toCollectorSnapshot and toCollectorBody apply forward() to rewrite paths so they
+    // are relative to the collector document's location.
     private toSourceSnapshot(entry: TaskIndexEntry): ExistingTaskSnapshot {
         return {
             id: entry.id,
@@ -842,10 +873,6 @@ async function openTextDocumentIfPresent(uri: vscode.Uri): Promise<vscode.TextDo
     } catch {
         return null;
     }
-}
-
-function normalizePath(value: string): string {
-    return value.replace(/\\/g, "/");
 }
 
 function stringArrayEqual(left: string[], right: string[]): boolean {

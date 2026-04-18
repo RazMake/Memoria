@@ -1,3 +1,7 @@
+// Renders the collector document from the current task index.
+// Separated from the sync logic so that the same renderer can be called from both
+// full sync (reconcileCollector with skipDirtyGuard=true) and incremental renders
+// (renderOnly collector jobs triggered after source reconciliation).
 import { forward } from "./pathRewriter";
 import { getCollectorOrder, getSourceDisplayPath } from "./taskIndex";
 import type { CollectorRenderResult, StoredTaskIndex, TaskIndexEntry } from "./types";

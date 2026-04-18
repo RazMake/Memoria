@@ -102,11 +102,12 @@ export interface FeaturesConfig {
     features: FeatureState[];
 }
 
-/** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
+/** Sub-object within BlueprintManifest that records task-collector metadata. */
 export interface TaskCollectorManifestConfig {
     collectorPath: string;
 }
 
+/** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
 export interface BlueprintManifest {
     blueprintId: string;
     blueprintVersion: string;
@@ -155,7 +156,10 @@ export interface BlueprintInfo {
 export interface ReinitPlan {
     /** All top-level on-disk folders absent from the new blueprint (input to folder picker). */
     extraFolders: string[];
-    /** Subset of extraFolders the user unchecked — these will be moved to WorkspaceInitializationBackups/. */
+    /**
+     * Subset of extraFolders the user unchecked in the folder QuickPick — these will be moved
+     * to WorkspaceInitializationBackups/. Kept folders remain in place (user chose to keep them).
+     */
     foldersToCleanup: string[];
     /** Relative paths of conflicting files (input to file merge picker). All will be overwritten. */
     toMergeList: string[];

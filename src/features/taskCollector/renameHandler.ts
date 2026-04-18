@@ -1,3 +1,7 @@
+// Rename event handler for tracked source files.
+// Rename events fire before the file content changes, so the index must be updated with
+// the new paths before the subsequent save reconciliation reads the file. Keeping this
+// logic separate from the main feature class keeps the event handler lean and testable.
 import { makeSourceKey } from "./taskIndex";
 import type { StoredTaskIndex } from "./types";
 

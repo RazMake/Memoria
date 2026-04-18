@@ -1,3 +1,7 @@
+// Debounce queue for task sync jobs. Each sync job (full, source, collector) is
+// debounced so rapid document saves don't trigger O(n) re-syncs. The queue also
+// serializes concurrent jobs so only one sync runs at a time — this prevents
+// index races when multiple files are saved simultaneously.
 import type { SyncJob } from "./types";
 
 interface DeferredJob {
@@ -33,6 +37,9 @@ export class SyncQueue {
         },
     ) {}
 
+    /** Enqueues a sync job. Source and collector jobs are debounced; full-sync jobs are queued
+     *  immediately. Returns a Promise that resolves when the job has been processed, or rejects
+     *  if the queue is disposed before the job runs. */
     enqueue(job: SyncJob): Promise<void> {
         if (this.disposed) {
             return Promise.reject(new Error("SyncQueue has been disposed."));
@@ -65,6 +72,7 @@ export class SyncQueue {
         });
     }
 
+    /** Waits until all queued and pending (debounced) jobs have been processed. */
     async drain(): Promise<void> {
         if (this.pending.size === 0 && this.queue.length === 0 && !this.processing) {
             return;
@@ -75,6 +83,7 @@ export class SyncQueue {
         });
     }
 
+    /** Cancels all pending debounced jobs and rejects any in-flight Promises. */
     dispose(): void {
         this.disposed = true;
 

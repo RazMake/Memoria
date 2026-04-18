@@ -8,6 +8,10 @@ export function createSyncTasksCommand(
 ): () => Promise<void> {
     return async () => {
         try {
+            // syncNow() drains the queue AND waits for completion — giving the user a
+            // synchronous "sync finished" experience from the command, as opposed to
+            // enqueueing a task and returning immediately while the work happens in the
+            // background.
             const started = await feature.syncNow();
             if (started) {
                 telemetry.logUsage("taskCollector.syncRequested", { trigger: "command" });

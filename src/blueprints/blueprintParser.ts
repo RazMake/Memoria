@@ -4,6 +4,7 @@
 
 import { parse } from "yaml";
 import { DEFAULT_TASK_COLLECTOR_CONFIG } from "../features/taskCollector/taskIndex";
+import { normalizePath } from "../utils/path";
 import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope } from "./types";
 
 const VALID_DEFAULT_SCOPES: ReadonlySet<string> = new Set<DefaultScope>(["relative", "includingRoot"]);
@@ -72,6 +73,9 @@ export function parseBlueprintYaml(content: string): BlueprintDefinition {
  * Recursively normalizes raw YAML workspace entries into typed WorkspaceEntry[].
  * Names ending in "/" are treated as folders; all others are files.
  * Files cannot have children.
+ *
+ * Exists as a standalone export so it can be exercised in unit tests independently
+ * of the full parseBlueprintYaml path.
  */
 export function parseWorkspaceTree(raw: unknown): WorkspaceEntry[] {
     if (!Array.isArray(raw)) {
@@ -161,35 +165,45 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
                     enabledByDefault: entry["enabledByDefault"] as boolean,
                     collectorPath: parseCollectorPath(entry["collectorPath"], index),
                     config: {
-                        completedRetentionDays: parseOptionalNumber(
+                        completedRetentionDays: parseOptionalField(
                             entry["completedRetentionDays"],
                             DEFAULT_TASK_COLLECTOR_CONFIG.completedRetentionDays,
                             index,
-                            "completedRetentionDays"
+                            "completedRetentionDays",
+                            (v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0,
+                            "a non-negative number",
                         ),
-                        syncOnStartup: parseOptionalBoolean(
+                        syncOnStartup: parseOptionalField(
                             entry["syncOnStartup"],
                             DEFAULT_TASK_COLLECTOR_CONFIG.syncOnStartup,
                             index,
-                            "syncOnStartup"
+                            "syncOnStartup",
+                            (v): v is boolean => typeof v === "boolean",
+                            "a boolean",
                         ),
-                        include: parseOptionalStringArray(
+                        include: parseOptionalField(
                             entry["include"],
-                            DEFAULT_TASK_COLLECTOR_CONFIG.include,
+                            [...DEFAULT_TASK_COLLECTOR_CONFIG.include],
                             index,
-                            "include"
+                            "include",
+                            (v): v is string[] => Array.isArray(v) && v.every((item) => typeof item === "string" && Boolean(item)),
+                            "an array of non-empty strings",
                         ),
-                        exclude: parseOptionalStringArray(
+                        exclude: parseOptionalField(
                             entry["exclude"],
-                            DEFAULT_TASK_COLLECTOR_CONFIG.exclude,
+                            [...DEFAULT_TASK_COLLECTOR_CONFIG.exclude],
                             index,
-                            "exclude"
+                            "exclude",
+                            (v): v is string[] => Array.isArray(v) && v.every((item) => typeof item === "string" && Boolean(item)),
+                            "an array of non-empty strings",
                         ),
-                        debounceMs: parseOptionalNumber(
+                        debounceMs: parseOptionalField(
                             entry["debounceMs"],
                             DEFAULT_TASK_COLLECTOR_CONFIG.debounceMs,
                             index,
-                            "debounceMs"
+                            "debounceMs",
+                            (v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0,
+                            "a non-negative number",
                         ),
                     },
                 };
@@ -199,12 +213,17 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
     });
 }
 
+/**
+ * Validates and normalizes the collectorPath field for a taskCollector feature entry.
+ * Backslashes are converted to forward slashes so stored paths are always POSIX-style,
+ * matching VS Code's Uri.path conventions regardless of the author's OS.
+ */
 function parseCollectorPath(raw: unknown, index: number): string {
     if (typeof raw !== "string" || !raw.trim()) {
         throw new Error(`Feature entry at index ${index}: "collectorPath" must be a non-empty string.`);
     }
 
-    const normalized = raw.replace(/\\/g, "/");
+    const normalized = normalizePath(raw);
     if (normalized.startsWith("/") || normalized.endsWith("/")) {
         throw new Error(`Feature entry at index ${index}: "collectorPath" must be a relative file path.`);
     }
@@ -212,40 +231,30 @@ function parseCollectorPath(raw: unknown, index: number): string {
     return normalized;
 }
 
-function parseOptionalBoolean(raw: unknown, fallback: boolean, index: number, field: string): boolean {
+function parseOptionalField<T>(
+    raw: unknown,
+    fallback: T,
+    index: number,
+    field: string,
+    isValid: (v: unknown) => v is T,
+    errorMessage: string,
+): T {
     if (raw === undefined) {
         return fallback;
     }
-    if (typeof raw !== "boolean") {
-        throw new Error(`Feature entry at index ${index}: "${field}" must be a boolean.`);
+    if (!isValid(raw)) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be ${errorMessage}.`);
     }
     return raw;
-}
-
-function parseOptionalNumber(raw: unknown, fallback: number, index: number, field: string): number {
-    if (raw === undefined) {
-        return fallback;
-    }
-    if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) {
-        throw new Error(`Feature entry at index ${index}: "${field}" must be a non-negative number.`);
-    }
-    return raw;
-}
-
-function parseOptionalStringArray(raw: unknown, fallback: string[], index: number, field: string): string[] {
-    if (raw === undefined) {
-        return [...fallback];
-    }
-    if (!Array.isArray(raw) || raw.some((value) => typeof value !== "string" || !value)) {
-        throw new Error(`Feature entry at index ${index}: "${field}" must be an array of non-empty strings.`);
-    }
-    return [...raw];
 }
 
 /**
  * Validates decoration rules from raw YAML.
  * Returns an empty array if the section is absent.
  * Each rule must have a "filter" string; badge must be ≤2 chars; color must be non-empty if present.
+ *
+ * Kept as a standalone export so blueprints that ship only a decorations feature can be
+ * validated in unit tests without exercising the full parseBlueprintYaml path.
  */
 export function parseDecorationRules(raw: unknown): DecorationRule[] {
     if (raw === undefined || raw === null) {

@@ -1,4 +1,10 @@
 // Context-aware CompletionItemProvider for .memoria/decorations.json.
+//
+// WHY this provider exists: generic JSON completion providers (e.g. the built-in JSON
+// language server) do not know the Memoria decoration schema. This provider offers
+// domain-specific completions — valid VS Code theme color names, propagate booleans,
+// and filter pattern snippets — that the generic provider cannot infer.
+//
 // Uses jsonc-parser to determine cursor position within the JSON tree and offers
 // field names, color values, booleans, and filter pattern snippets as appropriate.
 
@@ -19,6 +25,8 @@ export class DecorationCompletionProvider implements vscode.CompletionItemProvid
         document: vscode.TextDocument,
         position: vscode.Position,
     ): vscode.CompletionItem[] | undefined {
+        // jsonc-parser is used (rather than JSON.parse) because decorations.json may
+        // legally contain trailing commas or comments, which standard JSON.parse rejects.
         const text = document.getText();
         const offset = document.offsetAt(position);
         const location = getLocation(text, offset);

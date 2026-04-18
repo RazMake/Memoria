@@ -1,3 +1,7 @@
+// Parses markdown task list items from two document formats:
+//   • Source files       — standard GFM task list items (- [ ] / - [x]).
+//   • Collector document — same task list format plus optional suffix lines that carry
+//     metadata (source path and completion date) appended by the formatter.
 import type {
     CollectorSection,
     ParsedCollectorDocument,

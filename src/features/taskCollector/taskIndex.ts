@@ -1,3 +1,7 @@
+// Stable task identity layer for the task collector.
+// The index (persisted as .memoria/tasks-index.json) maps short random IDs to task entries,
+// allowing tasks to be tracked across document edits, renames, and collector round-trips
+// without embedding any mutable identifier into the source markdown text.
 import { randomBytes } from "node:crypto";
 import type {
     CollectorOrder,
@@ -47,6 +51,8 @@ export function hydrateTaskIndex(
 }
 
 export function generateTaskId(index: StoredTaskIndex): string {
+    // Task lists are rarely >1000 items; the 3-byte (6-hex-char) random ID space makes
+    // collision probability negligible. The loop is a safety valve, not expected to iterate.
     while (true) {
         const id = `mem-${randomBytes(3).toString("hex")}`;
         if (!index.tasks[id]) {
@@ -118,6 +124,8 @@ export function getCollectorOrder(index: StoredTaskIndex, completed: boolean): s
     return [...ordered, ...extras];
 }
 
+// Must be called after any task removal: sourceOrders and collectorOrder may still reference
+// IDs that were just deleted, which would produce phantom entries on the next read.
 export function pruneOrderReferences(index: StoredTaskIndex): void {
     const taskIds = new Set(Object.keys(index.tasks));
 

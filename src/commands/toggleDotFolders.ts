@@ -36,11 +36,19 @@ export function createToggleDotFoldersCommand(
 
         // Read managed entries from .memoria/dotfolders.json (empty on first use).
         const dotfoldersConfig = await manifest.readDotfolders(workspaceRoot);
+        // Only entries that Memoria manages are ever hidden or shown.
+        // This prevents the command from touching files.exclude entries added by the
+        // user or other extensions, ensuring safe coexistence with other exclusion rules.
         const managedEntries: string[] = dotfoldersConfig?.managedEntries ?? [];
 
         // Determine which managed entries are currently hidden.
         const hiddenManaged = managedEntries.filter((entry) => currentExclude[entry] === true);
 
+        // Two code paths intentionally:
+        // 1. First toggle (nothing hidden yet): hides all discovered dot-folders at once —
+        //    fast and requires no user interaction.
+        // 2. Subsequent toggles (some already hidden): shows a QuickPick for fine-grained
+        //    per-folder control, so the user can selectively show/hide individual entries.
         if (hiddenManaged.length === 0) {
             // "All visible" path: scan for dot-folders and hide them all.
             const dotFolders = await scanDotFolders(workspaceRoot);

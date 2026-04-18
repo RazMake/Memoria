@@ -1,3 +1,12 @@
+// Serializer for the Todo Editor document format — parses and reconstructs the
+// structured sections (preamble, active tasks, mid-section, completed tasks, epilogue)
+// of a .todo.md collector file without losing any user-authored content.
+//
+// WHY this serializer exists separately from the editor provider: the editor provider
+// is tightly coupled to the VS Code webview lifecycle, making section-parsing logic
+// difficult to test in isolation. A dedicated serializer exposes pure functions
+// (parseTodoDocument, serializeDocument, completeTask, …) that can be exercised
+// by unit tests with no VS Code API dependencies.
 import { parseCollectorDocument } from "../taskCollector/taskParser";
 import type { ParsedCollectorTask } from "../taskCollector/types";
 

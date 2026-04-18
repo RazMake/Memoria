@@ -44,6 +44,10 @@ export class BlueprintRegistry {
     /**
      * Returns the raw bytes of a seed file from the blueprint's files/ directory.
      * Returns null when no seed file exists — the scaffold layer will create an empty file instead.
+     *
+     * Returns null rather than throwing because a missing seed file is a valid, expected state:
+     * blueprint authors may choose not to provide seed content for a file the user is expected
+     * to populate from scratch.
      */
     async getSeedFileContent(blueprintId: string, relativePath: string): Promise<Uint8Array | null> {
         const seedUri = vscode.Uri.joinPath(this.blueprintsRoot, blueprintId, "files", ...relativePath.split("/"));

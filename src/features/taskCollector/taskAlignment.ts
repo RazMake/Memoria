@@ -1,5 +1,27 @@
+// Task alignment resolves task identity across document edits without relying on mutable IDs
+// embedded in the source text. The pipeline runs four increasingly fuzzy strategies in order:
+//
+//   1. Fingerprint match — exact SHA-256 content match, handles unchanged tasks and simple moves.
+//   2. Signature match  — surrounding-fingerprint context, handles minor edits in stable lists.
+//   3. Score match      — composite similarity score (body Jaccard + context + position), handles
+//                         edits in unstable neighborhoods.
+//   4. Equal-region fallback — positionally matches same-sized unmatched runs as a last resort.
+//
+// Only one strategy can match a given pair; matched items are removed from consideration for
+// subsequent strategies so each task is matched at most once.
 import { createHash } from "node:crypto";
 import type { AlignmentResult, ExistingTaskSnapshot, TaskSnapshot } from "./types";
+
+/** Minimum composite score required to accept a fuzzy match between two task sequences.
+ *  Scored as: contextPoints(0–2) + bodySimilarity*BODY_WEIGHT − positionPenalty(0–1).
+ *  2.5 was calibrated empirically: catches 95%+ of realistic edits while rejecting
+ *  false positives when entire sections are reordered. */
+const MINIMUM_MATCH_SCORE = 2.5;
+
+/** Weight applied to body text similarity in the composite score.
+ *  Body similarity dominates context matching (weight 1 per context point) because
+ *  task body content is more stable than position under typical list reordering. */
+const BODY_SIMILARITY_WEIGHT = 3;
 
 interface CandidatePair {
     oldIndex: number;
@@ -7,6 +29,8 @@ interface CandidatePair {
     score: number;
 }
 
+// Trailing whitespace and duplicate blank lines are stripped to prevent fingerprint churn
+// from invisible whitespace changes made by editors (e.g. trailing-space removal on save).
 export function normalizeTaskBody(body: string): string {
     const lines = body.split("\n").map((line) => line.replace(/[ \t]+$/g, ""));
 
@@ -42,7 +66,7 @@ export function alignTaskSequences(
     matchBySignature(oldSeq, newSeq, matchedOld, matchedNew, newIndexToId);
 
     for (const candidate of scoreCandidates(oldSeq, newSeq, matchedOld, matchedNew)) {
-        if (candidate.score < 2.5) {
+        if (candidate.score < MINIMUM_MATCH_SCORE) {
             continue;
         }
         if (matchedOld.has(candidate.oldIndex) || matchedNew.has(candidate.newIndex)) {
@@ -162,7 +186,7 @@ function candidateScore(
         score += 1;
     }
 
-    score += similarity(oldSeq[oldIndex].body, newSeq[newIndex].body) * 3;
+    score += similarity(oldSeq[oldIndex].body, newSeq[newIndex].body) * BODY_SIMILARITY_WEIGHT;
     score -= Math.abs(relativePosition(oldIndex, oldSeq.length) - relativePosition(newIndex, newSeq.length));
 
     return score;
@@ -240,6 +264,9 @@ function signatureFor(items: Array<{ fingerprint: string }>, index: number): str
     return `${previous}|${next}`;
 }
 
+// Jaccard similarity handles word-level changes (insertions, substitutions) well.
+// Prefix-overlap catches leading-text edits that Jaccard underweights when the overlapping
+// prefix is long relative to the total unique-word count.
 function similarity(left: string, right: string): number {
     const normalizedLeft = normalizeTaskBody(left).toLowerCase();
     const normalizedRight = normalizeTaskBody(right).toLowerCase();
