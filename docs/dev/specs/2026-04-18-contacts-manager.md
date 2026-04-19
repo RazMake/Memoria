@@ -290,7 +290,21 @@ interface ContactsFeatureEntry extends FeatureEntry {
 
 // Expand the discriminated union:
 type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry;
+
+// Manifest persistence (stored in .memoria/blueprint.json alongside taskCollector):
+interface ContactsManifestConfig {
+    peopleFolder: string;
+    groups: ContactGroup[];
+}
+
+// Add to BlueprintManifest:
+interface BlueprintManifest {
+    // ... existing fields ...
+    contacts?: ContactsManifestConfig;
+}
 ```
+
+**Runtime config resolution:** `ContactsFeature.refresh()` reads `peopleFolder` and `groups` from `manifest.readManifest(workspaceRoot)` → `manifest.contacts` (same pattern as `TaskCollectorFeature` reading `manifest.taskCollector.collectorPath`). The `BlueprintEngine` persists this config during `initialize()` and `reinitialize()` via `extractContactsFeature()` (analogous to `extractTaskCollectorFeature()`).
 
 **Custom groups at runtime:** The `groups` array in the blueprint defines the initial set of contact groups. Users can create additional groups via the Add Person form (see §7.1). When a new group is created, the feature creates a new `.md` file in `peopleFolder` and adds a file watcher for it. Custom groups always use the `"colleague"` type (same field structure as `Colleagues.md`). The feature discovers custom groups by scanning `peopleFolder` for `.md` files that are not in the blueprint's `groups` array and are not inside `DataTypes/`. Custom group files are loaded on activation alongside blueprint-defined groups.
 
@@ -520,7 +534,9 @@ Add `onView:memoria.contactsView` to the existing `activationEvents` array.
 | `src/features/contacts/webview/styles.ts` | CSS injection using VS Code theme variables. |
 | `src/features/contacts/webview/types.ts` | Webview-side types (`UIContact`, `UICareerLevel`, `UICareerPath`, `VsCodeApi`). |
 | `src/commands/contactCommands.ts` | Factory functions: `createAddPersonCommand`, `createEditPersonCommand`, `createDeletePersonCommand`, `createMovePersonCommand`. |
-| `src/blueprints/types.ts` | **Modified** — add `ContactsFeatureEntry` to `BlueprintFeature` union. |
+| `src/blueprints/types.ts` | **Modified** — add `ContactsFeatureEntry` and `ContactGroup` to `BlueprintFeature` union; add `ContactsManifestConfig` interface and `contacts?:` field to `BlueprintManifest`. |
+| `src/blueprints/blueprintParser.ts` | **Modified** — add `case "contacts"` to `parseFeatures()` switch; validate `peopleFolder` (relative path string) and `groups` array (each entry must have `file` string and `type` of `"report" \| "colleague"`). |
+| `src/blueprints/blueprintEngine.ts` | **Modified** — add `extractContactsFeature()`; persist `contacts: { peopleFolder, groups }` config to `BlueprintManifest` in `initialize()` and `reinitialize()`. |
 | `src/extension.ts` | **Modified** — instantiate `ContactsFeature`, register with `FeatureManager`, register commands. |
 | `src/package.json` | **Modified** — add commands, view container, view, activation event, menu entries. |
 | `src/resources/blueprints/individual-contributor/blueprint.yaml` | **Modified** — add `contacts` feature entry. |
@@ -538,7 +554,9 @@ Add `onView:memoria.contactsView` to the existing `activationEvents` array.
 - Implement `referenceDefaults.ts`: code-only default instances for each reference type.
 - Implement `titleGenerator.ts`: canonical title list generation as `{ normal, short }` pairs from career paths × career levels, and single-title pair generation for Reports.
 - Implement `integrityCheck.ts`: detect dangling references and produce correction lists.
-- Add `ContactsFeatureEntry` to `BlueprintFeature` union.
+- Add `ContactsFeatureEntry`, `ContactGroup`, and `ContactsManifestConfig` to `src/blueprints/types.ts`.
+- Add `case "contacts"` to `parseFeatures()` in `src/blueprints/blueprintParser.ts`.
+- Add `extractContactsFeature()` to `src/blueprints/blueprintEngine.ts`; persist contacts config to manifest.
 - Add `contacts` feature entries to both blueprint YAML files.
 - Unit tests for parser round-trips, edge cases, integrity check scenarios, and title generation.
 
