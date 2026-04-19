@@ -1,6 +1,5 @@
 # To do
+
 - [ ] Add here all your ToDos and sort them in the order they should be completed.
 
 # Completed
-- [x] This todo has been completed
-   - Completed on: 2026-03-25

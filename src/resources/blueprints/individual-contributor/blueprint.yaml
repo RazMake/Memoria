@@ -7,7 +7,7 @@ workspace:
   - name: "00-Workstreams/"
     children:
       - name: "Dev-Designs/"
-      - name: "AllTasks.todo.md"
+      - name: "All.todo.md"
         default: "relative"
   - name: "01-ToRemember/"
     children:
@@ -17,13 +17,23 @@ workspace:
       - name: "1-1"
   - name: "03-Inbox/"
   - name: "04-Archive/"
+  - name: "05-Contacts/"
+    children:
+      - name: "Colleagues.md"
+      - name: "InterviewTemplates/"
+      - name: "DataTypes/"
+        children:
+          - name: "CareerLevels.md"
+          - name: "CareerPaths.md"
+          - name: "InterviewTypes.md"
+          - name: "Pronouns.md"
 
 features:
   - id: "taskCollector"
     name: "Task Collector"
     description: "Aggregate and sync tasks from markdown files in the workspace into a single place."
     enabledByDefault: true
-    collectorPath: "00-Workstreams/AllTasks.todo.md"
+    collectorPath: "00-Workstreams/All.todo.md"
   - id: "decorations"
     name: "Explorer Decorations"
     description: "Badges and colors in the VS Code Explorer"
@@ -58,5 +68,25 @@ features:
       - filter: "04-Archive/"
         color: "terminal.ansiBrightBlack"
         badge: "⌛"
-        tooltip: "Personal knowledge base."
+        tooltip: "Notes/information that is considered obsolete, but the user decided to keep it around for a bit longer."
         propagate: true
+      - filter: "05-Contacts/DataTypes/"
+        color: "terminal.ansiBlue"
+        badge: "🔨"
+        tooltip: "Data types used in contact definitions."
+        propagate: true
+      - filter: "05-Contacts/InterviewTemplates/"
+        color: "terminal.ansiRed"
+        badge: "📋"
+        tooltip: "Problems that can be used in an interview."
+        propagate: true
+      - filter: "05-Contacts/"
+        color: "terminal.ansiBrightBlack"
+        badge: "👤"
+        tooltip: "Known contacts information, available in this workspace."
+        propagate: true
+      - filter: "WorkspaceInitializationBackups/"
+        color: "terminal.ansiBrightBlack"
+        tooltip: "Backup of files that existed before the scaffolding of the workspace."
+        propagate: true
+

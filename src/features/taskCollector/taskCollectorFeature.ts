@@ -299,7 +299,10 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         // Full sync always writes the collector even if it is dirty — it is the authoritative
         // refresh that overwrites any pending user edits with the ground-truth from all sources.
-        await this.reconcileCollector(true, true);
+        // On bootstrap (first run with no persisted index), read the existing collector document
+        // so seed content (e.g. sample tasks from the blueprint) is imported into the index
+        // before re-rendering — otherwise the seed content would be silently discarded.
+        await this.reconcileCollector(!this.bootstrapPending, true);
         this.bootstrapPending = false;
         this.telemetry.logUsage("taskCollector.syncCompleted", {
             kind: "full",
