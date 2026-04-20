@@ -45,6 +45,11 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
             return this.folderKeyCompletions(text, partialKey, replaceRange);
         }
 
+        if (isDefaultFilesEntryKey(location)) {
+            const folderKey = location.path[1] as string;
+            return this.entryKeyCompletions(text, folderKey);
+        }
+
         if (isDefaultFilesValue(location, text, offset)) {
             const folderKey = location.path[1] as string;
             const partialValue = extractPartialValue(text, offset);
@@ -62,11 +67,45 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
 
     private topLevelKeyCompletions(): vscode.CompletionItem[] {
         const item = new vscode.CompletionItem("defaultFiles", vscode.CompletionItemKind.Property);
-        item.detail = "Map of folder paths to default file arrays";
+        item.detail = "Map of folder paths to default file configuration";
         item.insertText = new vscode.SnippetString(
-            '"defaultFiles": {\n\t"$1": ["$2"]\n}',
+            '"defaultFiles": {\n\t"$1": {\n\t\t"filesToOpen": ["$2"]\n\t}\n}',
         );
         return [item];
+    }
+
+    private entryKeyCompletions(text: string, folderKey: string): vscode.CompletionItem[] {
+        const existingKeys = getExistingEntryKeys(text, folderKey);
+        const fields: Array<{ key: string; detail: string; snippet: string; sortText: string }> = [
+            {
+                key: "filesToOpen",
+                detail: "(required) Array of file paths to open",
+                snippet: `"filesToOpen": ["$1"]`,
+                sortText: "0_filesToOpen",
+            },
+            {
+                key: "closeCurrentlyOpenedFilesFirst",
+                detail: "(optional) boolean — close existing editors before opening files (default: true)",
+                snippet: `"closeCurrentlyOpenedFilesFirst": \${1|true,false|}`,
+                sortText: "1_closeCurrentlyOpenedFilesFirst",
+            },
+            {
+                key: "openSideBySide",
+                detail: "(optional) boolean — open each file in its own column (default: true)",
+                snippet: `"openSideBySide": \${1|true,false|}`,
+                sortText: "1_openSideBySide",
+            },
+        ];
+
+        return fields
+            .filter(({ key }) => !existingKeys.has(key))
+            .map(({ key, detail, snippet, sortText }) => {
+                const item = new vscode.CompletionItem(key, vscode.CompletionItemKind.Property);
+                item.detail = detail;
+                item.insertText = new vscode.SnippetString(snippet);
+                item.sortText = sortText;
+                return item;
+            });
     }
 
     private async folderKeyCompletions(text: string, partialKey: string, replaceRange: vscode.Range): Promise<vscode.CompletionItem[]> {
@@ -394,13 +433,38 @@ export function isDefaultFilesKey(loc: Location): boolean {
 }
 
 /**
+ * Cursor is at a property key inside a folder's entry object (depth 3).
+ * jsonc-parser reports path ["defaultFiles", "<folder>", ""] or ["defaultFiles", "<folder>", "<partial>"]
+ * with isAtPropertyKey when the user is typing a property key inside the entry object.
+ */
+export function isDefaultFilesEntryKey(loc: Location): boolean {
+    return loc.isAtPropertyKey && loc.path.length === 3
+        && loc.path[0] === "defaultFiles"
+        && typeof loc.path[1] === "string"
+        && typeof loc.path[2] === "string";
+}
+
+/**
  * Cursor is inside a string value within the "defaultFiles" arrays.
- * jsonc-parser reports path ["defaultFiles", "<folder>", <index>] when the cursor
- * is at a value position inside an array element.
+ * Handles both formats:
+ *   - Legacy: path ["defaultFiles", "<folder>", <index>] (string[] value)
+ *   - Current: path ["defaultFiles", "<folder>", "filesToOpen", <index>] (object value)
  * Falls back to a text scan when the parser hasn't resolved the key yet.
  */
 export function isDefaultFilesValue(loc: Location, text: string, offset: number): boolean {
-    // Fast path: parser resolved the full path.
+    // Fast path — new object format: ["defaultFiles", folderKey, "filesToOpen", index]
+    if (
+        !loc.isAtPropertyKey
+        && loc.path.length === 4
+        && loc.path[0] === "defaultFiles"
+        && typeof loc.path[1] === "string"
+        && loc.path[2] === "filesToOpen"
+        && typeof loc.path[3] === "number"
+    ) {
+        return true;
+    }
+
+    // Fast path — legacy array format: ["defaultFiles", folderKey, index]
     if (
         !loc.isAtPropertyKey
         && loc.path.length === 3
@@ -412,7 +476,7 @@ export function isDefaultFilesValue(loc: Location, text: string, offset: number)
     }
 
     // Fallback: cursor is inside a string value in an array but the parser only
-    // resolved to depth 2. Look behind for an array context ("[" or ",") after a ":".
+    // resolved to depth 2 or 3. Look behind for an array context ("[" or ",") after a ":".
     if (
         !loc.isAtPropertyKey
         && loc.path.length >= 2
@@ -462,13 +526,40 @@ function getExistingDefaultFilesKeys(text: string): Set<string> {
     return keys;
 }
 
-/** Returns the set of existing string values in the array for a given folder key. */
+/** Returns the set of existing property keys inside a folder's entry object. */
+function getExistingEntryKeys(text: string, folderKey: string): Set<string> {
+    const keys = new Set<string>();
+    const root = parseTree(text);
+    if (!root) return keys;
+
+    const entryNode = findNodeAtLocation(root, ["defaultFiles", folderKey]);
+    if (!entryNode || entryNode.type !== "object" || !entryNode.children) {
+        return keys;
+    }
+
+    for (const prop of entryNode.children) {
+        if (prop.type === "property" && prop.children?.[0]?.type === "string") {
+            keys.add(prop.children[0].value as string);
+        }
+    }
+    return keys;
+}
+
+/**
+ * Returns the set of existing string values in the filesToOpen array for a given folder key.
+ * Supports both the new object format ({ filesToOpen: [...] }) and the legacy array format ([...]).
+ */
 function getExistingArrayValues(text: string, folderKey: string): Set<string> {
     const values = new Set<string>();
     const root = parseTree(text);
     if (!root) return values;
 
-    const arrayNode = findNodeAtLocation(root, ["defaultFiles", folderKey]);
+    // Try new object format first: defaultFiles[folderKey].filesToOpen
+    const entryNode = findNodeAtLocation(root, ["defaultFiles", folderKey]);
+    let arrayNode = entryNode?.type === "object"
+        ? findNodeAtLocation(root, ["defaultFiles", folderKey, "filesToOpen"])
+        : entryNode; // legacy: the node itself is the array
+
     if (!arrayNode || arrayNode.type !== "array" || !arrayNode.children) {
         return values;
     }

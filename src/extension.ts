@@ -373,7 +373,7 @@ async function updateDefaultFileContext(
             // reducing total latency from O(n) sequential to O(1) (one round trip).
             const checks: Promise<void>[] = [];
 
-            for (const [key, filePaths] of Object.entries(defaultFiles)) {
+            for (const [key, entry] of Object.entries(defaultFiles)) {
                 const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
 
                 // Root-specific entries apply only to matching roots.
@@ -387,7 +387,7 @@ async function updateDefaultFileContext(
                         (async () => {
                             const folderSegments = relFolder.endsWith("/") ? relFolder.slice(0, -1) : relFolder;
                             let folderHasFile = false;
-                            for (const fileName of filePaths) {
+                            for (const fileName of entry.filesToOpen) {
                                 const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(fileName, rootNameSet);
                                 let fileUri: vscode.Uri;
                                 if (isWorkspaceAbsolute) {
@@ -491,7 +491,7 @@ function registerDefaultFileWatcher(
         const rootNameSet = new Set(allRoots.map(getRootFolderName));
 
         const fileDisposables: vscode.Disposable[] = [];
-        for (const [key, filePaths] of Object.entries(defaultFiles)) {
+        for (const [key, entry] of Object.entries(defaultFiles)) {
             const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
 
             // For watchers, root-specific entries watch only matching roots.
@@ -501,7 +501,7 @@ function registerDefaultFileWatcher(
                 : allRoots;
 
             for (const root of watchRoots) {
-                for (const fileName of filePaths) {
+                for (const fileName of entry.filesToOpen) {
                     const watcher = vscode.workspace.createFileSystemWatcher(
                         new vscode.RelativePattern(root, relFolder + fileName)
                     );

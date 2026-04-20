@@ -44,6 +44,7 @@ vi.mock("vscode", () => ({
         })),
     },
     ViewColumn: {
+        Active: -1,
         One: 1,
         Two: 2,
         Three: 3,
@@ -118,8 +119,8 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
-            "01-Notes/": ["Index.md"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+            "01-Notes/": { filesToOpen: ["Index.md"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -139,7 +140,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -159,8 +160,8 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
-            "01-Notes/": ["Index.md"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+            "01-Notes/": { filesToOpen: ["Index.md"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -180,7 +181,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo", "Work.todo"],
+            "00-ToDo/": { filesToOpen: ["Main.todo", "Work.todo"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -201,7 +202,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Missing.todo", "Main.todo"],
+            "00-ToDo/": { filesToOpen: ["Missing.todo", "Main.todo"] },
         });
 
         mockExecuteCommand
@@ -222,7 +223,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Missing1.todo", "Missing2.todo"],
+            "00-ToDo/": { filesToOpen: ["Missing1.todo", "Missing2.todo"] },
         });
 
         mockExecuteCommand.mockRejectedValue(new Error("File not found"));
@@ -243,7 +244,7 @@ describe("createOpenDefaultFileCommand", () => {
         // workspaceRoot is initialized, otherRoot is not — but config applies to both.
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -266,8 +267,8 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
-            "workspace/00-ToDo/": ["Work.todo"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+            "workspace/00-ToDo/": { filesToOpen: ["Work.todo"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -293,8 +294,8 @@ describe("createOpenDefaultFileCommand", () => {
         mockWorkspaceFolders.push({ uri: workspaceRoot }, { uri: otherRoot });
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo"],
-            "workspace/00-ToDo/": ["Work.todo"],
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+            "workspace/00-ToDo/": { filesToOpen: ["Work.todo"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -318,7 +319,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         // Only a root-prefixed key for "workspace" — no relative fallback.
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "workspace/00-ToDo/": ["Work.todo"],
+            "workspace/00-ToDo/": { filesToOpen: ["Work.todo"] },
         });
 
         const folderUri = { path: "/other-workspace/00-ToDo" } as any;
@@ -336,7 +337,7 @@ describe("createOpenDefaultFileCommand", () => {
         // File path "other-workspace/00-Notes/Index.md" is workspace-absolute — first
         // segment matches the "other-workspace" root name.
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["Main.todo", "other-workspace/00-Notes/Index.md"],
+            "00-ToDo/": { filesToOpen: ["Main.todo", "other-workspace/00-Notes/Index.md"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -365,7 +366,7 @@ describe("createOpenDefaultFileCommand", () => {
         mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
         // "UnknownRoot" is not a workspace root name, so the path is folder-relative.
         mockManifest.readDefaultFiles.mockResolvedValue({
-            "00-ToDo/": ["UnknownRoot/Notes.md"],
+            "00-ToDo/": { filesToOpen: ["UnknownRoot/Notes.md"] },
         });
 
         mockExecuteCommand.mockResolvedValue(undefined);
@@ -380,6 +381,49 @@ describe("createOpenDefaultFileCommand", () => {
             expect.objectContaining({ path: "/workspace/00-ToDo/UnknownRoot/Notes.md" }),
             expect.anything(),
         );
+    });
+
+    it("should not close existing editors when closeCurrentlyOpenedFilesFirst is false", async () => {
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": { filesToOpen: ["Main.todo"], closeCurrentlyOpenedFilesFirst: false },
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const folderUri = { path: "/workspace/00-ToDo" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        expect(mockTabGroupsClose).not.toHaveBeenCalled();
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+            expect.anything(),
+        );
+    });
+
+    it("should open all files in active column when openSideBySide is false", async () => {
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": { filesToOpen: ["Main.todo", "Work.todo"], openSideBySide: false },
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const folderUri = { path: "/workspace/00-ToDo" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(2);
+        // Both files opened in ViewColumn.Active (-1)
+        expect(vsCodeOpenCalls[0][2]).toEqual({ viewColumn: -1, preview: false });
+        expect(vsCodeOpenCalls[1][2]).toEqual({ viewColumn: -1, preview: false });
     });
 });
 

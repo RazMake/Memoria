@@ -1,5 +1,7 @@
 // Factory for the "Memoria: Open default file(s)" command handler.
-// Opens the blueprint-defined default files for the right-clicked folder in the editor, side by side.
+// Opens the blueprint-defined default files for the right-clicked folder in the editor.
+// Behavior (close existing editors, side-by-side columns) is controlled per-folder
+// via DefaultFilesEntry flags in .memoria/default-files.json.
 
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
@@ -57,37 +59,43 @@ export function createOpenDefaultFileCommand(
         // Root-prefixed key (e.g. "MyRoot/00-ToDo/") takes priority over
         // relative key (e.g. "00-ToDo/") for root-specific matching.
         const rootName = getRootFolderName(workspaceRoot);
-        const targetFiles = defaultFiles[rootName + "/" + folderKey] ?? defaultFiles[folderKey];
+        const targetEntry = defaultFiles[rootName + "/" + folderKey] ?? defaultFiles[folderKey];
 
         // Build a set of root names for workspace-absolute file path classification.
         const rootNameSet = new Set(folders.map((f) => getRootFolderName(f.uri)));
 
-        if (!targetFiles || targetFiles.length === 0) {
+        if (!targetEntry || targetEntry.filesToOpen.length === 0) {
             return;
         }
 
-        // Prompt to save unsaved changes before closing editors.
-        const shouldProceed = await promptToSaveDirtyFiles();
-        if (!shouldProceed) {
-            return;
+        // Determine behavior flags — both default to true for backward compatibility
+        // (matches the original "close everything, open side by side" behavior).
+        const closeFirst = targetEntry.closeCurrentlyOpenedFilesFirst ?? true;
+        const sideBySide = targetEntry.openSideBySide ?? true;
+
+        if (closeFirst) {
+            // Prompt to save unsaved changes before closing editors.
+            const shouldProceed = await promptToSaveDirtyFiles();
+            if (!shouldProceed) {
+                return;
+            }
+
+            // Close all existing editors before opening the default files.
+            // Use tabGroups API to close tabs without prompting for unsaved files
+            // (selected files were already saved by promptToSaveDirtyFiles).
+            const allTabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs);
+            await vscode.window.tabGroups.close(allTabs);
         }
 
-        // Close all existing editors before opening the default files.
-        // Use tabGroups API to close tabs without prompting for unsaved files
-        // (selected files were already saved by promptToSaveDirtyFiles).
-        const allTabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs);
-        await vscode.window.tabGroups.close(allTabs);
-
-        // Open each file side by side, skipping any that are missing.
+        // Open each file, skipping any that are missing.
         // File paths are either:
         //   - Workspace-absolute: first segment matches a root name (e.g. "ProjectA/00-ToDo/Main.todo")
         //     → resolved from that root, ignoring the owning folder.
         //   - Folder-relative: resolved from the matched folder (existing behaviour).
-        // Each file is opened in its own editor column so related files are visible
-        // side by side. The default file feature is designed as a "workspace layout reset"
-        // — opening a curated set of files arranged for a specific folder's workflow.
+        // When openSideBySide is true each file gets its own editor column.
+        // When openSideBySide is false all files open in the active column (additional tabs).
         let nextColumn = vscode.ViewColumn.One;
-        for (const filePath of targetFiles) {
+        for (const filePath of targetEntry.filesToOpen) {
             const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(filePath, rootNameSet);
             let fileUri: vscode.Uri;
             if (isWorkspaceAbsolute) {
@@ -102,10 +110,12 @@ export function createOpenDefaultFileCommand(
             }
             try {
                 await vscode.commands.executeCommand("vscode.open", fileUri, {
-                    viewColumn: nextColumn,
+                    viewColumn: sideBySide ? nextColumn : vscode.ViewColumn.Active,
                     preview: false,
                 });
-                nextColumn++;
+                if (sideBySide) {
+                    nextColumn++;
+                }
             } catch {
                 // File does not exist on disk — skip silently.
             }

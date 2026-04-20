@@ -388,7 +388,9 @@ describe("ManifestManager", () => {
             const config = { defaultFiles: { "00-ToDo/": ["Main.todo", "Notes.md"] } };
             mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(config)));
             const manager = new ManifestManager(mockFs);
-            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({ "00-ToDo/": ["Main.todo", "Notes.md"] });
+            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({
+                "00-ToDo/": { filesToOpen: ["Main.todo", "Notes.md"] },
+            });
         });
 
         it("should normalize legacy string values to single-element arrays", async () => {
@@ -396,15 +398,38 @@ describe("ManifestManager", () => {
             const legacyConfig = { defaultFiles: { "00-ToDo/": "Main.todo" } };
             mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(legacyConfig)));
             const manager = new ManifestManager(mockFs);
-            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({ "00-ToDo/": ["Main.todo"] });
+            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({
+                "00-ToDo/": { filesToOpen: ["Main.todo"] },
+            });
+        });
+
+        it("should preserve DefaultFilesEntry objects with behavior flags", async () => {
+            const config = {
+                defaultFiles: {
+                    "00-ToDo/": {
+                        filesToOpen: ["Main.todo"],
+                        closeCurrentlyOpenedFilesFirst: false,
+                        openSideBySide: false,
+                    },
+                },
+            };
+            mockReadFile.mockResolvedValue(encoder.encode(JSON.stringify(config)));
+            const manager = new ManifestManager(mockFs);
+            expect(await manager.readDefaultFiles(workspaceRoot)).toEqual({
+                "00-ToDo/": {
+                    filesToOpen: ["Main.todo"],
+                    closeCurrentlyOpenedFilesFirst: false,
+                    openSideBySide: false,
+                },
+            });
         });
 
         it("should write the defaultFiles map wrapped in { defaultFiles } to default-files.json", async () => {
             const manager = new ManifestManager(mockFs);
-            await manager.writeDefaultFiles(workspaceRoot, { "00-ToDo/": ["Main.todo"] });
+            await manager.writeDefaultFiles(workspaceRoot, { "00-ToDo/": { filesToOpen: ["Main.todo"] } });
             expect(mockCreateDirectory).toHaveBeenCalledOnce();
             const written = JSON.parse(new TextDecoder().decode(mockWriteFile.mock.calls[0][1]));
-            expect(written).toEqual({ defaultFiles: { "00-ToDo/": ["Main.todo"] } });
+            expect(written).toEqual({ defaultFiles: { "00-ToDo/": { filesToOpen: ["Main.todo"] } } });
         });
     });
 

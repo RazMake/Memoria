@@ -7,7 +7,7 @@
 // without storing any file content or PII.
 
 import * as vscode from "vscode";
-import type { BlueprintManifest, DefaultFilesConfig, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
+import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 
 const decoder = new TextDecoder();
@@ -97,20 +97,29 @@ export class ManifestManager {
         await this.writeJson(this.manifestUri(workspaceRoot), manifest);
     }
 
-    async readDefaultFiles(workspaceRoot: vscode.Uri): Promise<Record<string, string[]> | null> {
+    async readDefaultFiles(workspaceRoot: vscode.Uri): Promise<Record<string, DefaultFilesEntry> | null> {
         const config = await this.readJson<DefaultFilesConfig>(this.defaultFilesUri(workspaceRoot));
         if (!config?.defaultFiles) {
             return null;
         }
-        // Normalize legacy string values to string[] for backward compatibility.
-        const result: Record<string, string[]> = {};
+        // Normalize legacy formats to DefaultFilesEntry for backward compatibility:
+        //   - plain string (very old format) → { filesToOpen: [value] }
+        //   - string[] (previous format)     → { filesToOpen: value }
+        //   - DefaultFilesEntry object       → used as-is
+        const result: Record<string, DefaultFilesEntry> = {};
         for (const [key, value] of Object.entries(config.defaultFiles)) {
-            result[key] = typeof value === "string" ? [value] : value;
+            if (typeof value === "string") {
+                result[key] = { filesToOpen: [value] };
+            } else if (Array.isArray(value)) {
+                result[key] = { filesToOpen: value };
+            } else {
+                result[key] = value as DefaultFilesEntry;
+            }
         }
         return result;
     }
 
-    async writeDefaultFiles(workspaceRoot: vscode.Uri, defaultFiles: Record<string, string[]>): Promise<void> {
+    async writeDefaultFiles(workspaceRoot: vscode.Uri, defaultFiles: Record<string, DefaultFilesEntry>): Promise<void> {
         await this.ensureMemoriaDir(workspaceRoot);
         await this.writeJson(this.defaultFilesUri(workspaceRoot), { defaultFiles } satisfies DefaultFilesConfig);
     }

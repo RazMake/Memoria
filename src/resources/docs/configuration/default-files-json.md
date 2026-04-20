@@ -1,6 +1,6 @@
 # default-files.json
 
-Maps folder paths to lists of default files that open when you use the **Open default file(s)** context menu.
+Maps folder paths to default file configurations that control what opens when you use the **Open default file(s)** context menu.
 
 ## Location
 
@@ -11,8 +11,14 @@ Maps folder paths to lists of default files that open when you use the **Open de
 ```json
 {
   "defaultFiles": {
-    "00-ToDo/": ["Main.todo"],
-    "ProjectA/00-ToDo/": ["Main.todo", "notes.md"]
+    "00-ToDo/": {
+      "filesToOpen": ["Main.todo"],
+      "closeCurrentlyOpenedFilesFirst": true,
+      "openSideBySide": true
+    },
+    "ProjectA/00-ToDo/": {
+      "filesToOpen": ["Main.todo", "notes.md"]
+    }
   }
 }
 ```
@@ -26,7 +32,17 @@ Folder paths can be either:
 
 ## Values
 
-Each value is an array of file paths. Paths can be either:
+Each value is an object with the following properties:
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `filesToOpen` | `string[]` | _(required)_ | Array of file paths to open |
+| `closeCurrentlyOpenedFilesFirst` | `boolean` | `true` | Close all open editors before opening the files |
+| `openSideBySide` | `boolean` | `true` | Open each file in its own editor column (side by side) |
+
+### File paths
+
+Paths in `filesToOpen` can be either:
 
 - **Folder-relative** (e.g., `"Main.todo"`, `"sub/notes.md"`) — resolved relative to the matched folder (the default)
 - **Workspace-absolute** (e.g., `"ProjectB/00-Notes/Index.md"`) — when the first segment matches a workspace root name, the file is resolved from that root, regardless of which folder triggered the command. This lets you open files from any root in a multi-root workspace.
@@ -34,15 +50,19 @@ Each value is an array of file paths. Paths can be either:
 ```json
 {
   "defaultFiles": {
-    "00-ToDo/": [
-      "Main.todo",
-      "ProjectB/00-Notes/Index.md"
-    ]
+    "00-ToDo/": {
+      "filesToOpen": [
+        "Main.todo",
+        "ProjectB/00-Notes/Index.md"
+      ],
+      "closeCurrentlyOpenedFilesFirst": false,
+      "openSideBySide": false
+    }
   }
 }
 ```
 
-In the example above, right-clicking `00-ToDo/` in any root opens `Main.todo` from that folder, plus `Index.md` from `ProjectB`'s `00-Notes/` folder.
+In the example above, right-clicking `00-ToDo/` in any root opens `Main.todo` from that folder, plus `Index.md` from `ProjectB`'s `00-Notes/` folder — without closing existing editors, and as tabs in the current group.
 
 ## When is it updated?
 

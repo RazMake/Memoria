@@ -6,7 +6,7 @@ import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, TaskCollectorFeatureEntry, ContactsFeatureEntry } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, DefaultFilesEntry, TaskCollectorFeatureEntry, ContactsFeatureEntry } from "./types";
 import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -170,14 +170,18 @@ export class BlueprintEngine {
 export function mergeDefaultFileMap(
     map: DefaultFileMap,
     workspaceRoot: vscode.Uri
-): Record<string, string[]> {
-    const result: Record<string, string[]> = { ...map.relative };
+): Record<string, DefaultFilesEntry> {
+    const result: Record<string, DefaultFilesEntry> = {};
+
+    for (const [folder, files] of Object.entries(map.relative)) {
+        result[folder] = { filesToOpen: files };
+    }
 
     if (Object.keys(map.rootScoped).length > 0) {
         const rootName = getRootFolderName(workspaceRoot);
 
         for (const [folder, files] of Object.entries(map.rootScoped)) {
-            result[rootName + "/" + folder] = files;
+            result[rootName + "/" + folder] = { filesToOpen: files };
         }
     }
 

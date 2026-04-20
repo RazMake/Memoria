@@ -3,6 +3,7 @@ import {
     DefaultFileCompletionProvider,
     isTopLevelKey,
     isDefaultFilesKey,
+    isDefaultFilesEntryKey,
     isDefaultFilesValue,
     extractPartialValue,
 } from "../../../../src/features/navigator/defaultFileCompletionProvider";
@@ -162,9 +163,18 @@ describe("DefaultFileCompletionProvider", () => {
     });
 
     describe("isDefaultFilesValue", () => {
-        it("should return true when cursor is inside an array value", () => {
+        it("should return true when cursor is inside a legacy array value (depth 3)", () => {
             const { getLocation } = require("jsonc-parser");
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": [""]\n  }\n}';
+            const arrayStart = text.indexOf('[""]');
+            const offset = arrayStart + 2; // inside the empty string
+            const loc = getLocation(text, offset);
+            expect(isDefaultFilesValue(loc, text, offset)).toBe(true);
+        });
+
+        it("should return true when cursor is inside a filesToOpen array value (depth 4)", () => {
+            const { getLocation } = require("jsonc-parser");
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": { "filesToOpen": [""] }\n  }\n}';
             const arrayStart = text.indexOf('[""]');
             const offset = arrayStart + 2; // inside the empty string
             const loc = getLocation(text, offset);
@@ -178,6 +188,25 @@ describe("DefaultFileCompletionProvider", () => {
             const offset = keyStart + 1;
             const loc = getLocation(text, offset);
             expect(isDefaultFilesValue(loc, text, offset)).toBe(false);
+        });
+    });
+
+    describe("isDefaultFilesEntryKey", () => {
+        it("should return true when cursor is at a property key inside an entry object", () => {
+            const { getLocation } = require("jsonc-parser");
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": {\n      \n    }\n  }\n}';
+            // Position cursor inside the empty entry object
+            const offset = text.indexOf("{\n      \n") + 9;
+            const loc = getLocation(text, offset);
+            expect(isDefaultFilesEntryKey(loc)).toBe(true);
+        });
+
+        it("should return false when cursor is at a folder key (depth 2)", () => {
+            const { getLocation } = require("jsonc-parser");
+            const text = '{\n  "defaultFiles": {\n    \n  }\n}';
+            const offset = text.indexOf("{\n    \n") + 6;
+            const loc = getLocation(text, offset);
+            expect(isDefaultFilesEntryKey(loc)).toBe(false);
         });
     });
 
@@ -213,6 +242,45 @@ describe("DefaultFileCompletionProvider", () => {
             expect(items).toBeDefined();
             const labels = items!.map((i) => i.label);
             expect(labels).toContain("defaultFiles");
+        });
+    });
+
+    // ── Entry key completions ───────────────────────────────────────────
+
+    describe("entry key completions", () => {
+        it("should suggest filesToOpen, closeCurrentlyOpenedFilesFirst, openSideBySide for an empty entry", async () => {
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": {\n      \n    }\n  }\n}';
+            const offset = text.indexOf("{\n      \n") + 9;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(
+                document as any,
+                position as any,
+            );
+
+            expect(items).toBeDefined();
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("filesToOpen");
+            expect(labels).toContain("closeCurrentlyOpenedFilesFirst");
+            expect(labels).toContain("openSideBySide");
+        });
+
+        it("should not suggest keys that already exist in the entry", async () => {
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": {\n      "filesToOpen": [],\n      \n    }\n  }\n}';
+            const offset = text.indexOf(",\n      \n") + 9;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(
+                document as any,
+                position as any,
+            );
+
+            expect(items).toBeDefined();
+            const labels = items!.map((i) => i.label);
+            // filesToOpen is already present — must not be suggested again
+            expect(labels).not.toContain("filesToOpen");
+            expect(labels).toContain("closeCurrentlyOpenedFilesFirst");
+            expect(labels).toContain("openSideBySide");
         });
     });
 

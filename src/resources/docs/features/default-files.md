@@ -4,25 +4,39 @@ Default files are pre-configured files that open when you use the **Open default
 
 ## How it works
 
-Each blueprint defines which folders have default files. When you right-click a folder in the Explorer and select **Open default file(s)**, all configured files for that folder open side by side in the editor.
+Each blueprint defines which folders have default files. When you right-click a folder in the Explorer and select **Open default file(s)**, the configured files for that folder open in the editor.
 
 1. **Right-click** a folder in the Explorer
 2. Select **Open default file(s)**
-3. All current editors are closed and the default files open side by side
+3. The default files open according to the folder's configuration
 
 > The context menu item only appears on folders that have default files configured.
 
 ## Configuration
 
-Default files are set up by the blueprint during initialization and stored in `.memoria/default-files.json`. The format maps folder paths to arrays of file paths:
+Default files are set up by the blueprint during initialization and stored in `.memoria/default-files.json`. Each folder maps to a configuration object:
 
 ```json
 {
-  "00-ToDo/": ["Main.todo"]
+  "defaultFiles": {
+    "00-ToDo/": {
+      "filesToOpen": ["Main.todo"],
+      "closeCurrentlyOpenedFilesFirst": true,
+      "openSideBySide": true
+    }
+  }
 }
 ```
 
-When editing this file, Memoria provides **auto-completion** for folder paths (relative and root-prefixed) and file names within those folders.
+### Entry properties
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `filesToOpen` | `string[]` | _(required)_ | File paths to open |
+| `closeCurrentlyOpenedFilesFirst` | `boolean` | `true` | Close all open editors before opening the files. Set to `false` to add the files alongside existing editors |
+| `openSideBySide` | `boolean` | `true` | Open each file in its own editor column. Set to `false` to open all files as tabs in the active group |
+
+When editing this file, Memoria provides **auto-completion** for folder paths, entry property keys, and file names within those folders.
 
 Changes to `default-files.json` are picked up **live** — the context menu updates without reloading VS Code.
 
@@ -32,16 +46,20 @@ In a multi-root workspace, you can open files from a **different root** by prefi
 
 ```json
 {
-  "00-ToDo/": [
-    "Main.todo",
-    "ProjectB/00-Notes/Index.md"
-  ]
+  "defaultFiles": {
+    "00-ToDo/": {
+      "filesToOpen": [
+        "Main.todo",
+        "ProjectB/00-Notes/Index.md"
+      ]
+    }
+  }
 }
 ```
 
 Here, `Main.todo` is resolved relative to the right-clicked folder as usual, while `ProjectB/00-Notes/Index.md` is resolved from the `ProjectB` workspace root — regardless of which folder was clicked. Auto-completion in `default-files.json` suggests root names as a prefix to help you discover and build these paths.
 
-> **Warning:** Using this command closes all currently open editors before opening the default files side by side. Make sure to save any unsaved work first.
+> **Note:** When `closeCurrentlyOpenedFilesFirst` is `true` (the default), this command closes all currently open editors before opening the files. You will be prompted to save any unsaved work first. Set it to `false` to keep existing editors open.
 
 ## Troubleshooting
 

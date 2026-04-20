@@ -146,8 +146,26 @@ export interface BlueprintManifest {
  * or root-prefixed (e.g. "ProjectA/00-ToDo/") matching only the named root.
  * Root-prefixed keys take priority over relative keys.
  */
+
+/** Configuration object for a single folder entry in default-files.json. */
+export interface DefaultFilesEntry {
+    /** The list of files to open when the command is triggered on this folder. */
+    filesToOpen: string[];
+    /**
+     * When true (the default), all currently open editors are closed before opening
+     * the new files. Set to false to open the files alongside existing editors.
+     */
+    closeCurrentlyOpenedFilesFirst?: boolean;
+    /**
+     * When true (the default), each file is opened in its own editor column (side by side).
+     * Set to false to open all files as tabs in the active editor group.
+     */
+    openSideBySide?: boolean;
+}
+
 export interface DefaultFilesConfig {
-    defaultFiles: Record<string, string[]>;
+    /** Map from folder path to either a `DefaultFilesEntry` object or a legacy `string[]`. */
+    defaultFiles: Record<string, DefaultFilesEntry | string[]>;
 }
 
 /** Stored in .memoria/decorations.json — read by FileDecorationProvider at runtime. */

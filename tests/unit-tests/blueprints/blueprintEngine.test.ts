@@ -210,7 +210,7 @@ describe("BlueprintEngine", () => {
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
                 workspaceRoot,
-                { "Folder/": ["file.md"] }
+                { "Folder/": { filesToOpen: ["file.md"] } }
             );
         });
 
@@ -227,7 +227,7 @@ describe("BlueprintEngine", () => {
             await engine.initialize(workspaceRoot, "individual-contributor");
             expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
                 workspaceRoot,
-                { "A/": ["shared.md"], "workspace/A/": ["local.md"] }
+                { "A/": { filesToOpen: ["shared.md"] }, "workspace/A/": { filesToOpen: ["local.md"] } }
             );
         });
 
@@ -489,7 +489,7 @@ describe("BlueprintEngine", () => {
             await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
             expect(mockManifest.writeDefaultFiles).toHaveBeenCalledWith(
                 workspaceRoot,
-                { "Folder/": ["file.md"] }
+                { "Folder/": { filesToOpen: ["file.md"] } }
             );
         });
 
@@ -556,13 +556,13 @@ describe("extractContactsFeature", () => {
 });
 
 describe("mergeDefaultFileMap", () => {
-    it("should return relative entries as-is", () => {
+    it("should return relative entries as DefaultFilesEntry objects", () => {
         const root = { path: "/workspace" } as any;
         const result = mergeDefaultFileMap(
             { relative: { "A/": ["f.md"] }, rootScoped: {} },
             root
         );
-        expect(result).toEqual({ "A/": ["f.md"] });
+        expect(result).toEqual({ "A/": { filesToOpen: ["f.md"] } });
     });
 
     it("should prefix rootScoped entries with root folder name", () => {
@@ -571,7 +571,7 @@ describe("mergeDefaultFileMap", () => {
             { relative: {}, rootScoped: { "A/": ["f.md"] } },
             root
         );
-        expect(result).toEqual({ "workspace/A/": ["f.md"] });
+        expect(result).toEqual({ "workspace/A/": { filesToOpen: ["f.md"] } });
     });
 
     it("should merge both relative and rootScoped entries", () => {
@@ -584,8 +584,8 @@ describe("mergeDefaultFileMap", () => {
             root
         );
         expect(result).toEqual({
-            "A/": ["shared.md"],
-            "my-project/A/": ["local.md"],
+            "A/": { filesToOpen: ["shared.md"] },
+            "my-project/A/": { filesToOpen: ["local.md"] },
         });
     });
 
@@ -595,7 +595,7 @@ describe("mergeDefaultFileMap", () => {
             { relative: {}, rootScoped: { "B/": ["x.md"] } },
             root
         );
-        expect(result).toEqual({ "workspace/B/": ["x.md"] });
+        expect(result).toEqual({ "workspace/B/": { filesToOpen: ["x.md"] } });
     });
 });
 
