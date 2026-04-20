@@ -1,9 +1,11 @@
 # Sync Tasks
 
 **Command:** `Memoria: Sync Tasks`  
-**Available:** After workspace is initialized (requires Task Collector feature to be enabled)
+**Available:** After workspace is initialized
 
 Triggers a full workspace sync of the [Task Collector](../features/task-collector.md) feature — scanning all included Markdown files and reconciling their tasks with the collector file.
+
+If Task Collector is disabled for the current workspace, running the command shows an error instead of starting a sync.
 
 ## When to use
 

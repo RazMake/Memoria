@@ -83,7 +83,7 @@ Runtime settings are stored in `.memoria/task-collector.json`:
 
 ## Todo Editor
 
-When the Task Collector feature is enabled, `*.todo.md` files open in a **visual task board** instead of raw markdown.
+`*.todo.md` files open in a **visual task board** by default.
 
 ### Card layout
 
@@ -116,9 +116,14 @@ Each active task is displayed as a card with:
 
 A collapsible section at the bottom of the editor (collapsed by default). Completed tasks show their completion date as a badge. Click a completed task's checkbox to move it back to active.
 
-### Fallback
+### Collector integration
 
-When the Task Collector feature is disabled, `*.todo.md` files open as plain text in the standard editor.
+When the Task Collector feature is enabled for the current workspace, the Todo Editor also integrates with the collector index:
+
+- The `Sync` toolbar button runs **Memoria: Sync Tasks**.
+- Collected tasks can resolve their source files for the source-link action.
+
+When the feature is disabled, the file still opens in the Todo Editor and remains editable, but `Sync` shows the same "Task Collector is not enabled for this workspace" error as the command.
 
 ---
 

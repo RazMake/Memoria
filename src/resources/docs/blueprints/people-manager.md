@@ -4,11 +4,11 @@ This template is meant to help managers organize their meeting notes and create 
 
 ## Folder Structure
 
-```
+```text
 📁 00-Workstreams/        ← All active workstreams
    📁 Planning/           ← Planning notes, grouped by quarter
    📁 Team-Evaluations/   ← Individual team members' evaluations
-   📄 MyList.todo         ← The collection of things to do
+   📄 All.todo.md         ← The collection of things to do
 📁 01-ToRemember/         ← The personal wiki/knowledge base
    📁 Trainings/          ← Notes captured from trainings
    📁 Hiring/             ← The process for hiring
@@ -16,15 +16,26 @@ This template is meant to help managers organize their meeting notes and create 
 📁 02-MeetingNotes/       ← All meeting notes to be preserved
    📁 Team-Members-1-1/   ← Notes based on the team 1-1s
 📁 03-Inbox/              ← Default location for new notes
-📁 04-Archive/            ← Old, unused files are preserved here
+📁 05-Archive/            ← Old, unused files are preserved here
+📁 06-Contacts/           ← Contact records and reference data
+   📄 Team.md             ← Direct reports managed by the Contacts sidebar
+   📄 Colleagues.md       ← Colleagues managed by the Contacts sidebar
+   📁 InterviewTemplates/ ← Interview problems and notes
+   📁 DataTypes/          ← Reference data used by contacts
+      📄 CareerLevels.md
+      📄 CareerPaths.md
+      📄 InterviewTypes.md
+      📄 Pronouns.md
 ```
 
 ## Features
 
-### Optional
+### Toggleable
 
 | Feature | Enabled by Default |
 |---------|--------------------|
+| [Task Collector](../features/task-collector.md) | ✅ Yes |
+| [Contacts](../features/contacts.md) | ✅ Yes |
 | [Explorer Decorations](../features/decorations.md) | ✅ Yes |
 
 ### Always on

@@ -1,13 +1,13 @@
 # Default Files
 
-Default files are pre-configured files that open when you use the **Memoria: Open default file(s)** context menu. They provide quick access to the files you use most in each folder.
+Default files are pre-configured files that open when you use the **Open default file(s)** Explorer context-menu entry. They provide quick access to the files you use most in each folder.
 
 ## How it works
 
 Each blueprint defines which folders have default files. When you right-click a folder in the Explorer and select **Open default file(s)**, all configured files for that folder open side by side in the editor.
 
 1. **Right-click** a folder in the Explorer
-2. Select **Memoria: Open default file(s)**
+2. Select **Open default file(s)**
 3. All current editors are closed and the default files open side by side
 
 > The context menu item only appears on folders that have default files configured.
