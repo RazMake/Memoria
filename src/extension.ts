@@ -12,11 +12,19 @@ import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { createOpenDefaultFileCommand } from "./commands/openDefaultFile";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import { createSyncTasksCommand } from "./commands/syncTasks";
+import {
+    createAddPersonCommand,
+    createDeletePersonCommand,
+    createEditPersonCommand,
+    createMovePersonCommand,
+} from "./commands/contactCommands";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
 import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
 import { DefaultFileCompletionProvider, DEFAULT_FILES_JSON_SELECTOR } from "./features/navigator/defaultFileCompletionProvider";
 import { FeatureManager } from "./features/featureManager";
+import { ContactsFeature } from "./features/contacts/contactsFeature";
+import { ContactsViewProvider } from "./features/contacts/contactsViewProvider";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 
@@ -58,13 +66,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
     const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
+    const contactsFeature = new ContactsFeature(manifest);
     const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri);
     const featureManager = new FeatureManager(manifest);
+    let contactsViewDisposable: vscode.Disposable | undefined;
+
+    context.subscriptions.push(
+        contactsFeature,
+        {
+            dispose: () => {
+                contactsViewDisposable?.dispose();
+                contactsViewDisposable = undefined;
+            },
+        },
+    );
+
     featureManager.register("decorations", (root, enabled) =>
         decorationProvider.refresh(root, enabled, getWorkspaceRoots())
     );
     featureManager.register("taskCollector", async (root, enabled) => {
         await taskCollectorFeature.refresh(root, enabled, getWorkspaceRoots());
+    });
+    featureManager.register("contacts", async (root, enabled) => {
+        await contactsFeature.refresh(root, enabled);
+
+        if (enabled && !contactsViewDisposable) {
+            const provider = new ContactsViewProvider(contactsFeature, context.extensionUri);
+            const registration = ContactsViewProvider.register(context, provider);
+            contactsViewDisposable = {
+                dispose: () => {
+                    registration.dispose();
+                    provider.dispose();
+                },
+            };
+            return;
+        }
+
+        if (!enabled && contactsViewDisposable) {
+            contactsViewDisposable.dispose();
+            contactsViewDisposable = undefined;
+        }
     });
 
     // Register the decoration provider eagerly so VS Code is already listening when
@@ -125,7 +166,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     registerFileWatchers(context, roots, manifest, featureManager, initializedRoot, defaultFileWatcherHolder);
     registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
-    registerCommands(context, engine, registry, manifest, telemetry, resolver, featureManager, taskCollectorFeature, onWorkspaceInitialized);
+    registerCommands(
+        context,
+        engine,
+        registry,
+        manifest,
+        telemetry,
+        resolver,
+        featureManager,
+        taskCollectorFeature,
+        contactsFeature,
+        onWorkspaceInitialized,
+    );
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -225,6 +277,7 @@ function registerCommands(
     resolver: WorkspaceInitConflictResolver,
     featureManager: FeatureManager,
     taskCollectorFeature: TaskCollectorFeature,
+    contactsFeature: ContactsFeature,
     onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
 ): void {
     context.subscriptions.push(
@@ -254,6 +307,22 @@ function registerCommands(
         vscode.commands.registerCommand(
             "memoria.syncTasks",
             createSyncTasksCommand(taskCollectorFeature, telemetry)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.addPerson",
+            createAddPersonCommand(contactsFeature)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.editPerson",
+            createEditPersonCommand(contactsFeature)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.deletePerson",
+            createDeletePersonCommand(contactsFeature)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.movePerson",
+            createMovePersonCommand(contactsFeature)
         )
     );
 }

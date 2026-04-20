@@ -3,6 +3,7 @@
 // scaffold, manifest manager, and engine — keeping each component loosely coupled.
 
 import * as vscode from "vscode";
+import type { ContactKind } from "../features/contacts/types";
 import type { TaskCollectorConfig } from "../features/taskCollector/types";
 
 /** Allowed values for the `default` field on a workspace entry. */
@@ -59,8 +60,21 @@ export interface TaskCollectorFeatureEntry extends FeatureEntry {
     config: TaskCollectorConfig;
 }
 
+/** A blueprint-defined contact group file under the contacts people folder. */
+export interface ContactGroup {
+    file: string;
+    type: ContactKind;
+}
+
+/** A contacts feature — provides group-based people data rooted in a blueprint-owned folder. */
+export interface ContactsFeatureEntry extends FeatureEntry {
+    id: "contacts";
+    peopleFolder: string;
+    groups: ContactGroup[];
+}
+
 /** Discriminated union of all known feature types. Expand as new features are added. */
-export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry;
+export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry;
 
 /**
  * Default files split by scope, as returned by `resolveDefaultFiles()`.
@@ -107,6 +121,12 @@ export interface TaskCollectorManifestConfig {
     collectorPath: string;
 }
 
+/** Sub-object within BlueprintManifest that records contacts feature metadata. */
+export interface ContactsManifestConfig {
+    peopleFolder: string;
+    groups: ContactGroup[];
+}
+
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
 export interface BlueprintManifest {
     blueprintId: string;
@@ -116,6 +136,7 @@ export interface BlueprintManifest {
     lastReinitAt: string | null;
     fileManifest: Record<string, string>;
     taskCollector?: TaskCollectorManifestConfig;
+    contacts?: ContactsManifestConfig;
 }
 
 /**

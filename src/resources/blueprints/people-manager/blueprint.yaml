@@ -38,6 +38,16 @@ features:
     description: "Aggregate and sync tasks from markdown files in the workspace into a single place."
     enabledByDefault: true
     collectorPath: "00-Workstreams/All.todo.md"
+  - id: "contacts"
+    name: "Contacts"
+    description: "Browse, search, and manage reports and colleagues."
+    enabledByDefault: true
+    peopleFolder: "06-Contacts/"
+    groups:
+      - file: "Team.md"
+        type: "report"
+      - file: "Colleagues.md"
+        type: "colleague"
   - id: "decorations"
     name: "Explorer Decorations"
     description: "Badges and colors in the VS Code Explorer"

@@ -6,7 +6,7 @@ import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, TaskCollectorFeatureEntry } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, TaskCollectorFeatureEntry, ContactsFeatureEntry } from "./types";
 import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -30,6 +30,7 @@ export class BlueprintEngine {
     async initialize(workspaceRoot: vscode.Uri, blueprintId: string): Promise<void> {
         const definition = await this.registry.getBlueprintDefinition(blueprintId);
         const taskCollector = extractTaskCollectorFeature(definition.features);
+        const contacts = extractContactsFeature(definition.features);
 
         const { fileManifest } = await this.scaffold.scaffoldTree(
             workspaceRoot,
@@ -44,6 +45,7 @@ export class BlueprintEngine {
             lastReinitAt: null,
             fileManifest,
             taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
+            contacts: contacts ? buildContactsManifestConfig(contacts) : undefined,
         };
 
         await this.manifest.writeManifest(workspaceRoot, manifest);
@@ -83,6 +85,7 @@ export class BlueprintEngine {
 
         const newDefinition = await this.registry.getBlueprintDefinition(blueprintId);
         const taskCollector = extractTaskCollectorFeature(newDefinition.features);
+        const contacts = extractContactsFeature(newDefinition.features);
 
         const plan = await resolver.resolveConflicts(
             workspaceRoot,
@@ -133,6 +136,7 @@ export class BlueprintEngine {
             lastReinitAt: new Date().toISOString(),
             fileManifest,
             taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
+            contacts: contacts ? buildContactsManifestConfig(contacts) : undefined,
         };
 
         await this.manifest.writeManifest(workspaceRoot, updatedManifest);
@@ -201,6 +205,18 @@ export function extractDecorationRules(features: BlueprintFeature[]): Decoration
 export function extractTaskCollectorFeature(features: BlueprintFeature[]): TaskCollectorFeatureEntry | null {
     const feature = features.find((entry): entry is TaskCollectorFeatureEntry => entry.id === "taskCollector");
     return feature ?? null;
+}
+
+export function extractContactsFeature(features: BlueprintFeature[]): ContactsFeatureEntry | null {
+    const feature = features.find((entry): entry is ContactsFeatureEntry => entry.id === "contacts");
+    return feature ?? null;
+}
+
+function buildContactsManifestConfig(feature: ContactsFeatureEntry): NonNullable<BlueprintManifest["contacts"]> {
+    return {
+        peopleFolder: feature.peopleFolder,
+        groups: feature.groups.map((group) => ({ ...group })),
+    };
 }
 
 /**

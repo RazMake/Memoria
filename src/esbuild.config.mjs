@@ -31,4 +31,14 @@ await Promise.all([
         sourcemap: isDev,
         minify: !isDev,
     }),
+    build({
+        entryPoints: ["features/contacts/webview/main.ts"],
+        bundle: true,
+        outfile: "dist/contacts-webview.js",
+        format: "iife",
+        platform: "browser",
+        target: "es2022",
+        sourcemap: isDev,
+        minify: !isDev,
+    }),
 ]);

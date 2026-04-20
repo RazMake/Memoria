@@ -14,6 +14,13 @@ extension.ts (activation, DI wiring, versioning check)
   │   ├── featureManager.ts       — feature toggle orchestrator
   │   ├── decorations/
   │   │   └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
+  │   ├── contacts/
+  │   │   ├── contactsFeature.ts      — feature lifecycle, contacts service/query API, file watching, mutations
+  │   │   ├── contactsViewProvider.ts — WebviewViewProvider for the Contacts Activity Bar panel
+  │   │   ├── contactParser.ts        — pure markdown dictionary parsing/serialization for contacts + reference data
+  │   │   ├── integrityCheck.ts       — pure dangling-reference detection/correction helpers
+  │   │   ├── titleGenerator.ts       — canonical normal/short title generation from career paths + levels
+  │   │   └── webview/main.ts         — browser-side contacts sidebar UI (bundled to dist/contacts-webview.js)
   │   └── todoEditor/
   │       ├── types.ts                — UITask, ToWebviewMessage, ToExtensionMessage
   │       ├── documentSerializer.ts   — pure parse/mutate functions for .todo.md
@@ -36,6 +43,8 @@ extension.ts (activation, DI wiring, versioning check)
 ### Factory Functions for Commands
 Command handlers are created by factory functions (`createInitializeWorkspaceCommand`, `createToggleDotFoldersCommand`) that receive dependencies at construction time. This avoids classes for single-operation callbacks while preserving testability via DI.
 
+Contacts commands follow the same pattern (`createAddPersonCommand`, `createEditPersonCommand`, `createDeletePersonCommand`, `createMovePersonCommand`). Palette invocation uses QuickPick fallback; sidebar invocation passes the contact id directly.
+
 ### Dependency Injection
 - All classes take dependencies via constructor injection
 - `typeof vscode.workspace.fs` is the FS abstraction — unit tests pass mock, E2E uses real `vscode.workspace.fs`
@@ -50,6 +59,8 @@ Command handlers are created by factory functions (`createInitializeWorkspaceCom
 
 ### Composition in Engine
 `BlueprintEngine` is a thin orchestrator that sequences calls to `BlueprintRegistry`, `FileScaffold`, and `ManifestManager`. All domain logic lives in the collaborators; the engine just sequences them.
+
+Contacts extends this pattern: blueprint YAML declares only the initial contacts config (`peopleFolder` + group files), and `ContactsFeature` owns the runtime concerns such as custom-group discovery, reference-data loading, watcher-driven reloads, and integrity rewrites.
 
 ### Single Owner of `.memoria/`
 `ManifestManager` is the sole component that reads/writes the `.memoria/` directory. It handles `blueprint.json`, `decorations.json`, and `dotfolders.json`. All write methods call `ensureMemoriaDir()` internally, so no other component needs to know about the metadata folder structure.
@@ -108,6 +119,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - Defer heavy work via `queueMicrotask()` or `void promise.catch()`
 - Background update checks must not block decoration rendering
 - Pre-compute and cache decorations at refresh time, not per `provideFileDecoration()` call
+- Webview-backed features should keep the provider thin and push expensive parsing/resolution work into the feature layer before posting snapshots
 
 ### Refactoring Complex Closures
 - Extract large inline closures to named private methods (e.g. `buildReinitSeedCallback`)
@@ -121,6 +133,8 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - `BlueprintDecorationProvider` depends on `ManifestManager` (reads decorations.json, discovers root)
 - `BlueprintParser` is pure (no vscode dependency) — used only by `BlueprintRegistry`
 - `TodoEditorProvider` depends on `ManifestManager` (reads task index), `documentSerializer` (parse/mutate .todo.md), `taskParser` (parse source files for write-back), `taskWriter.replaceLineRange` (source file edits). Registered/disposed dynamically via `FeatureManager` callback for `taskCollector`. Webview communicates via message protocol (`ToWebviewMessage`/`ToExtensionMessage`).
+- `ContactsFeature` depends on `ManifestManager` for persisted blueprint config, reuses the shared path-normalization utility, and exposes the contacts/query/mutation surface used by both commands and the sidebar provider.
+- `ContactsViewProvider` depends on `ContactsFeature` update + form-request hooks, keeps the webview HTML shell/CSP concerns in one place, and maps runtime snapshots into a UI-specific message protocol.
 
 ## BlueprintDecorationProvider Pattern
 - Registered via `vscode.window.registerFileDecorationProvider` in `extension.ts`

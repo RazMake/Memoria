@@ -331,6 +331,83 @@ describe("parseFeatures", () => {
             },
         ])).toThrow('"collectorPath"');
     });
+
+    it("should parse a valid contacts feature and normalize the people folder path", () => {
+        const features = parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse and manage colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts\\",
+                groups: [{ file: "Colleagues.md", type: "colleague" }],
+            },
+        ]);
+
+        expect(features[0]).toEqual({
+            id: "contacts",
+            name: "Contacts",
+            description: "Browse and manage colleagues.",
+            enabledByDefault: true,
+            peopleFolder: "05-Contacts/",
+            groups: [{ file: "Colleagues.md", type: "colleague" }],
+        });
+    });
+
+    it("should throw when contacts peopleFolder is missing", () => {
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse and manage colleagues.",
+                enabledByDefault: true,
+                groups: [{ file: "Colleagues.md", type: "colleague" }],
+            },
+        ])).toThrow('"peopleFolder"');
+    });
+
+    it("should throw when contacts groups are invalid", () => {
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse and manage colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts/",
+                groups: [
+                    { file: "nested/Colleagues.md", type: "colleague" },
+                    { file: "Team.md", type: "manager" },
+                ],
+            },
+        ])).toThrow('"file"');
+
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse and manage colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts/",
+                groups: [{ file: "Team.md", type: "manager" }],
+            },
+        ])).toThrow('"type"');
+    });
+
+    it("should throw when contacts group files are duplicated case-insensitively", () => {
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse and manage colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts/",
+                groups: [
+                    { file: "Colleagues.md", type: "colleague" },
+                    { file: "colleagues.md", type: "colleague" },
+                ],
+            },
+        ])).toThrow("duplicate contacts group file");
+    });
 });
 
 describe("resolveDefaultFiles", () => {

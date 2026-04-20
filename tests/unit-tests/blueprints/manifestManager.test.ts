@@ -105,6 +105,10 @@ describe("ManifestManager", () => {
             initializedAt: "2026-04-10T00:00:00Z",
             lastReinitAt: null,
             fileManifest: { "Folder/file.md": "sha256:abc123" },
+            contacts: {
+                peopleFolder: "05-Contacts/",
+                groups: [{ file: "Colleagues.md", type: "colleague" }],
+            },
         };
 
         it("should return null when blueprint.json is not found", async () => {

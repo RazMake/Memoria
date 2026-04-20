@@ -42,7 +42,12 @@ describe("package.json command declarations", () => {
     });
 
     it("should guard non-always-visible commands with a 'when' clause", () => {
-        const memoriaContextKeys = ["memoria.workspaceInitialized", "memoria.defaultFileAvailable"];
+        const memoriaContextKeys = [
+            "memoria.workspaceInitialized",
+            "memoria.defaultFileAvailable",
+            "memoria.contactsActive",
+            "memoria.contactsMultiGroup",
+        ];
 
         const unguarded = paletteEntries
             .filter((e) => !ALWAYS_VISIBLE.has(e.command))

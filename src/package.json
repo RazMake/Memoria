@@ -43,11 +43,50 @@
                 "category": "Memoria"
             },
             {
+                "command": "memoria.addPerson",
+                "title": "Add Person",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.editPerson",
+                "title": "Edit Person",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.deletePerson",
+                "title": "Delete Person",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.movePerson",
+                "title": "Move Person",
+                "category": "Memoria"
+            },
+            {
                 "command": "memoria.openUserGuide",
                 "title": "Open User Guide",
                 "category": "Memoria"
             }
         ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "memoria-contacts",
+                    "title": "Contacts",
+                    "icon": "resources/media/contacts-view.svg"
+                }
+            ]
+        },
+        "views": {
+            "memoria-contacts": [
+                {
+                    "type": "webview",
+                    "id": "memoria.contactsView",
+                    "name": "Contacts",
+                    "when": "memoria.contactsActive"
+                }
+            ]
+        },
         "menus": {
             "commandPalette": [
                 {
@@ -64,6 +103,22 @@
                 {
                     "command": "memoria.syncTasks",
                     "when": "memoria.workspaceInitialized"
+                },
+                {
+                    "command": "memoria.addPerson",
+                    "when": "memoria.contactsActive"
+                },
+                {
+                    "command": "memoria.editPerson",
+                    "when": "memoria.contactsActive"
+                },
+                {
+                    "command": "memoria.deletePerson",
+                    "when": "memoria.contactsActive"
+                },
+                {
+                    "command": "memoria.movePerson",
+                    "when": "memoria.contactsActive && memoria.contactsMultiGroup"
                 },
                 {
                     "command": "memoria.openUserGuide"

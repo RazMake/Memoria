@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BlueprintEngine, buildFeaturesConfig, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
+import { BlueprintEngine, buildFeaturesConfig, extractContactsFeature, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
 import type { BlueprintDefinition, BlueprintFeature, FeaturesConfig } from "../../../src/blueprints/types";
 
 // BlueprintEngine uses only injected collaborators — no direct vscode API calls.
@@ -63,6 +63,23 @@ const taskCollectorDefinition: BlueprintDefinition = {
                 debounceMs: 300,
             },
         },
+    ],
+};
+
+const contactsFeature = {
+    id: "contacts" as const,
+    name: "Contacts",
+    description: "Browse and manage colleagues.",
+    enabledByDefault: true,
+    peopleFolder: "05-Contacts/",
+    groups: [{ file: "Colleagues.md", type: "colleague" as const }],
+};
+
+const contactsDefinition: BlueprintDefinition = {
+    ...mockDefinition,
+    features: [
+        ...mockDefinition.features,
+        contactsFeature,
     ],
 };
 
@@ -263,6 +280,23 @@ describe("BlueprintEngine", () => {
                 workspaceRoot,
                 expect.objectContaining({
                     taskCollector: { collectorPath: "00-Tasks/All-Tasks.md" },
+                })
+            );
+        });
+
+        it("should write contacts config into the manifest when the blueprint defines the feature", async () => {
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(contactsDefinition);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+
+            await engine.initialize(workspaceRoot, "individual-contributor");
+
+            expect(mockManifest.writeManifest).toHaveBeenCalledWith(
+                workspaceRoot,
+                expect.objectContaining({
+                    contacts: {
+                        peopleFolder: "05-Contacts/",
+                        groups: [{ file: "Colleagues.md", type: "colleague" }],
+                    },
                 })
             );
         });
@@ -491,6 +525,33 @@ describe("BlueprintEngine", () => {
             );
         });
 
+        it("should write contacts config into the updated manifest during reinit", async () => {
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(contactsDefinition);
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+
+            await engine.reinitialize(workspaceRoot, "individual-contributor", mockResolver);
+
+            expect(mockManifest.writeManifest).toHaveBeenCalledWith(
+                workspaceRoot,
+                expect.objectContaining({
+                    contacts: {
+                        peopleFolder: "05-Contacts/",
+                        groups: [{ file: "Colleagues.md", type: "colleague" }],
+                    },
+                })
+            );
+        });
+
+    });
+});
+
+describe("extractContactsFeature", () => {
+    it("should return the contacts feature when present", () => {
+        expect(extractContactsFeature(contactsDefinition.features)).toEqual(contactsFeature);
+    });
+
+    it("should return null when the blueprint has no contacts feature", () => {
+        expect(extractContactsFeature(mockDefinition.features)).toBeNull();
     });
 });
 

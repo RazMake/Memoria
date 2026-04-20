@@ -14,6 +14,7 @@
 - **Structural/perf improvements**: Cached reinit hashes, multi-root file watchers, parallel hash reads, extracted activate() helpers, removed dead ManifestManager.computeFileHash wrapper
 - **Task Collector feature**: Two-way sync of Markdown tasks (`- [ ]`/`- [x]`) between source files and a blueprint-defined collector file. Save-triggered sync via `SyncQueue`, self-write suppression via `PendingWrites`, Myers-style alignment for rename-safe task identity, relative path rewriting for images/links, completed-task aging and pruning, manual (collector-only) tasks, `Memoria: Sync Tasks` command. Documented in user guide.
 - **Custom Todo Editor**: `CustomTextEditorProvider` for `*.todo.md` files — visual task board with drag-and-drop reordering, checkbox completion/un-completion (optimistic UI), add/edit task popups, source file navigation, and collapsible completed section. Feature-gated via `taskCollector` toggle. Webview powered by `markdown-it` for task body rendering. Source file write-back for collected tasks. Documented in user guide.
+- **Contacts feature**: Activity Bar sidebar for browsing, searching, adding, editing, deleting, and moving contacts stored in blueprint-owned Markdown group files. Includes reference-data loading, code-only `unknown` fallbacks, canonical title generation, custom group creation, debounced file watching, and integrity rewrites. Documented in the user guide.
 
 ## What's Left (Not Implemented)
 - **`.vscodeignore`**: Not yet created (needed for publishing)
@@ -22,12 +23,13 @@
 - **`patch-package`**: Istanbul crash patch not persisted across `npm install`
 
 ## Current Status
-Version 0.0.1, not publicly released. All three phases complete and verified.
+Version 0.0.1, not publicly released. Contacts is implemented and verified with unit tests plus a focused Contacts E2E suite.
 
 ## Known Issues
 - `blueprintEngine.ts` branch coverage at 90% (the `buildSeedCallback` inner function has complex branching)
 - E2E tests depend on real Extension Host — can be slow on CI
 - Istanbul crash patch in `node_modules` is not persisted across `npm install`—needs `patch-package` or upstream fix
+- The full `npm run test:integration` suite still has unrelated existing failures in Todo Editor / Task Collector tests; the Contacts-only filtered E2E run passes.
 
 ## Evolution of Decisions
 1. **Vitest for unit tests** (ADR-0001): Chosen over Mocha for better ESM support, built-in mocking, and faster execution.

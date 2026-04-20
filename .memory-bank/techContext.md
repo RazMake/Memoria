@@ -46,6 +46,9 @@
 ### Stale `.js` Files
 Manual `tsc` runs can create `.js`/`.js.map` files in `src/blueprints/`, `src/commands/`, and `src/features/` that cause "Cannot find module 'vscode'" errors in Vitest. Delete them if tests fail with that error.
 
+### Webview Form Blur Races
+In webview forms that rerender on `blur`/commit, inline controls such as calendar buttons should prevent focus changes on `pointerdown` when they live beside an input. Otherwise the input's blur handler can rerender the form and disconnect the clicked button before its `click` handler fires.
+
 ### extension.ts Unit Test Mock Requirements
 The `extension.ts` unit test `vi.mock("vscode", ...)` must include `EventEmitter`, `ThemeColor`, `FileDecoration`, and `window.registerFileDecorationProvider` — `BlueprintDecorationProvider` is instantiated during `activate()` and uses all of these at construction time.
 

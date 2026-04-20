@@ -5,9 +5,10 @@
 import { parse } from "yaml";
 import { DEFAULT_TASK_COLLECTOR_CONFIG } from "../features/taskCollector/taskIndex";
 import { normalizePath } from "../utils/path";
-import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope } from "./types";
+import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope, ContactGroup } from "./types";
 
 const VALID_DEFAULT_SCOPES: ReadonlySet<string> = new Set<DefaultScope>(["relative", "includingRoot"]);
+const VALID_CONTACT_GROUP_TYPES: ReadonlySet<ContactGroup["type"]> = new Set(["report", "colleague"]);
 
 /**
  * Parses a blueprint.yaml string into a validated BlueprintDefinition.
@@ -207,6 +208,15 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
                         ),
                     },
                 };
+            case "contacts":
+                return {
+                    id,
+                    name: entry["name"] as string,
+                    description: entry["description"] as string,
+                    enabledByDefault: entry["enabledByDefault"] as boolean,
+                    peopleFolder: parsePeopleFolder(entry["peopleFolder"], index),
+                    groups: parseContactGroups(entry["groups"], index),
+                };
             default:
                 throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
         }
@@ -219,16 +229,82 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
  * matching VS Code's Uri.path conventions regardless of the author's OS.
  */
 function parseCollectorPath(raw: unknown, index: number): string {
+    return parseRelativePathField(raw, index, "collectorPath", "file");
+}
+
+function parsePeopleFolder(raw: unknown, index: number): string {
+    return parseRelativePathField(raw, index, "peopleFolder", "folder");
+}
+
+function parseContactGroups(raw: unknown, index: number): ContactGroup[] {
+    if (!Array.isArray(raw)) {
+        throw new Error(`Feature entry at index ${index}: "groups" must be an array.`);
+    }
+
+    const seenFiles = new Set<string>();
+    return raw.map((item: unknown, groupIndex: number) => {
+        if (!item || typeof item !== "object") {
+            throw new Error(`Feature entry at index ${index}: group at index ${groupIndex} must be an object.`);
+        }
+
+        const entry = item as Record<string, unknown>;
+        const file = parseContactGroupFile(entry["file"], index, groupIndex);
+        const type = parseContactGroupType(entry["type"], index, groupIndex);
+        const normalizedKey = file.toLowerCase();
+        if (seenFiles.has(normalizedKey)) {
+            throw new Error(`Feature entry at index ${index}: duplicate contacts group file "${file}".`);
+        }
+        seenFiles.add(normalizedKey);
+
+        return { file, type };
+    });
+}
+
+function parseContactGroupFile(raw: unknown, index: number, groupIndex: number): string {
+    const file = parseRelativePathField(raw, index, `groups[${groupIndex}].file`, "file");
+    if (file.includes("/")) {
+        throw new Error(`Feature entry at index ${index}: group at index ${groupIndex}: "file" must be a file name, not a nested path.`);
+    }
+    if (!file.toLowerCase().endsWith(".md")) {
+        throw new Error(`Feature entry at index ${index}: group at index ${groupIndex}: "file" must end with ".md".`);
+    }
+    return file;
+}
+
+function parseContactGroupType(raw: unknown, index: number, groupIndex: number): ContactGroup["type"] {
+    if (typeof raw !== "string" || !VALID_CONTACT_GROUP_TYPES.has(raw as ContactGroup["type"])) {
+        throw new Error(`Feature entry at index ${index}: group at index ${groupIndex}: "type" must be "report" or "colleague".`);
+    }
+    return raw as ContactGroup["type"];
+}
+
+function parseRelativePathField(
+    raw: unknown,
+    index: number,
+    field: string,
+    kind: "file" | "folder",
+): string {
+    const expected = kind === "folder" ? "relative folder path" : "relative file path";
     if (typeof raw !== "string" || !raw.trim()) {
-        throw new Error(`Feature entry at index ${index}: "collectorPath" must be a non-empty string.`);
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a non-empty ${expected}.`);
     }
 
-    const normalized = normalizePath(raw);
-    if (normalized.startsWith("/") || normalized.endsWith("/")) {
-        throw new Error(`Feature entry at index ${index}: "collectorPath" must be a relative file path.`);
+    const normalizedInput = normalizePath(raw.trim());
+    const normalized = kind === "folder"
+        ? normalizedInput.replace(/\/+$/, "")
+        : normalizedInput;
+
+    if (!normalized || normalized.startsWith("/")) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a ${expected}.`);
+    }
+    if (kind === "file" && normalized.endsWith("/")) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a ${expected}.`);
+    }
+    if (normalized.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
+        throw new Error(`Feature entry at index ${index}: "${field}" must be a ${expected}.`);
     }
 
-    return normalized;
+    return kind === "folder" ? normalized + "/" : normalized;
 }
 
 function parseOptionalField<T>(
