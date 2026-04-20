@@ -14,7 +14,7 @@ Each blueprint defines which folders have default files. When you right-click a 
 
 ## Configuration
 
-Default files are set up by the blueprint during initialization and stored in `.memoria/default-files.json`. The format maps folder paths to arrays of file names:
+Default files are set up by the blueprint during initialization and stored in `.memoria/default-files.json`. The format maps folder paths to arrays of file paths:
 
 ```json
 {
@@ -25,6 +25,21 @@ Default files are set up by the blueprint during initialization and stored in `.
 When editing this file, Memoria provides **auto-completion** for folder paths (relative and root-prefixed) and file names within those folders.
 
 Changes to `default-files.json` are picked up **live** — the context menu updates without reloading VS Code.
+
+### Opening files from another root
+
+In a multi-root workspace, you can open files from a **different root** by prefixing the file path with the target root's folder name:
+
+```json
+{
+  "00-ToDo/": [
+    "Main.todo",
+    "ProjectB/00-Notes/Index.md"
+  ]
+}
+```
+
+Here, `Main.todo` is resolved relative to the right-clicked folder as usual, while `ProjectB/00-Notes/Index.md` is resolved from the `ProjectB` workspace root — regardless of which folder was clicked. Auto-completion in `default-files.json` suggests root names as a prefix to help you discover and build these paths.
 
 > **Warning:** Using this command closes all currently open editors before opening the default files side by side. Make sure to save any unsaved work first.
 

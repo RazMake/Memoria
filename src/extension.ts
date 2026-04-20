@@ -5,7 +5,7 @@ import { ManifestManager } from "./blueprints/manifestManager";
 import { FileScaffold } from "./blueprints/fileScaffold";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
-import { getWorkspaceRoots, getRootFolderName, classifyFolderKey } from "./blueprints/workspaceUtils";
+import { getWorkspaceRoots, getRootFolderName, classifyFolderKey, classifyFilePath } from "./blueprints/workspaceUtils";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
 import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
 import { createManageFeaturesCommand } from "./commands/manageFeatures";
@@ -388,11 +388,18 @@ async function updateDefaultFileContext(
                             const folderSegments = relFolder.endsWith("/") ? relFolder.slice(0, -1) : relFolder;
                             let folderHasFile = false;
                             for (const fileName of filePaths) {
-                                const fileUri = vscode.Uri.joinPath(
-                                    root,
-                                    ...folderSegments.split("/"),
-                                    ...fileName.split("/")
-                                );
+                                const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(fileName, rootNameSet);
+                                let fileUri: vscode.Uri;
+                                if (isWorkspaceAbsolute) {
+                                    const fileRoot = allRoots.find((r) => getRootFolderName(r) === fileRootName) ?? root;
+                                    fileUri = vscode.Uri.joinPath(fileRoot, ...relPath.split("/").filter(Boolean));
+                                } else {
+                                    fileUri = vscode.Uri.joinPath(
+                                        root,
+                                        ...folderSegments.split("/"),
+                                        ...fileName.split("/")
+                                    );
+                                }
                                 try {
                                     await vscode.workspace.fs.stat(fileUri);
                                     folderHasFile = true;

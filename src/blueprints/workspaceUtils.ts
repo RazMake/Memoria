@@ -38,3 +38,28 @@ export function classifyFolderKey(
     const relFolder = isRootSpecific ? key.slice(firstSlash + 1) : key;
     return { isRootSpecific, relFolder, rootName: firstSegment };
 }
+
+/**
+ * Classifies a file path entry in default-files.json as workspace-absolute or folder-relative.
+ *
+ * Workspace-absolute paths have their first segment matching a workspace root name
+ * (e.g. "ProjectA/00-ToDo/Main.todo"). The file is resolved from that root, ignoring
+ * the folder context used to trigger the command — making it possible to open files
+ * from any root in a multi-root workspace.
+ *
+ * Folder-relative paths (e.g. "Main.todo", "sub/file.md") are resolved relative to
+ * the folder that was right-clicked (the existing behaviour).
+ */
+export function classifyFilePath(
+    filePath: string,
+    rootNameSet: ReadonlySet<string>
+): { isWorkspaceAbsolute: boolean; rootName: string; relPath: string } {
+    const firstSlash = filePath.indexOf("/");
+    if (firstSlash === -1) {
+        return { isWorkspaceAbsolute: false, rootName: "", relPath: filePath };
+    }
+    const firstSegment = filePath.slice(0, firstSlash);
+    const isWorkspaceAbsolute = rootNameSet.has(firstSegment);
+    const relPath = isWorkspaceAbsolute ? filePath.slice(firstSlash + 1) : filePath;
+    return { isWorkspaceAbsolute, rootName: firstSegment, relPath };
+}

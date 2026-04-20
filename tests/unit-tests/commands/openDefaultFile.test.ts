@@ -328,6 +328,59 @@ describe("createOpenDefaultFileCommand", () => {
         // No match for "other-workspace" — should not open anything.
         expect(mockExecuteCommand).not.toHaveBeenCalledWith("vscode.open", expect.anything(), expect.anything());
     });
+
+    it("should open a workspace-absolute file from a different root", async () => {
+        const otherRoot = { path: "/other-workspace" } as any;
+        mockWorkspaceFolders.push({ uri: workspaceRoot }, { uri: otherRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        // File path "other-workspace/00-Notes/Index.md" is workspace-absolute — first
+        // segment matches the "other-workspace" root name.
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": ["Main.todo", "other-workspace/00-Notes/Index.md"],
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const folderUri = { path: "/workspace/00-ToDo" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(2);
+
+        // First file is folder-relative → resolved under workspaceRoot/00-ToDo/.
+        expect(vsCodeOpenCalls[0][1]).toEqual(
+            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+        );
+        // Second file is workspace-absolute → resolved from "other-workspace" root.
+        expect(vsCodeOpenCalls[1][1]).toEqual(
+            expect.objectContaining({ path: "/other-workspace/00-Notes/Index.md" }),
+        );
+    });
+
+    it("should fall back to owning root when workspace-absolute root name is not found", async () => {
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        // "UnknownRoot" is not a workspace root name, so the path is folder-relative.
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": ["UnknownRoot/Notes.md"],
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const folderUri = { path: "/workspace/00-ToDo" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        // "UnknownRoot" is not a known root → treated as folder-relative.
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/UnknownRoot/Notes.md" }),
+            expect.anything(),
+        );
+    });
 });
 
 describe("promptToSaveDirtyFiles", () => {

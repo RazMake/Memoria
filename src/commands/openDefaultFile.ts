@@ -3,7 +3,7 @@
 
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
-import { getRootFolderName } from "../blueprints/workspaceUtils";
+import { getRootFolderName, classifyFilePath } from "../blueprints/workspaceUtils";
 
 export { getRootFolderName } from "../blueprints/workspaceUtils";
 
@@ -59,6 +59,9 @@ export function createOpenDefaultFileCommand(
         const rootName = getRootFolderName(workspaceRoot);
         const targetFiles = defaultFiles[rootName + "/" + folderKey] ?? defaultFiles[folderKey];
 
+        // Build a set of root names for workspace-absolute file path classification.
+        const rootNameSet = new Set(folders.map((f) => getRootFolderName(f.uri)));
+
         if (!targetFiles || targetFiles.length === 0) {
             return;
         }
@@ -76,17 +79,27 @@ export function createOpenDefaultFileCommand(
         await vscode.window.tabGroups.close(allTabs);
 
         // Open each file side by side, skipping any that are missing.
-        // File paths are relative to the matched folder, not to the workspace root.
+        // File paths are either:
+        //   - Workspace-absolute: first segment matches a root name (e.g. "ProjectA/00-ToDo/Main.todo")
+        //     → resolved from that root, ignoring the owning folder.
+        //   - Folder-relative: resolved from the matched folder (existing behaviour).
         // Each file is opened in its own editor column so related files are visible
         // side by side. The default file feature is designed as a "workspace layout reset"
         // — opening a curated set of files arranged for a specific folder's workflow.
         let nextColumn = vscode.ViewColumn.One;
         for (const filePath of targetFiles) {
-            const fileUri = vscode.Uri.joinPath(
-                workspaceRoot,
-                ...relativeFolderPath.split("/").filter(Boolean),
-                ...filePath.split("/")
-            );
+            const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(filePath, rootNameSet);
+            let fileUri: vscode.Uri;
+            if (isWorkspaceAbsolute) {
+                const fileRoot = folders.find((f) => getRootFolderName(f.uri) === fileRootName)?.uri ?? workspaceRoot;
+                fileUri = vscode.Uri.joinPath(fileRoot, ...relPath.split("/").filter(Boolean));
+            } else {
+                fileUri = vscode.Uri.joinPath(
+                    workspaceRoot,
+                    ...relativeFolderPath.split("/").filter(Boolean),
+                    ...filePath.split("/")
+                );
+            }
             try {
                 await vscode.commands.executeCommand("vscode.open", fileUri, {
                     viewColumn: nextColumn,

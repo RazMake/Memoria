@@ -26,7 +26,23 @@ Folder paths can be either:
 
 ## Values
 
-Each value is an array of file names relative to the matched folder (not the workspace root).
+Each value is an array of file paths. Paths can be either:
+
+- **Folder-relative** (e.g., `"Main.todo"`, `"sub/notes.md"`) — resolved relative to the matched folder (the default)
+- **Workspace-absolute** (e.g., `"ProjectB/00-Notes/Index.md"`) — when the first segment matches a workspace root name, the file is resolved from that root, regardless of which folder triggered the command. This lets you open files from any root in a multi-root workspace.
+
+```json
+{
+  "defaultFiles": {
+    "00-ToDo/": [
+      "Main.todo",
+      "ProjectB/00-Notes/Index.md"
+    ]
+  }
+}
+```
+
+In the example above, right-clicking `00-ToDo/` in any root opens `Main.todo` from that folder, plus `Index.md` from `ProjectB`'s `00-Notes/` folder.
 
 ## When is it updated?
 

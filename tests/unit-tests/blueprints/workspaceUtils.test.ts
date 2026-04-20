@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
     },
 }));
 
-import { getWorkspaceRoots, getRootFolderName, classifyFolderKey } from '../../../src/blueprints/workspaceUtils';
+import { getWorkspaceRoots, getRootFolderName, classifyFolderKey, classifyFilePath } from '../../../src/blueprints/workspaceUtils';
 
 describe('getWorkspaceRoots', () => {
     it('should return empty array when no workspace folders are open', () => {
@@ -86,5 +86,46 @@ describe('classifyFolderKey', () => {
         expect(result.isRootSpecific).toBe(true);
         expect(result.relFolder).toBe('src/docs/');
         expect(result.rootName).toBe('ProjectB');
+    });
+});
+
+describe('classifyFilePath', () => {
+    const roots = new Set(['ProjectA', 'ProjectB']);
+
+    it('should classify a bare filename as folder-relative', () => {
+        const result = classifyFilePath('Main.todo', roots);
+        expect(result.isWorkspaceAbsolute).toBe(false);
+        expect(result.relPath).toBe('Main.todo');
+    });
+
+    it('should classify a path whose first segment is a root name as workspace-absolute', () => {
+        const result = classifyFilePath('ProjectA/00-ToDo/Main.todo', roots);
+        expect(result.isWorkspaceAbsolute).toBe(true);
+        expect(result.rootName).toBe('ProjectA');
+        expect(result.relPath).toBe('00-ToDo/Main.todo');
+    });
+
+    it('should classify a path from a second root as workspace-absolute', () => {
+        const result = classifyFilePath('ProjectB/notes/Index.md', roots);
+        expect(result.isWorkspaceAbsolute).toBe(true);
+        expect(result.rootName).toBe('ProjectB');
+        expect(result.relPath).toBe('notes/Index.md');
+    });
+
+    it('should classify a subfolder path whose first segment is not a root name as folder-relative', () => {
+        const result = classifyFilePath('sub/file.md', roots);
+        expect(result.isWorkspaceAbsolute).toBe(false);
+        expect(result.relPath).toBe('sub/file.md');
+    });
+
+    it('should classify a path starting with an unknown first segment as folder-relative', () => {
+        const result = classifyFilePath('SomeFolder/notes.md', roots);
+        expect(result.isWorkspaceAbsolute).toBe(false);
+        expect(result.relPath).toBe('SomeFolder/notes.md');
+    });
+
+    it('should return empty rootName for folder-relative paths', () => {
+        const result = classifyFilePath('Main.todo', roots);
+        expect(result.rootName).toBe('');
     });
 });
