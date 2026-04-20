@@ -4,8 +4,13 @@
     "description": "Scaffold a personal knowledge base in a workspace - organize notes, meetings, contacts, and TODOs with optional Copilot integration.",
     "version": "0.0.1",
     "publisher": "RazMake",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/RazMake/Memoria"
+    },
+    "license": "Elastic-2.0",
     "engines": {
-        "vscode": "^1.100.0"
+        "vscode": "^1.116.0"
     },
     "categories": [
         "Other"
