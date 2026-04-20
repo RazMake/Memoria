@@ -9,6 +9,14 @@
     "npm run build": true,
     "npm install": true,
     "npm audit": true,
-    "npm test": true
+    "npm test": true,
+    "Test-Path": true,
+    "Get-Process": true,
+    "Get-NetTCPConnection": true,
+    "ForEach-Object": true,
+    "uvx": true,
+    "pip": true,
+    "where.exe": true,
+    "uv": true
   }
 }
