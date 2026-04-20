@@ -164,7 +164,8 @@
         "compile:tests": "tsc -p ../tests/e2e-tests/tsconfig.json",
         "pretest:integration": "npm run build && npm run compile:tests",
         "test:integration": "vscode-test",
-        "package": "vsce package --out ../publish/",
+        "prepackage": "node -e \"require('fs').mkdirSync('../publish',{recursive:true})\"",
+        "package": "node -e \"const p=require('./package.json');const {execSync}=require('child_process');execSync('vsce package --out ../publish/memoria-'+p.version+'.vsix',{stdio:'inherit'})\"",
         "typecheck": "tsc --noEmit",
         "lint": "eslint . --ext .ts"
     },
