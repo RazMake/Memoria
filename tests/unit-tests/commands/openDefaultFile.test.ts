@@ -425,6 +425,80 @@ describe("createOpenDefaultFileCommand", () => {
         expect(vsCodeOpenCalls[0][2]).toEqual({ viewColumn: -1, preview: false });
         expect(vsCodeOpenCalls[1][2]).toEqual({ viewColumn: -1, preview: false });
     });
+
+    it("should open parent config when clicked folder is a compact-mode leaf (single child)", async () => {
+        // VS Code compact folder mode: "00-ToDo/Projects" is displayed as one item
+        // when Projects is the only subfolder. Right-clicking it passes the leaf URI.
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        // folderUri is the leaf "Projects" inside "00-ToDo", not "00-ToDo" itself.
+        const folderUri = { path: "/workspace/00-ToDo/Projects" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        // Files should be resolved from the parent "00-ToDo/" config.
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+            expect.anything(),
+        );
+    });
+
+    it("should open ancestor config when clicked folder is a deep compact-mode chain", async () => {
+        // VS Code compact folder mode: "00-ToDo/Projects/Active" is displayed as one item
+        // when each folder has exactly one subfolder. Right-clicking passes the deepest URI.
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": { filesToOpen: ["Main.todo"] },
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        // folderUri is two levels deep inside "00-ToDo".
+        const folderUri = { path: "/workspace/00-ToDo/Projects/Active" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        // Files should be resolved from the "00-ToDo/" ancestor config.
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+            expect.anything(),
+        );
+    });
+
+    it("should prefer direct config over parent config when both exist", async () => {
+        mockWorkspaceFolders.push({ uri: workspaceRoot });
+        mockManifest.findInitializedRoot.mockResolvedValue(workspaceRoot);
+        mockManifest.readDefaultFiles.mockResolvedValue({
+            "00-ToDo/": { filesToOpen: ["Parent.todo"] },
+            "00-ToDo/Projects/": { filesToOpen: ["Project.todo"] },
+        });
+
+        mockExecuteCommand.mockResolvedValue(undefined);
+
+        const folderUri = { path: "/workspace/00-ToDo/Projects" } as any;
+        const handler = createOpenDefaultFileCommand(mockManifest);
+        await handler(folderUri);
+
+        // Direct config for "00-ToDo/Projects/" takes priority.
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "vscode.open",
+            expect.objectContaining({ path: "/workspace/00-ToDo/Projects/Project.todo" }),
+            expect.anything(),
+        );
+        const vsCodeOpenCalls = mockExecuteCommand.mock.calls.filter(
+            (c: any[]) => c[0] === "vscode.open",
+        );
+        expect(vsCodeOpenCalls).toHaveLength(1);
+    });
 });
 
 describe("promptToSaveDirtyFiles", () => {

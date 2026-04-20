@@ -342,6 +342,31 @@ async function updateWorkspaceInitializedContext(
 }
 
 /**
+ * Walks down single-child subfolder chains and adds each step to `lookup`.
+ * VS Code compact folder mode shows "parent/child" as one tree item when `child`
+ * is the only subfolder of `parent`. The right-click resource URI is the leaf
+ * folder, so the leaf must be in the lookup for the context menu `when` clause.
+ */
+async function addCompactChainDescendants(
+    folderUri: vscode.Uri,
+    lookup: Record<string, true>,
+    depth = 0
+): Promise<void> {
+    if (depth >= 50) { return; } // guard against unexpectedly deep chains
+    try {
+        const entries = await vscode.workspace.fs.readDirectory(folderUri);
+        const subfolders = entries.filter(([, type]) => type === vscode.FileType.Directory);
+        if (subfolders.length === 1) {
+            const childUri = vscode.Uri.joinPath(folderUri, subfolders[0][0]);
+            lookup[childUri.toString()] = true;
+            await addCompactChainDescendants(childUri, lookup, depth + 1);
+        }
+    } catch {
+        // Folder not readable — skip.
+    }
+}
+
+/**
  * Sets the VS Code context keys for default file availability.
  * - `memoria.defaultFileAvailable`: true when at least one default file exists on disk.
  * - `memoria.defaultFileFolders`: lookup object mapping full folder URI → true for
@@ -414,6 +439,9 @@ async function updateDefaultFileContext(
                                     ? vscode.Uri.joinPath(root, ...folderSegments.split("/"))
                                     : root;
                                 folderLookup[folderUri.toString()] = true;
+                                // Also register single-child subfolder chains so the context
+                                // menu appears on compact "parent/child" items in the explorer.
+                                await addCompactChainDescendants(folderUri, folderLookup);
                             }
                         })()
                     );

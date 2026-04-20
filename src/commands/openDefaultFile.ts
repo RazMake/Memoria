@@ -50,7 +50,7 @@ export function createOpenDefaultFileCommand(
         const rootPath = workspaceRoot.path.endsWith("/")
             ? workspaceRoot.path
             : workspaceRoot.path + "/";
-        const relativeFolderPath = folderUri.path.slice(rootPath.length);
+        let relativeFolderPath = folderUri.path.slice(rootPath.length);
         // Normalize to match the keys in defaultFiles (folder paths end with "/").
         const folderKey = relativeFolderPath.endsWith("/")
             ? relativeFolderPath
@@ -59,7 +59,27 @@ export function createOpenDefaultFileCommand(
         // Root-prefixed key (e.g. "MyRoot/00-ToDo/") takes priority over
         // relative key (e.g. "00-ToDo/") for root-specific matching.
         const rootName = getRootFolderName(workspaceRoot);
-        const targetEntry = defaultFiles[rootName + "/" + folderKey] ?? defaultFiles[folderKey];
+        let targetEntry = defaultFiles[rootName + "/" + folderKey] ?? defaultFiles[folderKey];
+
+        // Fallback: walk up the directory tree to handle VS Code compact folder mode.
+        // When a folder has exactly one subfolder, VS Code displays them together as
+        // "parent/child" and passes the leaf folder's URI as the right-click resource.
+        // The config entry lives on the parent, so we traverse upward to find it.
+        if (!targetEntry) {
+            let parentRelPath = relativeFolderPath;
+            while (!targetEntry) {
+                const lastSlash = parentRelPath.lastIndexOf("/");
+                if (lastSlash < 0) { break; }
+                parentRelPath = parentRelPath.substring(0, lastSlash);
+                const parentKey = parentRelPath + "/";
+                const parentEntry = defaultFiles[rootName + "/" + parentKey] ?? defaultFiles[parentKey];
+                if (parentEntry) {
+                    targetEntry = parentEntry;
+                    // Resolve files relative to the ancestor folder that owns the config.
+                    relativeFolderPath = parentRelPath;
+                }
+            }
+        }
 
         // Build a set of root names for workspace-absolute file path classification.
         const rootNameSet = new Set(folders.map((f) => getRootFolderName(f.uri)));
