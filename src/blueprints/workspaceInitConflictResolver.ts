@@ -6,6 +6,13 @@
 //   Phase A — parallel I/O: hash files, back up conflicts to WorkspaceInitializationBackups/
 //   Phase B — folder QuickPick: user keeps (checked) or removes (unchecked) extra folders
 //   Phase C — file QuickPick: user selects which conflicting files to open in diff after reinit
+//
+// Re-initialization conflict resolution uses a three-phase design:
+//   Phase A (I/O): Read files, compute hashes, detect modifications since last init
+//   Phase B (Folder cleanup): Prompt user to move extra top-level folders to ReInitializationCleanup/
+//   Phase C (File merge): For each modified file, prompt user to overwrite or keep current version
+// Phases are separated so that all I/O completes before any user prompts appear,
+// and folder-level decisions are made before individual file decisions.
 
 import * as vscode from "vscode";
 import { computeFileHash } from "./hashUtils";

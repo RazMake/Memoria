@@ -127,6 +127,70 @@ describe("contactCommands", () => {
         expect(mockShowQuickPick).not.toHaveBeenCalled();
     });
 
+    it("should show an informational message when edit is invoked while contacts is inactive", async () => {
+        mockFeature.isActive.mockReturnValue(false);
+
+        await createEditPersonCommand(mockFeature as any)();
+
+        expect(mockShowInformationMessage).toHaveBeenCalledWith(
+            "Memoria: Contacts is not enabled for this workspace."
+        );
+        expect(mockFeature.requestEditContactForm).not.toHaveBeenCalled();
+    });
+
+    it("should show an informational message when delete is invoked while contacts is inactive", async () => {
+        mockFeature.isActive.mockReturnValue(false);
+
+        await createDeletePersonCommand(mockFeature as any)();
+
+        expect(mockShowInformationMessage).toHaveBeenCalledWith(
+            "Memoria: Contacts is not enabled for this workspace."
+        );
+        expect(mockFeature.deleteContact).not.toHaveBeenCalled();
+    });
+
+    it("should show an informational message when move is invoked while contacts is inactive", async () => {
+        mockFeature.isActive.mockReturnValue(false);
+
+        await createMovePersonCommand(mockFeature as any)();
+
+        expect(mockShowInformationMessage).toHaveBeenCalledWith(
+            "Memoria: Contacts is not enabled for this workspace."
+        );
+        expect(mockFeature.moveContact).not.toHaveBeenCalled();
+    });
+
+    it("should do nothing when the user cancels the edit contact QuickPick", async () => {
+        mockFeature.getAllContacts.mockReturnValue([makeResolvedContact()]);
+        mockShowQuickPick.mockResolvedValue(undefined);
+
+        await createEditPersonCommand(mockFeature as any)();
+
+        expect(mockFeature.requestEditContactForm).not.toHaveBeenCalled();
+    });
+
+    it("should do nothing when the user cancels the delete contact QuickPick", async () => {
+        mockFeature.getAllContacts.mockReturnValue([makeResolvedContact()]);
+        mockShowQuickPick.mockResolvedValue(undefined);
+
+        await createDeletePersonCommand(mockFeature as any)();
+
+        expect(mockFeature.deleteContact).not.toHaveBeenCalled();
+    });
+
+    it("should not delete when the user declines the confirmation prompt", async () => {
+        const contact = makeResolvedContact();
+        mockFeature.getAllContacts.mockReturnValue([contact]);
+        mockFeature.getContactById.mockReturnValue(contact);
+        mockShowQuickPick
+            .mockResolvedValueOnce({ contactId: "alias1" })
+            .mockResolvedValueOnce(undefined);
+
+        await createDeletePersonCommand(mockFeature as any)();
+
+        expect(mockFeature.deleteContact).not.toHaveBeenCalled();
+    });
+
     it("should request the move form instead of moving directly when a colleague is sent to a report group", async () => {
         const contact = makeResolvedContact();
         mockFeature.getContactById.mockReturnValue(contact);

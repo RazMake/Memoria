@@ -9,6 +9,10 @@
 //
 // Only one strategy can match a given pair; matched items are removed from consideration for
 // subsequent strategies so each task is matched at most once.
+//
+// Myers-diff-style alignment is used instead of simpler positional matching because
+// tasks can be reordered, inserted, or deleted between syncs. Positional matching
+// would lose task identity on any reorder; alignment preserves stable IDs across edits.
 import { createHash } from "node:crypto";
 import type { AlignmentResult, ExistingTaskSnapshot, TaskSnapshot } from "./types";
 

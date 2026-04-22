@@ -38,6 +38,7 @@ Follow the [design principles](./focusedInstructions/generic-design-principles.m
 # Coding guidelines
 Follow the instructions in the following files:
 - [class architecture](./focusedInstructions/class-architecture-patterns.md)
+- [feature development](./focusedInstructions/feature-development.md)
 
 # Testing guidelines
 Follow the [testing guidelines](./focusedInstructions/testing-guidelines.md) instructions.

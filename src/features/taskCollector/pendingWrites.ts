@@ -1,6 +1,10 @@
 // Tracks writes this extension has made so that the onDidSave handler can skip
 // re-processing files the extension itself just saved. Without this, each write
 // would trigger reconcileSource/reconcileCollector in an infinite loop.
+//
+// Self-write suppression prevents infinite sync loops: when the extension writes to a
+// source or collector file, the save event would trigger another sync pass. This module
+// tracks which URIs have pending writes so the sync handler can skip them.
 import { computeFileHash } from "../../blueprints/hashUtils";
 
 const encoder = new TextEncoder();

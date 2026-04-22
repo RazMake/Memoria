@@ -149,6 +149,9 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
 
         const id = entry["id"] as string;
 
+        // Switch is preferred over a Map-based dispatch here because there are only three
+        // feature types. Adding a registry pattern would be over-engineering for this scale.
+        // If feature count grows beyond ~5, consider extracting per-feature parser functions.
         switch (id) {
             case "decorations":
                 return {

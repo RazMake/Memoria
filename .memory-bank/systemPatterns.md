@@ -2,25 +2,52 @@
 
 ## Architecture
 
-```
+```text
 extension.ts (activation, DI wiring, versioning check)
-  ├── registerFileWatchers()   — per-root .memoria/blueprint.json watchers + onDidDeleteFiles
-  ├── registerCommands()       — command registration
+  ├── defaultFileContext.ts       — default-file context key management + watchers
+  ├── registerFileWatchers()      — per-root .memoria/blueprint.json watchers + onDidDeleteFiles
+  ├── registerCommands()          — command registration
   ├── commands/
   │   ├── initializeWorkspace.ts  — factory function → command handler
   │   ├── toggleDotFolders.ts     — factory function → command handler
-  │   └── manageFeatures.ts       — factory function → command handler
+  │   ├── manageFeatures.ts       — factory function → command handler
+  │   ├── openDefaultFile.ts      — factory function → open blueprint-defined file for folder
+  │   ├── openUserGuide.ts        — factory function → open bundled markdown docs
+  │   ├── syncTasks.ts            — factory function → manual task synchronization trigger
+  │   └── contactCommands.ts      — factory functions → add/edit/delete/move contact handlers
   ├── features/
   │   ├── featureManager.ts       — feature toggle orchestrator
   │   ├── decorations/
-  │   │   └── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
+  │   │   ├── blueprintDecorationProvider.ts — FileDecorationProvider, reads .memoria/decorations.json
+  │   │   ├── decorationCompletionProvider.ts — JSON completions for decorations.json
+  │   │   ├── decorationColorProvider.ts     — color swatches for decoration rules
+  │   │   ├── decorationSchema.ts            — field metadata for decoration rules
+  │   │   └── themeColors.ts                 — theme color ID constants
+  │   ├── navigator/
+  │   │   └── defaultFileCompletionProvider.ts — IntelliSense completions for default-files.json paths
   │   ├── contacts/
   │   │   ├── contactsFeature.ts      — feature lifecycle, contacts service/query API, file watching, mutations
   │   │   ├── contactsViewProvider.ts — WebviewViewProvider for the Contacts Activity Bar panel
   │   │   ├── contactParser.ts        — pure markdown dictionary parsing/serialization for contacts + reference data
+  │   │   ├── contactUtils.ts         — pure builder/clone helpers for resolved contacts + reference data
   │   │   ├── integrityCheck.ts       — pure dangling-reference detection/correction helpers
   │   │   ├── titleGenerator.ts       — canonical normal/short title generation from career paths + levels
+  │   │   ├── referenceDefaults.ts    — code-only fallbacks for unknown pronoun/career/interview references
+  │   │   ├── types.ts                — Contact, ResolvedContact, ContactsReferenceData, form messages
   │   │   └── webview/main.ts         — browser-side contacts sidebar UI (bundled to dist/contacts-webview.js)
+  │   ├── taskCollector/
+  │   │   ├── taskCollectorFeature.ts — feature lifecycle, sync orchestration, file watching, reconciliation
+  │   │   ├── taskParser.ts           — parse markdown task lists from source and collector formats
+  │   │   ├── taskIndex.ts            — stable task identity management (.memoria/tasks-index.json)
+  │   │   ├── taskAlignment.ts        — Myers-diff-style alignment for rename-safe task matching
+  │   │   ├── syncQueue.ts            — debounced job queue (source debounce, immediate full sync)
+  │   │   ├── pathRewriter.ts         — rewrite relative image/link paths when tasks move between files
+  │   │   ├── taskWriter.ts           — line-range replacement in source markdown files
+  │   │   ├── pendingWrites.ts        — self-write suppression to prevent sync → save → sync loops
+  │   │   ├── renameHandler.ts        — update collector paths when source files are renamed
+  │   │   ├── aging.ts                — remove stale completed tasks after configurable period
+  │   │   ├── collectorFormatter.ts   — render collector document from task index
+  │   │   └── types.ts                — SyncJob, ParsedTask, StoredTaskIndex, etc.
   │   └── todoEditor/
   │       ├── types.ts                — UITask, ToWebviewMessage, ToExtensionMessage
   │       ├── documentSerializer.ts   — pure parse/mutate functions for .todo.md
@@ -135,6 +162,7 @@ When initializing a different root in a multi-root workspace, deletion of the ol
 - `TodoEditorProvider` depends on `ManifestManager` (reads task index), `documentSerializer` (parse/mutate .todo.md), `taskParser` (parse source files for write-back), `taskWriter.replaceLineRange` (source file edits). Registered/disposed dynamically via `FeatureManager` callback for `taskCollector`. Webview communicates via message protocol (`ToWebviewMessage`/`ToExtensionMessage`).
 - `ContactsFeature` depends on `ManifestManager` for persisted blueprint config, reuses the shared path-normalization utility, and exposes the contacts/query/mutation surface used by both commands and the sidebar provider.
 - `ContactsViewProvider` depends on `ContactsFeature` update + form-request hooks, keeps the webview HTML shell/CSP concerns in one place, and maps runtime snapshots into a UI-specific message protocol.
+- `TaskCollectorFeature` depends on `ManifestManager` (reads task-collector config + task index), uses `SyncQueue` for debounced job dispatch, `TaskIndex` for stable identity tracking, `PendingWrites` for self-write suppression, `RenameHandler` for source file rename tracking, and pure modules (`taskParser`, `pathRewriter`, `collectorFormatter`, `taskAlignment`, `aging`) for the sync pipeline. Registered/disposed dynamically via `FeatureManager` callback for `taskCollector`.
 
 ## BlueprintDecorationProvider Pattern
 - Registered via `vscode.window.registerFileDecorationProvider` in `extension.ts`

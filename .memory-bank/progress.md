@@ -9,7 +9,7 @@
   - `isNewerVersion(bundled, stored)` — exported pure utility for major.minor.patch SemVer comparison
 - **Telemetry**: Production-ready pattern with `ConsoleTelemetrySender` + lazy factory for `@vscode/extension-telemetry`
 - **Two bundled blueprints**: Individual Contributor (5 folders) and People Manager (6 folders with nested meeting types)
-- **Test coverage**: 263 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
+- **Test coverage**: 622 unit tests passing, 7 E2E tests passing. All covered files ≥ 85%. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
 - **Context key**: `memoria.workspaceInitialized` checks all workspace roots (not just first)
 - **Structural/perf improvements**: Cached reinit hashes, multi-root file watchers, parallel hash reads, extracted activate() helpers, removed dead ManifestManager.computeFileHash wrapper
 - **Task Collector feature**: Two-way sync of Markdown tasks (`- [ ]`/`- [x]`) between source files and a blueprint-defined collector file. Save-triggered sync via `SyncQueue`, self-write suppression via `PendingWrites`, Myers-style alignment for rename-safe task identity, relative path rewriting for images/links, completed-task aging and pruning, manual (collector-only) tasks, `Memoria: Sync Tasks` command. Documented in user guide.
@@ -17,7 +17,7 @@
 - **Contacts feature**: Activity Bar sidebar for browsing, searching, adding, editing, deleting, and moving contacts stored in blueprint-owned Markdown group files. Includes reference-data loading, code-only `unknown` fallbacks, canonical title generation, custom group creation, debounced file watching, and integrity rewrites. Documented in the user guide.
 
 ## What's Left (Not Implemented)
-- **`.vscodeignore`**: Not yet created (needed for publishing)
+- **`.vscodeignore`**: Created at `src/.vscodeignore` (excludes test files, TypeScript sources, node_modules, coverage)
 - **Publishing**: `publisher` field set to `RazMake`
 - **TelemetryReporter → TelemetryLogger adapter**: Needed when a connection string is configured pre-publish
 - **`patch-package`**: Istanbul crash patch not persisted across `npm install`

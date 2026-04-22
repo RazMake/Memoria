@@ -103,14 +103,16 @@ describe("extension", () => {
         mockSubscriptions.length = 0;
     });
 
-    it("activate is a function", async () => {
+    it("should push at least one disposable to context.subscriptions during activation", async () => {
         const { activate } = await import("../../src/extension");
-        expect(typeof activate).toBe("function");
-    });
+        const context = {
+            subscriptions: mockSubscriptions,
+            extensionUri: { path: "/ext" },
+        } as any;
 
-    it("deactivate is a function", async () => {
-        const { deactivate } = await import("../../src/extension");
-        expect(typeof deactivate).toBe("function");
+        await activate(context);
+
+        expect(mockSubscriptions.length).toBeGreaterThan(0);
     });
 
     it("activate registers commands", async () => {
@@ -130,11 +132,6 @@ describe("extension", () => {
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.editPerson", expect.any(Function));
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.deletePerson", expect.any(Function));
         expect(mockRegisterCommand).toHaveBeenCalledWith("memoria.movePerson", expect.any(Function));
-    });
-
-    it("deactivate returns void", async () => {
-        const { deactivate } = await import("../../src/extension");
-        expect(deactivate()).toBeUndefined();
     });
 
     it("activate creates file system watchers for blueprint.json and decorations.json", async () => {

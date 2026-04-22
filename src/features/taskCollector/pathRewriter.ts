@@ -11,6 +11,11 @@
 //
 // Paths are rewritten only when they are relative (no scheme, not absolute).
 // Fenced code blocks are passed through unchanged to avoid corrupting code samples.
+//
+// When tasks are collected from source files into the collector document, relative
+// paths in markdown links and images (e.g., `./img/screenshot.png`) break because
+// the collector lives in a different directory. This module rewrites those paths
+// to remain valid from the collector's location.
 import path from "node:path";
 import { normalizePath } from "../../utils/path";
 

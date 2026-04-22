@@ -14,32 +14,43 @@ import {
     serializeContactGroupDocument,
 } from "./contactParser";
 import {
+    buildAutoMovedContact,
+    buildResolvedContact,
+    buildResolvedReferenceData,
+    buildShortTitleLookup,
+    compareText,
+    createEmptyReferenceData,
+    disposeAll,
+    fileName,
+    joinRelativePath,
+    mergeMovedContact,
+    splitRelativePath,
+    stripMarkdownExtension,
+    type ResolvedContact,
+    type ResolvedContactsReferenceData,
+} from "./contactUtils";
+import {
     applyCareerLevelIntegrityCorrections,
     applyContactIntegrityCorrections,
     findCareerLevelIntegrityCorrections,
     findContactIntegrityCorrections,
 } from "./integrityCheck";
-import {
-    resolveCareerLevel,
-    resolveCareerPath,
-    resolveInterviewType,
-    resolvePronouns,
-} from "./referenceDefaults";
-import { generateCanonicalTitlePairs, generateTitle } from "./titleGenerator";
+import { generateTitle } from "./titleGenerator";
 import type {
     CareerLevelReference,
     CareerPathReference,
-    ColleagueContact,
     Contact,
-    ContactFieldMap,
     ContactGroupDocument,
     ContactKind,
-    ContactTitlePair,
     ContactsReferenceData,
-    InterviewTypeReference,
     PronounsReference,
-    ReportContact,
 } from "./types";
+
+export type {
+    ResolvedCareerLevelReference,
+    ResolvedContact,
+    ResolvedContactsReferenceData,
+} from "./contactUtils";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -49,6 +60,8 @@ const PRONOUNS_FILE = "Pronouns.md";
 const CAREER_LEVELS_FILE = "CareerLevels.md";
 const CAREER_PATHS_FILE = "CareerPaths.md";
 const INTERVIEW_TYPES_FILE = "InterviewTypes.md";
+// Characters forbidden in group names — these are invalid in file names on Windows/macOS/Linux,
+// and group names map directly to markdown file names on disk.
 const INVALID_GROUP_NAME_RE = /[\\/:*?"<>|]/;
 
 export const CONTACTS_INACTIVE_MESSAGE = "Memoria: Contacts is not enabled for this workspace.";
@@ -76,30 +89,6 @@ export interface ContactGroupSummary {
     type: ContactKind;
     isCustom: boolean;
     contactCount: number;
-}
-
-export interface ResolvedCareerLevelReference extends CareerLevelReference {
-    resolvedInterviewType: InterviewTypeReference;
-}
-
-export type ResolvedContact = Contact & {
-    groupFile: string;
-    groupName: string;
-    groupType: ContactKind;
-    isCustomGroup: boolean;
-    shortTitle: string;
-    resolvedPronouns: PronounsReference;
-    resolvedCareerPath: CareerPathReference;
-    resolvedCareerLevel: CareerLevelReference | null;
-    resolvedInterviewType: InterviewTypeReference | null;
-};
-
-export interface ResolvedContactsReferenceData {
-    pronouns: PronounsReference[];
-    careerLevels: ResolvedCareerLevelReference[];
-    careerPaths: CareerPathReference[];
-    interviewTypes: InterviewTypeReference[];
-    canonicalTitles: ContactTitlePair[];
 }
 
 export interface ContactsSnapshot {
@@ -540,7 +529,7 @@ export class ContactsFeature implements vscode.Disposable {
             throw new Error(`Expected a ${expectedKind} contact for this group.`);
         }
 
-        const normalizedContact = cloneContact(contact);
+        const normalizedContact = structuredClone(contact);
         if (!normalizedContact.id.trim()) {
             throw new Error("Contact id is required.");
         }
@@ -735,186 +724,6 @@ export class ContactsFeature implements vscode.Disposable {
     }
 }
 
-function createEmptyReferenceData(): ContactsReferenceData {
-    return {
-        pronouns: [],
-        careerLevels: [],
-        careerPaths: [],
-        interviewTypes: [],
-    };
-}
-
-function buildResolvedReferenceData(referenceData: ContactsReferenceData): ResolvedContactsReferenceData {
-    const canonicalTitles = generateCanonicalTitlePairs(referenceData.careerPaths, referenceData.careerLevels)
-        .map(cloneTitlePair);
-
-    return {
-        pronouns: referenceData.pronouns.map(clonePronouns),
-        careerLevels: referenceData.careerLevels.map((careerLevel) => ({
-            ...cloneCareerLevel(careerLevel),
-            resolvedInterviewType: cloneInterviewType(
-                resolveInterviewType(careerLevel.interviewType, referenceData.interviewTypes)
-            ),
-        })),
-        careerPaths: referenceData.careerPaths.map(cloneCareerPath),
-        interviewTypes: referenceData.interviewTypes.map(cloneInterviewType),
-        canonicalTitles,
-    };
-}
-
-function buildResolvedContact(
-    contact: Contact,
-    group: LoadedGroupState,
-    referenceData: ContactsReferenceData,
-    shortTitleLookup: ReadonlyMap<string, string>,
-): ResolvedContact {
-    const resolvedCareerPath = cloneCareerPath(resolveCareerPath(contact.careerPathKey, referenceData.careerPaths));
-    const resolvedPronouns = clonePronouns(resolvePronouns(contact.pronounsKey, referenceData.pronouns));
-
-    if (contact.kind === "report") {
-        const resolvedCareerLevel = cloneCareerLevel(resolveCareerLevel(contact.levelId, referenceData.careerLevels));
-        const resolvedInterviewType = cloneInterviewType(
-            resolveInterviewType(resolvedCareerLevel.interviewType, referenceData.interviewTypes)
-        );
-
-        return {
-            ...cloneContact(contact),
-            groupFile: group.file,
-            groupName: group.name,
-            groupType: group.type,
-            isCustomGroup: group.isCustom,
-            shortTitle: shortTitleLookup.get(contact.title) ?? contact.title,
-            resolvedPronouns,
-            resolvedCareerPath,
-            resolvedCareerLevel,
-            resolvedInterviewType,
-        };
-    }
-
-    return {
-        ...cloneContact(contact),
-        groupFile: group.file,
-        groupName: group.name,
-        groupType: group.type,
-        isCustomGroup: group.isCustom,
-        shortTitle: shortTitleLookup.get(contact.title) ?? contact.title,
-        resolvedPronouns,
-        resolvedCareerPath,
-        resolvedCareerLevel: null,
-        resolvedInterviewType: null,
-    };
-}
-
-function buildShortTitleLookup(referenceData: ContactsReferenceData): Map<string, string> {
-    return new Map(
-        generateCanonicalTitlePairs(referenceData.careerPaths, referenceData.careerLevels)
-            .map((pair) => [pair.normal, pair.short] as const)
-    );
-}
-
-function buildAutoMovedContact(
-    sourceContact: Contact,
-    targetKind: ContactKind,
-    referenceData: ContactsReferenceData,
-): Contact {
-    if (sourceContact.kind === targetKind) {
-        return cloneContact(sourceContact);
-    }
-
-    if (sourceContact.kind === "report") {
-        const movedContact: ColleagueContact = {
-            kind: "colleague",
-            id: sourceContact.id,
-            nickname: sourceContact.nickname,
-            fullName: sourceContact.fullName,
-            title: sourceContact.title,
-            careerPathKey: sourceContact.careerPathKey,
-            pronounsKey: sourceContact.pronounsKey,
-            extraFields: cloneFieldMap(sourceContact.extraFields),
-            droppedFields: {
-                ...cloneFieldMap(sourceContact.droppedFields),
-                LevelId: sourceContact.levelId,
-                LevelStartDate: sourceContact.levelStartDate,
-            },
-        };
-        return movedContact;
-    }
-
-    const levelId = sourceContact.droppedFields.LevelId;
-    const levelStartDate = sourceContact.droppedFields.LevelStartDate;
-    if (!levelId || !levelStartDate) {
-        throw new Error("Moving this contact to a reports group requires LevelId and LevelStartDate.");
-    }
-
-    const nextDroppedFields = cloneFieldMap(sourceContact.droppedFields);
-    delete nextDroppedFields.LevelId;
-    delete nextDroppedFields.LevelStartDate;
-
-    const resolvedCareerPath = resolveCareerPath(sourceContact.careerPathKey, referenceData.careerPaths);
-    const resolvedCareerLevel = resolveCareerLevel(levelId, referenceData.careerLevels);
-
-    const movedContact: ReportContact = {
-        kind: "report",
-        id: sourceContact.id,
-        nickname: sourceContact.nickname,
-        fullName: sourceContact.fullName,
-        title: generateTitle(resolvedCareerPath, resolvedCareerLevel).normal,
-        careerPathKey: sourceContact.careerPathKey,
-        levelId,
-        levelStartDate,
-        pronounsKey: sourceContact.pronounsKey,
-        extraFields: cloneFieldMap(sourceContact.extraFields),
-        droppedFields: nextDroppedFields,
-    };
-
-    return movedContact;
-}
-
-function mergeMovedContact(autoMovedContact: Contact, targetContact: Contact): Contact {
-    if (autoMovedContact.kind !== targetContact.kind) {
-        throw new Error("Target contact kind does not match the destination group.");
-    }
-
-    if (autoMovedContact.id !== targetContact.id) {
-        throw new Error("Moving a contact cannot change its id.");
-    }
-
-    const clonedTarget = cloneContact(targetContact);
-    if (autoMovedContact.kind === "report") {
-        const reportAutoMovedContact = autoMovedContact;
-        const reportTarget = clonedTarget as ReportContact;
-        const mergedContact: ReportContact = {
-            ...reportAutoMovedContact,
-            ...reportTarget,
-            extraFields: {
-                ...reportAutoMovedContact.extraFields,
-                ...reportTarget.extraFields,
-            },
-            droppedFields: {
-                ...reportAutoMovedContact.droppedFields,
-                ...reportTarget.droppedFields,
-            },
-        };
-        return mergedContact;
-    }
-
-    const colleagueAutoMovedContact = autoMovedContact;
-    const colleagueTarget = clonedTarget as ColleagueContact;
-    const mergedContact: ColleagueContact = {
-        ...colleagueAutoMovedContact,
-        ...colleagueTarget,
-        extraFields: {
-            ...colleagueAutoMovedContact.extraFields,
-            ...colleagueTarget.extraFields,
-        },
-        droppedFields: {
-            ...colleagueAutoMovedContact.droppedFields,
-            ...colleagueTarget.droppedFields,
-        },
-    };
-    return mergedContact;
-}
-
 function toGroupSummary(group: LoadedGroupState): ContactGroupSummary {
     return {
         file: group.file,
@@ -923,60 +732,6 @@ function toGroupSummary(group: LoadedGroupState): ContactGroupSummary {
         isCustom: group.isCustom,
         contactCount: group.document.contacts.length,
     };
-}
-
-function cloneContact(contact: Contact): Contact {
-    if (contact.kind === "report") {
-        const clonedContact: ReportContact = {
-            ...contact,
-            extraFields: cloneFieldMap(contact.extraFields),
-            droppedFields: cloneFieldMap(contact.droppedFields),
-        };
-        return clonedContact;
-    }
-
-    const clonedContact: ColleagueContact = {
-        ...contact,
-        extraFields: cloneFieldMap(contact.extraFields),
-        droppedFields: cloneFieldMap(contact.droppedFields),
-    };
-    return clonedContact;
-}
-
-function clonePronouns(pronouns: PronounsReference): PronounsReference {
-    return {
-        ...pronouns,
-        extraFields: cloneFieldMap(pronouns.extraFields),
-    };
-}
-
-function cloneCareerPath(careerPath: CareerPathReference): CareerPathReference {
-    return {
-        ...careerPath,
-        extraFields: cloneFieldMap(careerPath.extraFields),
-    };
-}
-
-function cloneCareerLevel(careerLevel: CareerLevelReference): CareerLevelReference {
-    return {
-        ...careerLevel,
-        extraFields: cloneFieldMap(careerLevel.extraFields),
-    };
-}
-
-function cloneInterviewType(interviewType: InterviewTypeReference): InterviewTypeReference {
-    return {
-        ...interviewType,
-        extraFields: cloneFieldMap(interviewType.extraFields),
-    };
-}
-
-function cloneTitlePair(pair: ContactTitlePair): ContactTitlePair {
-    return { ...pair };
-}
-
-function cloneFieldMap(fields: ContactFieldMap): ContactFieldMap {
-    return { ...fields };
 }
 
 function toCustomGroupFileName(name: string): string {
@@ -996,32 +751,4 @@ function toCustomGroupFileName(name: string): string {
     }
 
     return `${baseName}.md`;
-}
-
-function stripMarkdownExtension(value: string): string {
-    return value.replace(/\.md$/i, "");
-}
-
-function fileName(value: string): string {
-    const segments = splitRelativePath(value);
-    return segments.length === 0 ? value : segments[segments.length - 1];
-}
-
-function splitRelativePath(value: string): string[] {
-    return normalizePath(value).split("/").filter(Boolean);
-}
-
-function joinRelativePath(base: vscode.Uri, relativePath: string): vscode.Uri {
-    const segments = splitRelativePath(relativePath);
-    return segments.length === 0 ? base : vscode.Uri.joinPath(base, ...segments);
-}
-
-function compareText(left: string, right: string): number {
-    return left.localeCompare(right, undefined, { sensitivity: "base" });
-}
-
-function disposeAll(disposables: readonly vscode.Disposable[]): void {
-    for (const disposable of disposables) {
-        disposable.dispose();
-    }
 }
