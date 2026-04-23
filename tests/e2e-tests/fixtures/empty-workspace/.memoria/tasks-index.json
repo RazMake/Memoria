@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "collectorPath": "00-Workstreams/All.todo.md",
+  "tasks": {
+    "mem-8f083a": {
+      "id": "mem-8f083a",
+      "source": null,
+      "sourceRoot": null,
+      "sourceOrder": null,
+      "fingerprint": "sha256:d50dd949582517e5fb354e1219c6aa7683845328530cdf4cdbc2858df5a60571",
+      "body": "Add here all your ToDos and sort them in the order they should be completed.",
+      "firstSeenAt": "2026-04-23T04:40:57.912Z",
+      "completed": false,
+      "doneDate": null,
+      "collectorOwned": true,
+      "agingSkipCount": 0
+    },
+    "mem-963fe5": {
+      "id": "mem-963fe5",
+      "source": null,
+      "sourceRoot": null,
+      "sourceOrder": null,
+      "fingerprint": "sha256:01eb718a69358caa628bb8965454f7a9ccc57f6af4f9617802a6de1b06f18348",
+      "body": "Existing task",
+      "firstSeenAt": "2026-04-23T04:40:57.912Z",
+      "completed": false,
+      "doneDate": null,
+      "collectorOwned": true,
+      "agingSkipCount": 0
+    },
+    "mem-4d4b98": {
+      "id": "mem-4d4b98",
+      "source": "03-Inbox/project-notes.md",
+      "sourceRoot": "empty-workspace",
+      "sourceOrder": 0,
+      "fingerprint": "sha256:47339aecca55ad1eb32bc6d511d698093e37466f96bb215f4a0674c8ea729455",
+      "body": "Implement feature X",
+      "firstSeenAt": "2026-04-23T04:40:58.186Z",
+      "completed": false,
+      "doneDate": null,
+      "collectorOwned": false,
+      "agingSkipCount": 0
+    }
+  },
+  "collectorOrder": {
+    "active": [
+      "mem-8f083a",
+      "mem-963fe5",
+      "mem-4d4b98"
+    ],
+    "completed": []
+  },
+  "sourceOrders": {
+    "empty-workspace:03-Inbox/project-notes.md": [
+      "mem-4d4b98"
+    ]
+  }
+}

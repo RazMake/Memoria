@@ -157,7 +157,7 @@ describe("generateContactSnippets", () => {
         const contacts = [makeContact()];
         const result = generateContactSnippets(contacts);
 
-        expect(result[0].label).toContain("SDE 2");
+        expect(result[0].description).toContain("SDE 2");
         expect(result[0].label).toContain("johnsmith");
     });
 });

@@ -77,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     let contactsViewDisposable: vscode.Disposable | undefined;
     let snippetCompletionDisposable: vscode.Disposable | undefined;
     let snippetHoverDisposable: vscode.Disposable | undefined;
+    let snippetHoverCommandDisposable: vscode.Disposable | undefined;
 
     context.subscriptions.push(
         contactsFeature,
@@ -131,6 +132,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 { scheme: "file" },
                 hoverProvider,
             );
+            snippetHoverCommandDisposable = vscode.commands.registerCommand(
+                "memoria.showDetailedContactHover",
+                () => hoverProvider.showDetailedHover(),
+            );
             return;
         }
 
@@ -139,6 +144,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             snippetCompletionDisposable = undefined;
             snippetHoverDisposable?.dispose();
             snippetHoverDisposable = undefined;
+            snippetHoverCommandDisposable?.dispose();
+            snippetHoverCommandDisposable = undefined;
         }
     });
 

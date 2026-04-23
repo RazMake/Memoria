@@ -76,6 +76,19 @@
                 "command": "memoria.resetSnippet",
                 "title": "Reset snippet to default",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.showDetailedContactHover",
+                "title": "Show detailed contact hover",
+                "category": "Memoria"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "memoria.showDetailedContactHover",
+                "key": "ctrl+shift+h",
+                "mac": "cmd+shift+h",
+                "when": "editorTextFocus && memoria.snippetsActive"
             }
         ],
         "viewsContainers": {
@@ -136,6 +149,10 @@
                 {
                     "command": "memoria.resetSnippet",
                     "when": "memoria.workspaceInitialized"
+                },
+                {
+                    "command": "memoria.showDetailedContactHover",
+                    "when": "false"
                 },
                 {
                     "command": "memoria.openDefaultFile",

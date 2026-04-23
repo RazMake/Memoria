@@ -1,0 +1,31 @@
+{
+  "blueprintId": "individual-contributor",
+  "blueprintVersion": "1.0.0",
+  "initializedAt": "2026-04-23T04:40:57.677Z",
+  "lastReinitAt": null,
+  "fileManifest": {
+    "00-Workstreams/All.todo.md": "sha256:5841b12f01cbd2c416ee26930dc7051ec4fb8905cac074a6cc3cb84b5d29ce5d",
+    "02-MeetingNotes/1-1": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "05-Autocomplete/Contacts/Colleagues.md": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "05-Autocomplete/Contacts/DataTypes/CareerLevels.md": "sha256:a36e3039ea615631f360f2dbcfcf77c54bcbd71921b2380185db1187ad5fb6ee",
+    "05-Autocomplete/Contacts/DataTypes/CareerPaths.md": "sha256:20f017684bc5fd14a1c4df1d656f223df360ed05a7564476693d75eec4da5a88",
+    "05-Autocomplete/Contacts/DataTypes/InterviewTypes.md": "sha256:0cb8a01aa1da3fe20088ddc307ab30743fa6ad4223208017568d836fb8607ccb",
+    "05-Autocomplete/Contacts/DataTypes/Pronouns.md": "sha256:a665db8d6e1fde5d726812f76d9c85e78f3fe174be3f494ebd078bfabd06db71",
+    "05-Autocomplete/Snippets/date-time.ts": "sha256:502ad6c86a8224bc5d836d66cfa719a5f0c7ec18de9565d999896b36476b1140"
+  },
+  "taskCollector": {
+    "collectorPath": "00-Workstreams/All.todo.md"
+  },
+  "contacts": {
+    "peopleFolder": "05-Autocomplete/Contacts/",
+    "groups": [
+      {
+        "file": "Colleagues.md",
+        "type": "colleague"
+      }
+    ]
+  },
+  "snippets": {
+    "snippetsFolder": "05-Autocomplete/Snippets/"
+  }
+}
