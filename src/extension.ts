@@ -28,6 +28,9 @@ import { ContactsFeature } from "./features/contacts/contactsFeature";
 import { ContactsViewProvider } from "./features/contacts/contactsViewProvider";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
+import { SnippetsFeature } from "./features/snippets/snippetsFeature";
+import { SnippetCompletionProvider } from "./features/snippets/snippetCompletionProvider";
+import { SnippetHoverProvider } from "./features/snippets/snippetHoverProvider";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
 const reporterFactory: TelemetryReporterFactory = (connectionString) => {
@@ -68,12 +71,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
     const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
     const contactsFeature = new ContactsFeature(manifest);
+    const snippetsFeature = new SnippetsFeature(manifest, contactsFeature);
     const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri);
     const featureManager = new FeatureManager(manifest);
     let contactsViewDisposable: vscode.Disposable | undefined;
+    let snippetCompletionDisposable: vscode.Disposable | undefined;
+    let snippetHoverDisposable: vscode.Disposable | undefined;
 
     context.subscriptions.push(
         contactsFeature,
+        snippetsFeature,
         {
             dispose: () => {
                 contactsViewDisposable?.dispose();
@@ -106,6 +113,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!enabled && contactsViewDisposable) {
             contactsViewDisposable.dispose();
             contactsViewDisposable = undefined;
+        }
+    });
+    featureManager.register("snippets", async (root, enabled) => {
+        await snippetsFeature.refresh(root, enabled);
+        await vscode.commands.executeCommand("setContext", "memoria.snippetsActive", enabled && root !== null);
+
+        if (enabled && !snippetCompletionDisposable) {
+            const completionProvider = new SnippetCompletionProvider(snippetsFeature);
+            snippetCompletionDisposable = vscode.languages.registerCompletionItemProvider(
+                { scheme: "file" },
+                completionProvider,
+                "{", "@",
+            );
+            const hoverProvider = new SnippetHoverProvider(snippetsFeature);
+            snippetHoverDisposable = vscode.languages.registerHoverProvider(
+                { scheme: "file" },
+                hoverProvider,
+            );
+            return;
+        }
+
+        if (!enabled && snippetCompletionDisposable) {
+            snippetCompletionDisposable.dispose();
+            snippetCompletionDisposable = undefined;
+            snippetHoverDisposable?.dispose();
+            snippetHoverDisposable = undefined;
         }
     });
 
@@ -177,6 +210,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         featureManager,
         taskCollectorFeature,
         contactsFeature,
+        snippetsFeature,
         onWorkspaceInitialized,
     );
 
@@ -279,6 +313,7 @@ function registerCommands(
     featureManager: FeatureManager,
     taskCollectorFeature: TaskCollectorFeature,
     contactsFeature: ContactsFeature,
+    snippetsFeature: SnippetsFeature,
     onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
 ): void {
     context.subscriptions.push(
@@ -324,7 +359,85 @@ function registerCommands(
         vscode.commands.registerCommand(
             "memoria.movePerson",
             createMovePersonCommand(contactsFeature)
-        )
+        ),
+        vscode.commands.registerCommand(
+            "memoria.expandSnippet",
+            async (trigger: string, documentUriStr: string) => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor || editor.document.uri.toString() !== documentUriStr) return;
+
+                const allSnippets = snippetsFeature.getAllSnippets();
+                const snippet = allSnippets.find((s) => s.trigger === trigger);
+                if (!snippet) return;
+
+                // Use the current cursor — VS Code places it after the accepted
+                // completion's insertText (which is ""), so the cursor sits where
+                // the trigger text was removed. A stray `}` may remain if the user
+                // typed the full `{trigger}` before accepting.
+                const cursorPos = editor.selection.active;
+                const lineText = editor.document.lineAt(cursorPos.line).text;
+                const hasStrayBrace = lineText[cursorPos.character] === "}";
+
+                const selectedText = editor.selection.isEmpty === false
+                    ? editor.document.getText(editor.selection)
+                    : undefined;
+
+                const expanded = await snippetsFeature.expandSnippet(
+                    snippet, editor.document, cursorPos, selectedText,
+                );
+
+                await editor.edit((editBuilder) => {
+                    if (hasStrayBrace) {
+                        const braceRange = new vscode.Range(
+                            cursorPos,
+                            new vscode.Position(cursorPos.line, cursorPos.character + 1),
+                        );
+                        editBuilder.replace(braceRange, expanded);
+                    } else {
+                        editBuilder.insert(cursorPos, expanded);
+                    }
+                });
+            },
+        ),
+        vscode.commands.registerCommand(
+            "memoria.resetSnippet",
+            async (uri: vscode.Uri) => {
+                if (!uri) {
+                    vscode.window.showInformationMessage("Memoria: No file selected.");
+                    return;
+                }
+
+                const roots = getWorkspaceRoots();
+                const root = await manifest.findInitializedRoot(roots);
+                if (!root) return;
+
+                const manifestData = await manifest.readManifest(root);
+                if (!manifestData?.snippets) return;
+
+                const relativePath = vscode.workspace.asRelativePath(uri, false);
+                if (!(relativePath in manifestData.fileManifest)) {
+                    vscode.window.showInformationMessage(
+                        "This snippet was not shipped with the blueprint and cannot be reset.",
+                    );
+                    return;
+                }
+
+                try {
+                    const originalBytes = await registry.getSeedFileContent(
+                        manifestData.blueprintId,
+                        relativePath,
+                    );
+                    if (!originalBytes) {
+                        vscode.window.showWarningMessage("Memoria: Could not reset snippet — original not found.");
+                        return;
+                    }
+                    await vscode.workspace.fs.writeFile(uri, originalBytes);
+                    vscode.window.showInformationMessage(`Memoria: Snippet reset to default.`);
+                } catch {
+                    vscode.window.showWarningMessage("Memoria: Could not reset snippet — original not found.");
+                }
+            },
+        ),
     );
 }
 

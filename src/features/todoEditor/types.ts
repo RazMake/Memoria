@@ -6,9 +6,17 @@ export interface UITask {
     sourceRelativePath: string | null;
 }
 
+export interface SnippetSuggestion {
+    trigger: string;
+    label: string;
+    description?: string;
+}
+
 export type ToWebviewMessage =
     | { type: 'update'; active: UITask[]; completed: UITask[] }
-    | { type: 'syncDone' };
+    | { type: 'syncDone' }
+    | { type: 'snippetSuggestions'; items: SnippetSuggestion[] }
+    | { type: 'snippetResult'; text: string };
 
 export type ToExtensionMessage =
     | { type: 'ready' }
@@ -21,4 +29,6 @@ export type ToExtensionMessage =
     | { type: 'openSourceInPlace'; id: string }
     | { type: 'toggleSubtask'; id: string; index: number }
     | { type: 'deleteTask'; id: string }
-    | { type: 'scan' };
+    | { type: 'scan' }
+    | { type: 'snippetQuery'; prefix: string }
+    | { type: 'snippetAccept'; trigger: string; selectedText?: string };

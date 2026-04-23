@@ -220,6 +220,14 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
                     peopleFolder: parsePeopleFolder(entry["peopleFolder"], index),
                     groups: parseContactGroups(entry["groups"], index),
                 };
+            case "snippets":
+                return {
+                    id,
+                    name: entry["name"] as string,
+                    description: entry["description"] as string,
+                    enabledByDefault: entry["enabledByDefault"] as boolean,
+                    snippetsFolder: parseSnippetsFolder(entry["snippetsFolder"], index),
+                };
             default:
                 throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
         }
@@ -237,6 +245,10 @@ function parseCollectorPath(raw: unknown, index: number): string {
 
 function parsePeopleFolder(raw: unknown, index: number): string {
     return parseRelativePathField(raw, index, "peopleFolder", "folder");
+}
+
+function parseSnippetsFolder(raw: unknown, index: number): string {
+    return parseRelativePathField(raw, index, "snippetsFolder", "folder");
 }
 
 function parseContactGroups(raw: unknown, index: number): ContactGroup[] {

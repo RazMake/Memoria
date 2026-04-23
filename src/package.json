@@ -71,6 +71,11 @@
                 "command": "memoria.openUserGuide",
                 "title": "Open User Guide",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.resetSnippet",
+                "title": "Reset snippet to default",
+                "category": "Memoria"
             }
         ],
         "viewsContainers": {
@@ -129,6 +134,10 @@
                     "command": "memoria.openUserGuide"
                 },
                 {
+                    "command": "memoria.resetSnippet",
+                    "when": "memoria.workspaceInitialized"
+                },
+                {
                     "command": "memoria.openDefaultFile",
                     "when": "false"
                 }
@@ -138,6 +147,11 @@
                     "command": "memoria.openDefaultFile",
                     "when": "memoria.defaultFileAvailable && explorerResourceIsFolder && resource in memoria.defaultFileFolders",
                     "group": "navigation"
+                },
+                {
+                    "command": "memoria.resetSnippet",
+                    "when": "memoria.workspaceInitialized && resourceExtname == .ts && memoria.snippetsActive",
+                    "group": "memoria"
                 }
             ]
         },

@@ -73,8 +73,14 @@ export interface ContactsFeatureEntry extends FeatureEntry {
     groups: ContactGroup[];
 }
 
+/** A snippets feature — provides text expansion for Markdown files. */
+export interface SnippetsFeatureEntry extends FeatureEntry {
+    id: "snippets";
+    snippetsFolder: string;
+}
+
 /** Discriminated union of all known feature types. Expand as new features are added. */
-export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry;
+export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry | SnippetsFeatureEntry;
 
 /**
  * Default files split by scope, as returned by `resolveDefaultFiles()`.
@@ -127,6 +133,11 @@ export interface ContactsManifestConfig {
     groups: ContactGroup[];
 }
 
+/** Sub-object within BlueprintManifest that records snippets feature metadata. */
+export interface SnippetsManifestConfig {
+    snippetsFolder: string;
+}
+
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
 export interface BlueprintManifest {
     blueprintId: string;
@@ -137,6 +148,7 @@ export interface BlueprintManifest {
     fileManifest: Record<string, string>;
     taskCollector?: TaskCollectorManifestConfig;
     contacts?: ContactsManifestConfig;
+    snippets?: SnippetsManifestConfig;
 }
 
 /**

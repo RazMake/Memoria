@@ -20,17 +20,22 @@ workspace:
       - name: "Team-Members-1-1/"
   - name: "03-Inbox/"
   - name: "05-Archive/"
-  - name: "06-Contacts/"
+  - name: "06-Autocomplete/"
     children:
-      - name: "Team.md"
-      - name: "Colleagues.md"
-      - name: "InterviewTemplates/"
-      - name: "DataTypes/"
+      - name: "Contacts/"
         children:
-          - name: "CareerLevels.md"
-          - name: "CareerPaths.md"
-          - name: "InterviewTypes.md"
-          - name: "Pronouns.md"
+          - name: "Team.md"
+          - name: "Colleagues.md"
+          - name: "InterviewTemplates/"
+          - name: "DataTypes/"
+            children:
+              - name: "CareerLevels.md"
+              - name: "CareerPaths.md"
+              - name: "InterviewTypes.md"
+              - name: "Pronouns.md"
+      - name: "Snippets/"
+        children:
+          - name: "date-time.ts"
 
 features:
   - id: "taskCollector"
@@ -42,12 +47,17 @@ features:
     name: "Contacts"
     description: "Browse, search, and manage reports and colleagues."
     enabledByDefault: true
-    peopleFolder: "06-Contacts/"
+    peopleFolder: "06-Autocomplete/Contacts/"
     groups:
       - file: "Team.md"
         type: "report"
       - file: "Colleagues.md"
         type: "colleague"
+  - id: "snippets"
+    name: "Snippets"
+    description: "Text expansion for Markdown files via autocomplete."
+    enabledByDefault: true
+    snippetsFolder: "06-Autocomplete/Snippets"
   - id: "decorations"
     name: "Explorer Decorations"
     description: "Badges and colors in the VS Code Explorer"
@@ -55,6 +65,11 @@ features:
     rules:
       - filter: ".*/"
         color: "terminal.ansiBrightBlack"
+      - filter: "06-Autocomplete/Snippets/"
+        color: "terminal.ansiCyan"
+        badge: "✂️"
+        tooltip: "User-defined text expansion snippets."
+        propagate: true
       - filter: "Planning/"
         color: "charts.purple"
         badge: "📅"
@@ -101,20 +116,25 @@ features:
         badge: "⌛"
         tooltip: "Notes/information that is considered obsolete, but the user decided to keep it around for a bit longer."
         propagate: true
-      - filter: "06-Contacts/DataTypes/"
+      - filter: "06-Autocomplete/Contacts/DataTypes/"
         color: "terminal.ansiBlue"
         badge: "🔨"
         tooltip: "Data types used in contact definitions."
         propagate: true
-      - filter: "06-Contacts/InterviewTemplates/"
+      - filter: "06-Autocomplete/Contacts/InterviewTemplates/"
         color: "terminal.ansiRed"
         badge: "📋"
         tooltip: "Problems that can be used in an interview."
         propagate: true
-      - filter: "06-Contacts/"
-        color: "terminal.ansiBrightBlack"
+      - filter: "06-Autocomplete/Contacts/"
+        color: "terminal.ansiGreen"
         badge: "👤"
         tooltip: "Known contacts information, available in this workspace."
+        propagate: true
+      - filter: "06-Autocomplete/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Autocomplete features: contacts, snippets, and more."
         propagate: true
       - filter: "WorkspaceInitializationBackups/"
         color: "terminal.ansiBrightBlack"
