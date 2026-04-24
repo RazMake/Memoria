@@ -6,7 +6,7 @@ export function generateContactSnippets(contacts: ResolvedContact[]): SnippetDef
     return contacts.map((contact) => ({
         trigger: `@${contact.id}`,
         label: `${contact.fullName} (${contact.id})`,
-        description: `_${contact.shortTitle}_`,
+        description: `${contact.shortTitle}`,
         filterText: `@${contact.id} ${contact.nickname} ${contact.fullName}`,
         glob: "**/*",
         parameters: [
@@ -19,34 +19,45 @@ export function generateContactSnippets(contacts: ResolvedContact[]): SnippetDef
 }
 
 function getContactFormatOptions(contact: ResolvedContact): string[] {
-    const options = ["nickname", "full", "title", "alias"];
+    const options = ["Nickname", "Full Name", "Nickname (title)", "Full Name (title)", "Id", "Nickname (id)"];
     if (contact.kind === "report") {
-        options.push("level", "level full");
+        options.push("Nickname (level)", "Full Name (level)", "Full Name (level, for X months - since MM-dd-YYYY)");
     }
     return options;
 }
 
 function formatContact(contact: ResolvedContact, format: string): string {
     switch (format) {
-        case "alias":
+        case "Id":
             return contact.id;
-        case "nickname":
+        case "Nickname":
             return contact.nickname;
-        case "full":
+        case "Full Name":
             return contact.fullName;
-        case "title":
+        case "Nickname (title)":
+            return `${contact.nickname} (${contact.shortTitle})`;
+        case "Full Name (title)":
             return `${contact.fullName} (${contact.shortTitle})`;
-        case "level":
+        case "Nickname (id)":
+            return `${contact.nickname} (${contact.id})`;
+        case "Full Name (id)":
+            return `${contact.fullName} (${contact.id})`;
+        case "Nickname (level)":
+            if (contact.kind === "report") {
+                return `${contact.nickname} (${contact.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`;
+            }
+            return contact.fullName;
+        case "Full Name (level)":
             if (contact.kind === "report") {
                 return `${contact.fullName} (${contact.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`;
             }
             return contact.fullName;
-        case "level full":
+        case "Full Name (level, for X months - since MM-dd-YYYY)":
             if (contact.kind === "report") {
                 const level = contact.resolvedCareerLevel?.key.toUpperCase() ?? "?";
                 const startDate = (contact as { levelStartDate: string }).levelStartDate;
                 const elapsed = elapsedSince(startDate);
-                return `${contact.fullName} (${level}) - Time in level: ${formatElapsed(elapsed)} (from: ${startDate})`;
+                return `${contact.fullName} (${level}, for ${formatElapsed(elapsed)} - from: ${startDate})`;
             }
             return contact.fullName;
         default:

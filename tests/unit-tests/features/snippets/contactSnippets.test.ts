@@ -43,16 +43,16 @@ describe("generateContactSnippets", () => {
         const result = generateContactSnippets(contacts);
 
         expect(result[0].parameters).toHaveLength(1);
-        expect(result[0].parameters![0].options).toContain("level");
-        expect(result[0].parameters![0].options).toContain("level full");
+        expect(result[0].parameters![0].options).toContain("Full Name (level)");
+        expect(result[0].parameters![0].options).toContain("Nickname (level)");
     });
 
     it("should not include level options for colleague contacts", () => {
         const contacts = [makeContact({ kind: "colleague" } as any)];
         const result = generateContactSnippets(contacts);
 
-        expect(result[0].parameters![0].options).not.toContain("level");
-        expect(result[0].parameters![0].options).not.toContain("level full");
+        expect(result[0].parameters![0].options).not.toContain("Full Name (level)");
+        expect(result[0].parameters![0].options).not.toContain("Nickname (level)");
     });
 
     it("should expand nickname format correctly", () => {
@@ -62,7 +62,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "nickname" },
+            params: { format: "Nickname" },
             contacts: [],
         });
 
@@ -76,7 +76,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "full" },
+            params: { format: "Full Name" },
             contacts: [],
         });
 
@@ -90,7 +90,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "title" },
+            params: { format: "Full Name (title)" },
             contacts: [],
         });
 
@@ -104,7 +104,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "level" },
+            params: { format: "Full Name (level)" },
             contacts: [],
         });
 
@@ -118,7 +118,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "level" },
+            params: { format: "Full Name (level)" },
             contacts: [],
         });
 
@@ -136,7 +136,7 @@ describe("generateContactSnippets", () => {
         const contacts = [makeContact()];
         const result = generateContactSnippets(contacts);
 
-        expect(result[0].parameters![0].options).toContain("alias");
+        expect(result[0].parameters![0].options).toContain("Id");
     });
 
     it("should expand alias format to contact id", () => {
@@ -146,7 +146,7 @@ describe("generateContactSnippets", () => {
         const expanded = result[0].expand!({
             document: null,
             position: null,
-            params: { format: "alias" },
+            params: { format: "Id" },
             contacts: [],
         });
 

@@ -17,6 +17,7 @@
     "uvx": true,
     "pip": true,
     "where.exe": true,
-    "uv": true
+    "uv": true,
+    "npx vitest": true
   }
 }

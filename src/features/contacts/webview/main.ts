@@ -434,6 +434,7 @@ function renderFormPane(preserveFocus: boolean): void {
             placeholder: "Select the title",
             snapshot,
             currentTitle: formState.draft.title,
+            careerPathKey: formState.draft.careerPathKey,
             error: formState.errors.title,
             onChange: (value, careerPathKey) => mutateForm((formDraft) => {
                 formDraft.draft.title = value;
@@ -1218,6 +1219,7 @@ function createGroupedTitleField(options: {
     placeholder: string;
     snapshot: NonNullable<ReturnType<typeof getState>["snapshot"]>;
     currentTitle: string;
+    careerPathKey: string;
     error?: string;
     onChange: (value: string, careerPathKey: string | null) => void;
 }): HTMLElement {
@@ -1248,7 +1250,13 @@ function createGroupedTitleField(options: {
     function populateDropdown(filter: string): void {
         clearElement(dropdown);
         const lowerFilter = filter.toLowerCase();
-        const grouped = groupTitlesByCareerPath(titleOptions, options.snapshot);
+        const allGrouped = groupTitlesByCareerPath(titleOptions, options.snapshot);
+        const selectedPathName = options.careerPathKey
+            ? options.snapshot.referenceData.careerPaths.find((p) => p.key === options.careerPathKey)?.name ?? null
+            : null;
+        const grouped = selectedPathName
+            ? allGrouped.filter((g) => g.isStandalone || g.careerPathName === selectedPathName)
+            : allGrouped;
 
         let hasGroupedItems = false;
 
@@ -1320,6 +1328,7 @@ function createGroupedTitleField(options: {
     function selectItem(value: string): void {
         comboInput.value = value;
         dropdown.classList.remove("open");
+        comboInput.blur();
         const careerPathKey = titleMap.get(value) ?? null;
         options.onChange(value, careerPathKey);
     }
