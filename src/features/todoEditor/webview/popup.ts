@@ -1,6 +1,7 @@
 import type { UITask } from './types';
 import { vscode } from './state';
 import { el } from './utils';
+import { onPopupInput, onPopupKeydown, isDropdownVisible, disposeAutocomplete } from './snippetAutocomplete';
 
 let popupMode: 'add' | 'edit' | null = null;
 let popupEditId: string | null = null;
@@ -47,7 +48,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
             ta.value = mode === 'edit' && activeInput === undefined ? markdown : (activeInput?.value ?? '');
             ta.rows = 3;
             ta.placeholder = 'Task description…';
-            ta.addEventListener('input', () => autoGrow(ta));
+            ta.addEventListener('input', () => { autoGrow(ta); onPopupInput(ta); });
             ta.addEventListener('keydown', handleTextareaKey);
             inputWrap.appendChild(ta);
             activeInput = ta;
@@ -63,6 +64,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
             inp.className = 'popup-input';
             inp.value = mode === 'edit' && activeInput === undefined ? markdown : (activeInput?.value ?? '');
             inp.placeholder = 'Task description…';
+            inp.addEventListener('input', () => onPopupInput(inp));
             inp.addEventListener('keydown', handleInputKey);
             inputWrap.appendChild(inp);
             activeInput = inp;
@@ -79,6 +81,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
     buildInput();
 
     function handleInputKey(e: KeyboardEvent): void {
+        if (onPopupKeydown(e)) { e.preventDefault(); return; }
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             confirmPopup();
@@ -96,6 +99,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
     }
 
     function handleTextareaKey(e: KeyboardEvent): void {
+        if (onPopupKeydown(e)) { e.preventDefault(); return; }
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             confirmPopup();
@@ -146,6 +150,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
 }
 
 function closePopup(): void {
+    disposeAutocomplete();
     if (popupOverlay) {
         popupOverlay.removeEventListener('keydown', trapFocus);
         popupOverlay.remove();

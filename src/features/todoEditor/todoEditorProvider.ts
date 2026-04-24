@@ -11,6 +11,7 @@ import { parseTaskBlocks } from "../taskCollector/taskParser";
 import { forward } from "../taskCollector/pathRewriter";
 import { replaceLineRange } from "../taskCollector/taskWriter";
 import type { ContactExpansionMap } from "../snippets/snippetHoverProvider";
+import type { SnippetProvider } from "../snippets/snippetCompletionProvider";
 import { buildContactTooltipMarkdown } from "../contacts/contactTooltip";
 
 // A CustomTextEditor is used instead of a plain WebviewPanel so that VS Code's
@@ -41,6 +42,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         private readonly manifest: ManifestManager,
         private readonly extensionUri: vscode.Uri,
         private readonly expansionMap?: ContactExpansionMap,
+        private readonly snippetProvider?: SnippetProvider,
     ) {}
 
     static register(context: vscode.ExtensionContext, provider: TodoEditorProvider): vscode.Disposable {
@@ -420,6 +422,77 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                     if (workspaceRoot && sourcePath) {
                         await markRemovedInSource(workspaceRoot, sourcePath, found.bodyWithoutSuffix);
                     }
+                    break;
+                }
+                case "snippetQuery": {
+                    if (!this.snippetProvider) break;
+                    const prefix = msg.prefix;
+                    const all = this.snippetProvider.getAllSnippets();
+                    const isContact = prefix.startsWith("@");
+                    const filtered = all
+                        .filter((s) => {
+                            const matchesPrefix = isContact ? s.trigger.startsWith("@") : s.trigger.startsWith("{");
+                            if (!matchesPrefix) return false;
+                            // Match trigger against user-typed prefix (case-insensitive)
+                            return s.trigger.toLowerCase().startsWith(prefix.toLowerCase())
+                                || s.label.toLowerCase().includes(prefix.slice(1).toLowerCase());
+                        })
+                        .slice(0, 20)
+                        .map((s) => ({ trigger: s.trigger, label: s.label, description: s.description }));
+                    const reply: ToWebviewMessage = { type: "snippetSuggestions", items: filtered };
+                    webviewPanel.webview.postMessage(reply);
+                    break;
+                }
+                case "snippetAccept": {
+                    if (!this.snippetProvider) break;
+                    const all = this.snippetProvider.getAllSnippets();
+                    const snippet = all.find((s) => s.trigger === msg.trigger);
+                    if (!snippet) break;
+
+                    let expanded: string;
+                    if (snippet.body !== undefined && !snippet.expand && !snippet.parameters?.length) {
+                        // Static snippet — insert body directly.
+                        expanded = snippet.body;
+                    } else {
+                        // Dynamic or parameterized — resolve params then expand.
+                        const params: Record<string, string> = {};
+                        if (snippet.parameters?.length) {
+                            if (snippet.parameters.length === 1 && msg.selectedText) {
+                                params[snippet.parameters[0].name] = msg.selectedText;
+                            } else {
+                                for (const param of snippet.parameters) {
+                                    const picked = await vscode.window.showQuickPick(
+                                        param.options ?? [],
+                                        { placeHolder: `Select ${param.name}` },
+                                    );
+                                    if (picked === undefined) { break; }
+                                    params[param.name] = picked;
+                                }
+                                // If user cancelled a parameter, abort.
+                                if (snippet.parameters.some((p) => !(p.name in params))) break;
+                            }
+                        }
+
+                        if (snippet.expand) {
+                            try {
+                                expanded = snippet.expand({
+                                    document: null,
+                                    position: null,
+                                    params,
+                                    contacts: [],
+                                });
+                            } catch {
+                                expanded = snippet.trigger;
+                            }
+                        } else if (snippet.body !== undefined) {
+                            expanded = snippet.body;
+                        } else {
+                            expanded = snippet.trigger;
+                        }
+                    }
+
+                    const result: ToWebviewMessage = { type: "snippetResult", text: expanded };
+                    webviewPanel.webview.postMessage(result);
                     break;
                 }
             }

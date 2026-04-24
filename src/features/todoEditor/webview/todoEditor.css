@@ -398,6 +398,49 @@
     min-height: 60px;
     line-height: 1.45;
 }
+
+/* Snippet autocomplete dropdown */
+.snippet-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 3000;
+    max-height: 180px;
+    overflow-y: auto;
+    background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background));
+    border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border));
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+    margin-top: 2px;
+}
+.snippet-dropdown-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.snippet-dropdown-item.selected {
+    background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+    color: var(--vscode-editorSuggestWidget-selectedForeground, var(--vscode-list-activeSelectionForeground));
+}
+.snippet-dropdown-item:hover:not(.selected) {
+    background: var(--vscode-list-hoverBackground);
+}
+.snippet-dropdown-label {
+    font-weight: 500;
+}
+.snippet-dropdown-desc {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .popup-hint {
     font-size: 11px;
     color: var(--vscode-descriptionForeground);

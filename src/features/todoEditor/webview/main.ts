@@ -4,6 +4,7 @@ import { el } from './utils';
 import { renderActiveList, invalidateActiveCache } from './activeList';
 import { renderCompletedSection } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
+import { handleSnippetSuggestions, handleSnippetResult } from './snippetAutocomplete';
 
 const root = document.getElementById('root') ?? document.body;
 root.textContent = '';
@@ -42,6 +43,10 @@ window.addEventListener('message', (e: MessageEvent) => {
         setContactTooltips(msg.entries);
         invalidateActiveCache();
         renderAll();
+    } else if (msg?.type === 'snippetSuggestions') {
+        handleSnippetSuggestions(msg.items);
+    } else if (msg?.type === 'snippetResult') {
+        handleSnippetResult(msg.text);
     }
 });
 

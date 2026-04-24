@@ -14,6 +14,12 @@ export interface ContactTooltipEntry {
     detailedHtml: string;
 }
 
+export interface SnippetSuggestion {
+    trigger: string;
+    label: string;
+    description?: string;
+}
+
 export type VsCodeApi = ReturnType<typeof acquireVsCodeApi>;
 
 export function getVsCodeApi(): VsCodeApi {
