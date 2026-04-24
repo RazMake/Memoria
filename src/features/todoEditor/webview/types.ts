@@ -8,6 +8,12 @@ export interface UITask {
     sourceRelativePath: string | null;
 }
 
+export interface ContactTooltipEntry {
+    text: string;
+    briefHtml: string;
+    detailedHtml: string;
+}
+
 export type VsCodeApi = ReturnType<typeof acquireVsCodeApi>;
 
 export function getVsCodeApi(): VsCodeApi {

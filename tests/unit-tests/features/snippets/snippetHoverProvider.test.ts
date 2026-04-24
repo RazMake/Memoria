@@ -90,7 +90,8 @@ describe("SnippetHoverProvider", () => {
         expect(result).toBeDefined();
         const md = result!.contents as any;
         expect(md.value).toContain("johnsmith");
-        expect(md.value).not.toContain("Software Engineer");
+        expect(md.value).toContain("Software Engineer");
+        expect(md.value).not.toContain("Level");
     });
 
     it("returns detailed hover after showDetailedHover flag is set", async () => {
@@ -117,7 +118,7 @@ describe("SnippetHoverProvider", () => {
         // Flag should be consumed — next hover should be brief
         const result2 = provider.provideHover(doc, makePosition(0, 10), token);
         const md = result2!.contents as any;
-        expect(md.value).not.toContain("Software Engineer");
+        expect(md.value).not.toContain("Level");
     });
 
     it("consumes the detailed flag even when no match is found", () => {

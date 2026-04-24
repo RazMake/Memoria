@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { ResolvedContact } from "../contacts/contactUtils";
-import { elapsedSince, formatElapsed } from "./dateUtils";
+import { buildContactTooltipMarkdown } from "../contacts/contactTooltip";
 
 export interface ContactExpansionMap {
     /** Returns all known expansion strings mapped to their contact, longest first. */
@@ -61,17 +61,6 @@ export class SnippetHoverProvider implements vscode.HoverProvider {
 
 function buildHoverContent(contact: ResolvedContact, detailed: boolean): vscode.MarkdownString {
     const md = new vscode.MarkdownString();
-    md.appendMarkdown(`**Id**: ${contact.id}\n`);
-    md.appendMarkdown(`\n**${contact.fullName}**\n\n`);
-    md.appendMarkdown(`- **Title**: ${contact.title}\n`);
-    md.appendMarkdown(`- Career Path: ${contact.resolvedCareerPath.short}\n`);
-    md.appendMarkdown(`- Group: _${contact.groupName}_\n`);
-
-    if (contact.kind === "report" && detailed) {
-        md.appendMarkdown(`- Level: _${contact.resolvedCareerLevel ? contact.resolvedCareerLevel.key.toUpperCase() : "Unknown"}_\n`);
-        const startDate = (contact as { levelStartDate: string }).levelStartDate;
-        md.appendMarkdown(`- Level Start: _${startDate}_\n`);
-        md.appendMarkdown(`- Time in level: _${formatElapsed(elapsedSince(startDate))}_\n`);
-    }
+    md.appendMarkdown(buildContactTooltipMarkdown(contact, detailed));
     return md;
 }

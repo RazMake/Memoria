@@ -4,6 +4,7 @@ import { el, formatDate, formatDateLong, sanitizeHtml } from './utils';
 import { createCheckbox } from './checkbox';
 import { attachSubtaskCheckboxHandlers } from './subtaskHandlers';
 import { showContextMenu, dismissContextMenu } from './contextMenu';
+import { annotateContacts } from './contactTooltip';
 
 let completedCollapsed = true;
 
@@ -64,6 +65,7 @@ function renderCompletedCard(task: UITask): HTMLElement {
     // Body (first line struck through via CSS)
     const body = el('div', 'task-body completed-body');
     body.innerHTML = sanitizeHtml(task.bodyHtml);
+    annotateContacts(body);
     attachSubtaskCheckboxHandlers(body, task.id);
 
     // Source link

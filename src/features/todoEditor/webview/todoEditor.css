@@ -490,3 +490,43 @@
     background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border));
     margin: 4px 0;
 }
+
+/* Contact mention & tooltip */
+.contact-mention {
+    text-decoration: underline dotted;
+    text-decoration-color: color-mix(in srgb, var(--vscode-foreground) 40%, transparent);
+    text-underline-offset: 2px;
+    cursor: default;
+    border-radius: 2px;
+    transition: background 100ms;
+}
+.contact-mention:hover {
+    background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+}
+.contact-tooltip {
+    position: fixed;
+    z-index: 3000;
+    max-width: 360px;
+    background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+    color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border));
+    border-radius: 4px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+    font-size: 12px;
+    line-height: 1.45;
+    pointer-events: none;
+}
+.contact-tooltip p {
+    margin: 0 0 4px;
+}
+.contact-tooltip p:last-child {
+    margin-bottom: 0;
+}
+.contact-tooltip ul {
+    margin: 0;
+    padding-left: 16px;
+}
+.contact-tooltip li {
+    margin-bottom: 2px;
+}

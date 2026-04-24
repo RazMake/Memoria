@@ -72,7 +72,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
     const contactsFeature = new ContactsFeature(manifest);
     const snippetsFeature = new SnippetsFeature(manifest, contactsFeature);
-    const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri);
+    const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri, snippetsFeature);
     const featureManager = new FeatureManager(manifest);
     let contactsViewDisposable: vscode.Disposable | undefined;
     let snippetCompletionDisposable: vscode.Disposable | undefined;
@@ -82,6 +82,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         contactsFeature,
         snippetsFeature,
+        snippetsFeature.onDidUpdateExpansionMap(() => {
+            todoEditorProvider.refreshContactTooltips();
+        }),
         {
             dispose: () => {
                 contactsViewDisposable?.dispose();

@@ -21,6 +21,9 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
     private reloadTimer: ReturnType<typeof setTimeout> | null = null;
     private contactsDisposable: vscode.Disposable | null = null;
 
+    private readonly _onDidUpdateExpansionMap = new vscode.EventEmitter<void>();
+    readonly onDidUpdateExpansionMap = this._onDidUpdateExpansionMap.event;
+
     constructor(
         private readonly manifest: ManifestManager,
         private readonly contactsFeature: ContactsFeatureType | null = null,
@@ -75,6 +78,7 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
 
     dispose(): void {
         void this.stop();
+        this._onDidUpdateExpansionMap.dispose();
     }
 
     isActive(): boolean {
@@ -263,6 +267,7 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         const contacts = this.contactsFeature.getAllContacts();
         this.contactSnippets = generateContactSnippets(contacts);
         this.rebuildContactExpansionMap(contacts);
+        this._onDidUpdateExpansionMap.fire();
     }
 
     private rebuildContactExpansionMap(contacts: ResolvedContact[]): void {

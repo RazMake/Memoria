@@ -5,9 +5,14 @@ import { createCheckbox } from './checkbox';
 import { attachSubtaskCheckboxHandlers } from './subtaskHandlers';
 import { openPopup } from './popup';
 import { showContextMenu, dismissContextMenu } from './contextMenu';
+import { annotateContacts } from './contactTooltip';
 
 let dragSrcId: string | null = null;
 const renderedActiveHtml = new Map<string, string>();
+
+export function invalidateActiveCache(): void {
+    renderedActiveHtml.clear();
+}
 
 export function renderActiveList(activeList: HTMLElement): void {
     const currentActive = getActive();
@@ -78,6 +83,7 @@ function renderActiveCard(activeList: HTMLElement, task: UITask): HTMLElement {
     // Body
     const body = el('div', 'task-body');
     body.innerHTML = sanitizeHtml(task.bodyHtml);
+    annotateContacts(body);
     body.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         openPopup('edit', task);

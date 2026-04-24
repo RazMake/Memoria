@@ -5,11 +5,13 @@ import MarkdownIt from "markdown-it";
 const taskLists = require("markdown-it-task-lists");
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { ParsedCollectorTask } from "../taskCollector/types";
-import type { UITask, ToWebviewMessage, ToExtensionMessage } from "./types";
+import type { UITask, ToWebviewMessage, ToExtensionMessage, ContactTooltipEntry } from "./types";
 import { parseTodoDocument, completeTask, uncompleteTask, addTaskRawLines, updateTaskBody, serializeDocument, stripHangingIndent, type TodoDocument } from "./documentSerializer";
 import { parseTaskBlocks } from "../taskCollector/taskParser";
 import { forward } from "../taskCollector/pathRewriter";
 import { replaceLineRange } from "../taskCollector/taskWriter";
+import type { ContactExpansionMap } from "../snippets/snippetHoverProvider";
+import { buildContactTooltipMarkdown } from "../contacts/contactTooltip";
 
 // A CustomTextEditor is used instead of a plain WebviewPanel so that VS Code's
 // built-in file save/dirty tracking, undo/redo stack, and tab management work
@@ -30,9 +32,15 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     // Cached body→source reverse map from the task index; survives tab switches.
     private cachedSourceByBody: Map<string, string> | null = null;
 
+    // Active panels: each open .todo.md editor registers its pushContactTooltips
+    // closure so we can push updated tooltip data when the expansion map changes
+    // (e.g. contacts load after the editor was already open).
+    private readonly activePanelTooltipPushers = new Set<() => void>();
+
     constructor(
         private readonly manifest: ManifestManager,
         private readonly extensionUri: vscode.Uri,
+        private readonly expansionMap?: ContactExpansionMap,
     ) {}
 
     static register(context: vscode.ExtensionContext, provider: TodoEditorProvider): vscode.Disposable {
@@ -41,6 +49,11 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             provider,
             { webviewOptions: { retainContextWhenHidden: true } },
         );
+    }
+
+    /** Re-pushes contact tooltip data to all open todo editor panels. */
+    refreshContactTooltips(): void {
+        for (const push of this.activePanelTooltipPushers) push();
     }
 
     async resolveCustomTextEditor(
@@ -159,7 +172,34 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             webviewPanel.webview.postMessage(msg);
         };
 
+        const pushContactTooltips = () => {
+            if (!this.expansionMap) return;
+            const entries = this.expansionMap.getExpansionEntries();
+            if (entries.length === 0) return;
+
+            const tooltipEntries: ContactTooltipEntry[] = [];
+            const seen = new Set<string>();
+            for (const { text, contact } of entries) {
+                if (seen.has(text)) continue;
+                seen.add(text);
+                const briefMd = buildContactTooltipMarkdown(contact, false);
+                const detailedMd = buildContactTooltipMarkdown(contact, true);
+                tooltipEntries.push({
+                    text,
+                    briefHtml: this.md.render(briefMd),
+                    detailedHtml: this.md.render(detailedMd),
+                });
+            }
+
+            const msg: ToWebviewMessage = { type: "contactTooltips", entries: tooltipEntries };
+            webviewPanel.webview.postMessage(msg);
+        };
+
         pushUpdate();
+        pushContactTooltips();
+
+        // Track this panel so refreshContactTooltips() can push updates later.
+        this.activePanelTooltipPushers.add(pushContactTooltips);
 
         // 8. Helper to apply edits and save so the task collector's onDidSave
         // handler ingests changes via reconcileCollector (collector-first sync).
@@ -192,6 +232,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             switch (msg.type) {
                 case "ready":
                     pushUpdate();
+                    pushContactTooltips();
                     break;
                 case "reorder": {
                     const doc = parseTodoDocument(document.getText());
@@ -400,6 +441,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         );
 
         webviewPanel.onDidDispose(() => {
+            this.activePanelTooltipPushers.delete(pushContactTooltips);
             for (const d of disposables) d.dispose();
         });
     }

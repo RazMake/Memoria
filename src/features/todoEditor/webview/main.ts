@@ -1,7 +1,7 @@
 import type { UITask } from './types';
-import { vscode, getActive, setActive, setCompleted } from './state';
+import { vscode, getActive, setActive, setCompleted, setContactTooltips } from './state';
 import { el } from './utils';
-import { renderActiveList } from './activeList';
+import { renderActiveList, invalidateActiveCache } from './activeList';
 import { renderCompletedSection } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
 
@@ -38,6 +38,10 @@ window.addEventListener('message', (e: MessageEvent) => {
         renderAll();
     } else if (msg?.type === 'syncDone') {
         syncBtn.classList.remove('syncing');
+    } else if (msg?.type === 'contactTooltips') {
+        setContactTooltips(msg.entries);
+        invalidateActiveCache();
+        renderAll();
     }
 });
 
