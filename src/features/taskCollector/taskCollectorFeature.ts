@@ -21,6 +21,13 @@ import { parseCollectorDocument, parseTaskBlocks, markSubtasksCompleted } from "
 import { renderDoneBlock, renderTaskBlock, replaceLineRange, TaskWriter } from "./taskWriter";
 import type { ExistingTaskSnapshot, ParsedCollectorTask, StoredTaskIndex, TaskBlock, TaskCollectorConfig, TaskIndexEntry, TaskSnapshot } from "./types";
 
+/**
+ * Maximum number of consecutive aging passes that can fail to locate a task
+ * in its source file before the task is removed from the index. Prevents
+ * indefinite accumulation of unreachable ghost entries.
+ */
+const MAX_AGING_SKIP_COUNT = 5;
+
 interface SourceContext {
     uri: vscode.Uri;
     workspaceFolder: vscode.WorkspaceFolder;
@@ -100,6 +107,8 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         const config = await this.readConfig();
         this.queue = new SyncQueue((job) => this.handleJob(job), config.debounceMs);
+        // Uses workspace-level event subscriptions (not FileSystemWatcher) because task tracking
+        // spans all markdown files matching configurable include/exclude globs across the workspace.
         this.subscriptions = [
             vscode.workspace.onDidSaveTextDocument((document) => {
                 void this.handleSave(document);
@@ -642,7 +651,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
     // indefinite accumulation of ghost entries in the index.
     private bumpAgingSkip(entry: TaskIndexEntry): void {
         entry.agingSkipCount = (entry.agingSkipCount ?? 0) + 1;
-        if ((entry.agingSkipCount ?? 0) >= 5 && this.index) {
+        if ((entry.agingSkipCount ?? 0) >= MAX_AGING_SKIP_COUNT && this.index) {
             removeTask(this.index, entry.id);
         }
     }

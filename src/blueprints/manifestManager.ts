@@ -9,6 +9,7 @@
 import * as vscode from "vscode";
 import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
+import type { TelemetryEmitter } from "../telemetry";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -23,7 +24,10 @@ export class ManifestManager {
      */
     private readonly ensuredDirs = new Set<string>();
 
-    constructor(fs: typeof vscode.workspace.fs) {
+    constructor(
+        fs: typeof vscode.workspace.fs,
+        private readonly telemetry?: TelemetryEmitter,
+    ) {
         this.fs = fs;
     }
 
@@ -220,12 +224,21 @@ export class ManifestManager {
     }
 
     private async readJson<T>(uri: vscode.Uri): Promise<T | null> {
+        let bytes: Uint8Array;
         try {
-            const bytes = await this.fs.readFile(uri);
+            bytes = await this.fs.readFile(uri);
+        } catch {
+            // File not found — expected when .memoria/ configs don't exist yet.
+            return null;
+        }
+
+        try {
             return JSON.parse(decoder.decode(bytes)) as T;
         } catch {
-            // Returns null for both "file not found" (expected) and JSON parse errors
-            // (unexpected but non-fatal — log would be ideal but we have no output channel here).
+            // JSON parse error — unexpected; the file exists but has invalid content.
+            this.telemetry?.logError("manifest.parseFailed", {
+                file: uri.path.split("/").pop() ?? "unknown",
+            });
             return null;
         }
     }

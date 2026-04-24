@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ConsoleTelemetrySender, createTelemetry, DeferredTelemetryLogger } from "../../src/telemetry";
+import { ConsoleTelemetrySender, createTelemetry, DeferredTelemetryLogger, ReporterTelemetrySender } from "../../src/telemetry";
 
 // Unit tests run outside VS Code — mock only the vscode API surface used by telemetry.ts.
 vi.mock("vscode", () => ({
@@ -76,15 +76,17 @@ describe("createTelemetry", () => {
         vi.clearAllMocks();
     });
 
-    it("returns reporter when connection string and factory are provided", () => {
-        const mockReporter = { dispose: vi.fn() };
+    it("returns TelemetryLogger wrapping reporter when connection string and factory are provided", async () => {
+        const vscode = await import("vscode");
+        const mockReporter = { dispose: vi.fn(), sendTelemetryEvent: vi.fn(), sendTelemetryErrorEvent: vi.fn() };
         const factory = vi.fn(() => mockReporter);
         const context = { subscriptions: [] } as any;
 
         const result = createTelemetry({ context, connectionString: "InstrumentationKey=test", createReporter: factory });
 
         expect(factory).toHaveBeenCalledWith("InstrumentationKey=test");
-        expect(result).toBe(mockReporter);
+        expect(vscode.env.createTelemetryLogger).toHaveBeenCalled();
+        expect(result).toHaveProperty("logUsage");
         expect(context.subscriptions).toContain(mockReporter);
     });
 
@@ -107,6 +109,41 @@ describe("createTelemetry", () => {
 
         expect(vscode.env.createTelemetryLogger).toHaveBeenCalled();
         expect(result).toBeDefined();
+    });
+});
+
+describe("ReporterTelemetrySender", () => {
+    it("sendEventData forwards to reporter.sendTelemetryEvent", () => {
+        const mockReporter = { dispose: vi.fn(), sendTelemetryEvent: vi.fn() };
+        const sender = new ReporterTelemetrySender(mockReporter as any);
+
+        sender.sendEventData("test.event", { key: "value" });
+
+        expect(mockReporter.sendTelemetryEvent).toHaveBeenCalledWith("test.event", { key: "value" });
+    });
+
+    it("sendErrorData forwards to reporter.sendTelemetryErrorEvent", () => {
+        const mockReporter = { dispose: vi.fn(), sendTelemetryErrorEvent: vi.fn() };
+        const sender = new ReporterTelemetrySender(mockReporter as any);
+
+        sender.sendErrorData(new Error("boom"), { ctx: "test" });
+
+        expect(mockReporter.sendTelemetryErrorEvent).toHaveBeenCalledWith("boom", { ctx: "test" });
+    });
+
+    it("sendEventData does not throw when reporter lacks sendTelemetryEvent", () => {
+        const mockReporter = { dispose: vi.fn() };
+        const sender = new ReporterTelemetrySender(mockReporter as any);
+
+        expect(() => sender.sendEventData("test.event")).not.toThrow();
+    });
+
+    it("flush and dispose do not throw", () => {
+        const mockReporter = { dispose: vi.fn() };
+        const sender = new ReporterTelemetrySender(mockReporter as any);
+
+        expect(() => sender.flush()).not.toThrow();
+        expect(() => sender.dispose()).not.toThrow();
     });
 });
 

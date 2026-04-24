@@ -2,6 +2,7 @@
 //   • Source files       — standard GFM task list items (- [ ] / - [x]).
 //   • Collector document — same task list format plus optional suffix lines that carry
 //     metadata (source path and completion date) appended by the formatter.
+import { TASK_LINE_RE, isChecked } from "../../utils/markdownCheckbox";
 import type {
     CollectorSection,
     ParsedCollectorDocument,
@@ -9,8 +10,6 @@ import type {
     ParsedCollectorTask,
     TaskBlock,
 } from "./types";
-
-const TASK_LINE_RE = /^([ \t]*)- \[([ xX])\](?:\s?(.*))?$/;
 const ACTIVE_HEADING_RE = /^#{1,6}\s+To\s+do\s*$/i;
 const COMPLETED_HEADING_RE = /^#{1,6}\s+Completed\s*$/i;
 const BLANK_LINE_RE = /^\s*$/;
@@ -184,7 +183,7 @@ function parseTaskAt(lines: string[], startLine: number): { block: TaskBlock; ne
         block: {
             indent,
             indentText,
-            checked: match[2].toLowerCase() === "x",
+            checked: isChecked(match[2]),
             firstLineText,
             continuationLines,
             bodyRange: {

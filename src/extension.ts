@@ -7,18 +7,7 @@ import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
 import { getWorkspaceRoots } from "./blueprints/workspaceUtils";
 import { updateDefaultFileContext, registerDefaultFileWatcher, type DefaultFileWatcherHolder } from "./defaultFileContext";
-import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
-import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
-import { createManageFeaturesCommand } from "./commands/manageFeatures";
-import { createOpenDefaultFileCommand } from "./commands/openDefaultFile";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
-import { createSyncTasksCommand } from "./commands/syncTasks";
-import {
-    createAddPersonCommand,
-    createDeletePersonCommand,
-    createEditPersonCommand,
-    createMovePersonCommand,
-} from "./commands/contactCommands";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
 import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
@@ -31,6 +20,11 @@ import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 import { SnippetsFeature } from "./features/snippets/snippetsFeature";
 import { SnippetCompletionProvider } from "./features/snippets/snippetCompletionProvider";
 import { SnippetHoverProvider } from "./features/snippets/snippetHoverProvider";
+import { checkForBlueprintUpdates, updateWorkspaceInitializedContext } from "./blueprintUpdateCheck";
+import { registerFileWatchers } from "./fileWatchers";
+import { registerCommands } from "./commandRegistration";
+
+export { isNewerVersion } from "./blueprintUpdateCheck";
 
 /** Lazy factory — defers require("@vscode/extension-telemetry") to first call. */
 const reporterFactory: TelemetryReporterFactory = (connectionString) => {
@@ -58,12 +52,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const telemetry = new DeferredTelemetryLogger();
     queueMicrotask(() => {
         telemetry.initialize(
-            createTelemetry({ context, createReporter: reporterFactory }) as vscode.TelemetryLogger
+            createTelemetry({ context, createReporter: reporterFactory })
         );
     });
 
     const registry = new BlueprintRegistry(context.extensionUri);
-    const manifest = new ManifestManager(vscode.workspace.fs);
+    const manifest = new ManifestManager(vscode.workspace.fs, telemetry);
     const scaffold = new FileScaffold(vscode.workspace.fs);
     const engine = new BlueprintEngine(registry, manifest, scaffold, vscode.workspace.fs, telemetry);
     const resolver = new WorkspaceInitConflictResolver(vscode.workspace.fs);
@@ -235,321 +229,4 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export function deactivate(): void {
     // Default-file watchers are tracked by the holder created in activate().
     // Context subscriptions handle disposal of all other watchers.
-}
-
-/**
- * Watches .memoria/blueprint.json across all workspace roots so the context key
- * and features stay in sync when external tools or the user modify the file system.
- *
- * Two complementary listeners are needed:
- *  - FileSystemWatcher — fires for external FS changes (terminal, OS, etc.)
- *  - onDidDeleteFiles  — fires when the user deletes via the VS Code Explorer.
- *    (Deleting the .memoria/ *directory* does not trigger the file-level watcher
- *     because the glob targets a child file, not the directory itself.)
- */
-function registerFileWatchers(
-    context: vscode.ExtensionContext,
-    roots: vscode.Uri[],
-    manifest: ManifestManager,
-    featureManager: FeatureManager,
-    initializedRoot: vscode.Uri | null,
-    defaultFileWatcherHolder: DefaultFileWatcherHolder
-): void {
-    // Tracks the previously seen initialized root. Used to short-circuit recheckInitialization()
-    // when the filesystem watcher fires but the initialized root has not actually changed —
-    // this avoids redundant feature refreshes on unrelated file-system events.
-    let lastKnownRoot: string | null = initializedRoot?.toString() ?? null;
-
-    const recheckInitialization = async (): Promise<void> => {
-        const currentRoot = await manifest.findInitializedRoot(roots);
-        const currentRootStr = currentRoot?.toString() ?? null;
-        if (currentRootStr === lastKnownRoot) {
-            return;
-        }
-        lastKnownRoot = currentRootStr;
-        await updateWorkspaceInitializedContext(currentRoot);
-        await featureManager.refresh(currentRoot);
-        await updateDefaultFileContext(currentRoot, roots, manifest);
-        registerDefaultFileWatcher(context, currentRoot, roots, manifest, defaultFileWatcherHolder);
-    };
-
-    // Watch every root — not just the first — so multi-root workspaces are fully covered.
-    for (const root of roots) {
-        const watcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(root, ".memoria/blueprint.json")
-        );
-        watcher.onDidCreate(recheckInitialization);
-        watcher.onDidDelete(recheckInitialization);
-        context.subscriptions.push(watcher);
-    }
-
-    // Watch decorations.json so explorer colors update live when the user edits the file.
-    // This needs a separate handler because recheckInitialization short-circuits when the
-    // initialized root hasn't changed — but here the root is the same, only the rules changed.
-    const refreshFeatures = async (): Promise<void> => {
-        const currentRoot = await manifest.findInitializedRoot(roots);
-        await featureManager.refresh(currentRoot);
-    };
-    for (const root of roots) {
-        const decWatcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(root, ".memoria/decorations.json")
-        );
-        decWatcher.onDidChange(() => void refreshFeatures());
-        decWatcher.onDidCreate(() => void refreshFeatures());
-        decWatcher.onDidDelete(() => void refreshFeatures());
-        context.subscriptions.push(decWatcher);
-    }
-
-    const memoriaDir = "/.memoria";
-    context.subscriptions.push(
-        vscode.workspace.onDidDeleteFiles((e) => {
-            const affectsMemoria = e.files.some((uri) =>
-                uri.path.includes(memoriaDir + "/") || uri.path.endsWith(memoriaDir)
-            );
-            if (affectsMemoria) {
-                void recheckInitialization();
-            }
-        })
-    );
-}
-
-function registerCommands(
-    context: vscode.ExtensionContext,
-    engine: BlueprintEngine,
-    registry: BlueprintRegistry,
-    manifest: ManifestManager,
-    telemetry: DeferredTelemetryLogger,
-    resolver: WorkspaceInitConflictResolver,
-    featureManager: FeatureManager,
-    taskCollectorFeature: TaskCollectorFeature,
-    contactsFeature: ContactsFeature,
-    snippetsFeature: SnippetsFeature,
-    onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>
-): void {
-    context.subscriptions.push(
-        vscode.commands.registerCommand(
-            "memoria.initializeWorkspace",
-            createInitializeWorkspaceCommand(
-                engine,
-                registry,
-                manifest,
-                telemetry,
-                resolver,
-                onWorkspaceInitialized
-            )
-        ),
-        vscode.commands.registerCommand(
-            "memoria.toggleDotFolders",
-            createToggleDotFoldersCommand(manifest, telemetry)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.manageFeatures",
-            createManageFeaturesCommand(manifest, telemetry, featureManager)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.openDefaultFile",
-            createOpenDefaultFileCommand(manifest)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.syncTasks",
-            createSyncTasksCommand(taskCollectorFeature, telemetry)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.addPerson",
-            createAddPersonCommand(contactsFeature)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.editPerson",
-            createEditPersonCommand(contactsFeature)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.deletePerson",
-            createDeletePersonCommand(contactsFeature)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.movePerson",
-            createMovePersonCommand(contactsFeature)
-        ),
-        vscode.commands.registerCommand(
-            "memoria.expandSnippet",
-            async (trigger: string, documentUriStr: string) => {
-                const editor = vscode.window.activeTextEditor;
-                if (!editor || editor.document.uri.toString() !== documentUriStr) return;
-
-                const allSnippets = snippetsFeature.getAllSnippets();
-                const snippet = allSnippets.find((s) => s.trigger === trigger);
-                if (!snippet) return;
-
-                // Use the current cursor — VS Code places it after the accepted
-                // completion's insertText (which is ""), so the cursor sits where
-                // the trigger text was removed. A stray `}` may remain if the user
-                // typed the full `{trigger}` before accepting.
-                const cursorPos = editor.selection.active;
-                const lineText = editor.document.lineAt(cursorPos.line).text;
-                const hasStrayBrace = lineText[cursorPos.character] === "}";
-
-                const selectedText = editor.selection.isEmpty === false
-                    ? editor.document.getText(editor.selection)
-                    : undefined;
-
-                const expanded = await snippetsFeature.expandSnippet(
-                    snippet, editor.document, cursorPos, selectedText,
-                );
-
-                await editor.edit((editBuilder) => {
-                    if (hasStrayBrace) {
-                        const braceRange = new vscode.Range(
-                            cursorPos,
-                            new vscode.Position(cursorPos.line, cursorPos.character + 1),
-                        );
-                        editBuilder.replace(braceRange, expanded);
-                    } else {
-                        editBuilder.insert(cursorPos, expanded);
-                    }
-                });
-            },
-        ),
-        vscode.commands.registerCommand(
-            "memoria.resetSnippet",
-            async (uri: vscode.Uri) => {
-                if (!uri) {
-                    vscode.window.showInformationMessage("Memoria: No file selected.");
-                    return;
-                }
-
-                const roots = getWorkspaceRoots();
-                const root = await manifest.findInitializedRoot(roots);
-                if (!root) return;
-
-                const manifestData = await manifest.readManifest(root);
-                if (!manifestData?.snippets) return;
-
-                const relativePath = vscode.workspace.asRelativePath(uri, false);
-                if (!(relativePath in manifestData.fileManifest)) {
-                    vscode.window.showInformationMessage(
-                        "This snippet was not shipped with the blueprint and cannot be reset.",
-                    );
-                    return;
-                }
-
-                try {
-                    const originalBytes = await registry.getSeedFileContent(
-                        manifestData.blueprintId,
-                        relativePath,
-                    );
-                    if (!originalBytes) {
-                        vscode.window.showWarningMessage("Memoria: Could not reset snippet — original not found.");
-                        return;
-                    }
-                    await vscode.workspace.fs.writeFile(uri, originalBytes);
-                    vscode.window.showInformationMessage(`Memoria: Snippet reset to default.`);
-                } catch {
-                    vscode.window.showWarningMessage("Memoria: Could not reset snippet — original not found.");
-                }
-            },
-        ),
-    );
-}
-
-/**
- * Sets the VS Code context key `memoria.workspaceInitialized`.
- * This drives the `when` clause visibility of the toggleDotFolders command.
- */
-async function updateWorkspaceInitializedContext(
-    initializedRoot: vscode.Uri | null
-): Promise<void> {
-    await vscode.commands.executeCommand(
-        "setContext",
-        "memoria.workspaceInitialized",
-        initializedRoot !== null
-    );
-}
-
-/**
- * Compares the stored blueprint version in .memoria/blueprint.json with the version
- * of the bundled blueprint. When the bundled version is newer, prompts the user to
- * re-initialize so the latest structure is applied.
- *
- * Runs silently (no-op) when: the workspace is not initialized, the blueprint id is no
- * longer bundled, or the stored version is current.
- *
- * Called with `void` + `.catch()` in activate() because showInformationMessage() with
- * action buttons blocks until the user responds — awaiting it would delay command
- * registration and initial decoration rendering. Errors are swallowed because the
- * update check is best-effort and must never prevent the extension from starting.
- */
-async function checkForBlueprintUpdates(
-    initializedRoot: vscode.Uri | null,
-    manifest: ManifestManager,
-    registry: BlueprintRegistry,
-    engine: BlueprintEngine,
-    resolver: WorkspaceInitConflictResolver,
-    featureManager: FeatureManager
-): Promise<void> {
-    if (!initializedRoot) {
-        return;
-    }
-
-    const storedManifest = await manifest.readManifest(initializedRoot);
-    if (!storedManifest) {
-        return;
-    }
-
-    let bundledDefinition;
-    try {
-        bundledDefinition = await registry.getBlueprintDefinition(storedManifest.blueprintId);
-    } catch {
-        // Blueprint ID no longer bundled — skip silently.
-        return;
-    }
-
-    if (!isNewerVersion(bundledDefinition.version, storedManifest.blueprintVersion)) {
-        return;
-    }
-
-    const answer = await vscode.window.showInformationMessage(
-        `Memoria: A newer version of blueprint "${bundledDefinition.name}" is available (${bundledDefinition.version}). Re-initialize to apply updates?`,
-        "Re-initialize",
-        "Later"
-    );
-
-    if (answer !== "Re-initialize") {
-        return;
-    }
-
-    try {
-        await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
-        await updateWorkspaceInitializedContext(initializedRoot);
-        await featureManager.refresh(initializedRoot);
-        vscode.window.showInformationMessage(
-            `Memoria: Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
-        );
-    } catch (err) {
-        vscode.window.showErrorMessage(
-            `Memoria: Re-initialization failed — ${(err as Error).message}`
-        );
-    }
-}
-
-/**
- * Returns true when `bundled` is a strictly newer SemVer than `stored`.
- * Handles only numeric major.minor.patch — pre-release suffixes are not compared.
- *
- * Exported so unit tests can exercise version-comparison logic in isolation,
- * without activating the full extension.
- */
-export function isNewerVersion(bundled: string, stored: string): boolean {
-    const parse = (v: string): [number, number, number] => {
-        const parts = v.split(".").map(Number);
-        return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-    };
-    const [bMaj, bMin, bPatch] = parse(bundled);
-    const [sMaj, sMin, sPatch] = parse(stored);
-    if (bMaj !== sMaj) {
-        return bMaj > sMaj;
-    }
-    if (bMin !== sMin) {
-        return bMin > sMin;
-    }
-    return bPatch > sPatch;
 }

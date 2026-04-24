@@ -13,6 +13,7 @@
 import * as vscode from "vscode";
 import { getLocation, parseTree, findNodeAtLocation, type Location } from "jsonc-parser";
 import { getWorkspaceRoots, getRootFolderName, classifyFolderKey, classifyFilePath } from "../../blueprints/workspaceUtils";
+import { extractPartialValue } from "../../utils/jsonCompletionHelpers";
 
 /** Document selector that matches only .memoria/default-files.json files. */
 export const DEFAULT_FILES_JSON_SELECTOR: vscode.DocumentSelector = {
@@ -493,19 +494,8 @@ export function isDefaultFilesValue(loc: Location, text: string, offset: number)
 
 // ── Parsing helpers ─────────────────────────────────────────────────────
 
-/**
- * Extracts the partial string value the user has typed so far at the cursor offset.
- * Scans backwards from the cursor to find the opening quote of the current string.
- */
-export function extractPartialValue(text: string, offset: number): string {
-    // Search backwards for the opening quote of the string the cursor is inside.
-    let i = offset - 1;
-    while (i >= 0 && text[i] !== '"') {
-        i--;
-    }
-    // i is now at the opening quote; extract from i+1 to offset.
-    return i >= 0 ? text.substring(i + 1, offset) : "";
-}
+// Re-export for backward compatibility with existing test imports.
+export { extractPartialValue } from "../../utils/jsonCompletionHelpers";
 
 /** Returns the set of existing keys inside the "defaultFiles" object. */
 function getExistingDefaultFilesKeys(text: string): Set<string> {

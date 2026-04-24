@@ -36,6 +36,30 @@ export class ConsoleTelemetrySender implements vscode.TelemetrySender {
 }
 
 /**
+ * Adapts a TelemetryReporter (from @vscode/extension-telemetry) to the
+ * vscode.TelemetrySender interface so it can be used with vscode.env.createTelemetryLogger().
+ *
+ * This bridges the gap between the CJS-only @vscode/extension-telemetry package
+ * and the native VS Code telemetry API. The reporter handles Application Insights
+ * transport; the sender interface lets VS Code manage telemetry settings and batching.
+ */
+export class ReporterTelemetrySender implements vscode.TelemetrySender {
+    constructor(private readonly reporter: TelemetryReporterLike) {}
+
+    sendEventData(eventName: string, data?: Record<string, any>): void {
+        (this.reporter as any).sendTelemetryEvent?.(eventName, data);
+    }
+
+    sendErrorData(error: Error, data?: Record<string, any>): void {
+        (this.reporter as any).sendTelemetryErrorEvent?.(error.message, data);
+    }
+
+    flush(): void {}
+
+    dispose(): void {}
+}
+
+/**
  * Minimal interface for telemetry emission — used by command handlers instead of
  * the concrete vscode.TelemetryLogger so they stay decoupled from initialization timing.
  */
@@ -77,27 +101,21 @@ export interface CreateTelemetryOptions {
 }
 
 /**
- * Creates a telemetry reporter or logger.
+ * Creates a TelemetryLogger. Both paths produce a vscode.TelemetryLogger that
+ * can be passed to DeferredTelemetryLogger.initialize().
  *
- * - With a connection string + factory: returns a TelemetryReporter that sends to Application Insights.
- * - Without: returns a TelemetryLogger that logs to a local OutputChannel.
- *
- * Both respect VS Code's telemetry.telemetryLevel user setting automatically.
- *
- * The TelemetryReporter is created via a factory injection rather than a direct import
- * because `@vscode/extension-telemetry` is a CJS-only package that uses `require()`.
- * A dynamic `require()` inside the lazy factory prevents esbuild from trying to bundle
- * it as an ESM module, avoiding CJS/ESM interop issues at build time.
+ * - With a connection string + factory: wraps TelemetryReporter in a TelemetrySender adapter
+ * - Without: uses ConsoleTelemetrySender for local output channel logging
  */
-export function createTelemetry(
-    options: CreateTelemetryOptions
-): TelemetryReporterLike | vscode.TelemetryLogger {
+export function createTelemetry(options: CreateTelemetryOptions): vscode.TelemetryLogger {
     const { context, connectionString, createReporter } = options;
 
     if (connectionString && createReporter) {
         const reporter = createReporter(connectionString);
-        context.subscriptions.push(reporter);
-        return reporter;
+        const sender = new ReporterTelemetrySender(reporter);
+        const logger = vscode.env.createTelemetryLogger(sender);
+        context.subscriptions.push(logger, reporter);
+        return logger;
     }
 
     const outputChannel = vscode.window.createOutputChannel("Memoria Telemetry");

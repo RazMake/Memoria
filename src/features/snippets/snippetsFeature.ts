@@ -311,6 +311,8 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         this.contactExpansionEntries = entries;
     }
 
+    // Uses a scoped FileSystemWatcher rather than workspace-level save events because snippets
+    // are confined to a single folder (the blueprint's snippets folder).
     private installWatcher(): void {
         if (!this.workspaceRoot || !this.snippetsFolder) return;
 

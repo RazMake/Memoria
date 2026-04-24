@@ -445,4 +445,31 @@ describe("ManifestManager", () => {
             expect(mockCreateDirectory).toHaveBeenCalledOnce();
         });
     });
+
+    describe("readJson parse-error telemetry", () => {
+        it("should log telemetry when JSON parsing fails", async () => {
+            const telemetry = { logUsage: vi.fn(), logError: vi.fn() };
+            mockReadFile.mockResolvedValueOnce(encoder.encode("{invalid json"));
+            const manager = new ManifestManager(mockFs, telemetry);
+
+            const result = await manager.readManifest(workspaceRoot);
+
+            expect(result).toBeNull();
+            expect(telemetry.logError).toHaveBeenCalledWith(
+                "manifest.parseFailed",
+                expect.objectContaining({ file: expect.any(String) }),
+            );
+        });
+
+        it("should not call telemetry when file is not found", async () => {
+            const telemetry = { logUsage: vi.fn(), logError: vi.fn() };
+            mockReadFile.mockRejectedValueOnce(new Error("not found"));
+            const manager = new ManifestManager(mockFs, telemetry);
+
+            const result = await manager.readManifest(workspaceRoot);
+
+            expect(result).toBeNull();
+            expect(telemetry.logError).not.toHaveBeenCalled();
+        });
+    });
 });
