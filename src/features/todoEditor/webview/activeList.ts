@@ -61,6 +61,7 @@ export function renderActiveList(activeList: HTMLElement): void {
 
 function renderActiveCard(activeList: HTMLElement, task: UITask): HTMLElement {
     const card = el('div', 'task-card active-card');
+    if (task.sourceRelativePath) card.classList.add('collected');
     card.setAttribute('data-id', task.id);
     card.draggable = true;
 

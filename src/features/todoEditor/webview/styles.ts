@@ -80,6 +80,12 @@ export function injectStyles(): void {
     cursor: grabbing;
 }
 
+/* Collected-from-source indicator */
+.task-card.collected {
+    border-left: 2px solid color-mix(in srgb, var(--vscode-textLink-foreground) 45%, transparent);
+    padding-left: 9px; /* 10px default minus 1px for thicker border */
+}
+
 /* Checkbox SVG */
 .checkbox-svg {
     flex-shrink: 0;

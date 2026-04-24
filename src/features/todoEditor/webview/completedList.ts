@@ -43,6 +43,7 @@ export function renderCompletedSection(completedSection: HTMLElement): void {
 
 function renderCompletedCard(task: UITask): HTMLElement {
     const card = el('div', 'task-card completed-card');
+    if (task.sourceRelativePath) card.classList.add('collected');
     card.setAttribute('data-id', task.id);
 
     // Checkbox (filled)
