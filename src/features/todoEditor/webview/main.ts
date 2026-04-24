@@ -4,9 +4,9 @@ import { el } from './utils';
 import { renderActiveList } from './activeList';
 import { renderCompletedSection } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
-import { injectStyles } from './styles';
 
 const root = document.getElementById('root') ?? document.body;
+root.textContent = '';
 
 const container = el('div', 'todo-container');
 const toolbarEl = el('div', 'toolbar');
@@ -29,8 +29,6 @@ const emptyState = el('div', 'empty-state');
 
 container.append(toolbarEl, activeListEl, emptyState, completedSectionEl);
 root.appendChild(container);
-
-injectStyles();
 
 window.addEventListener('message', (e: MessageEvent) => {
     const msg = e.data;

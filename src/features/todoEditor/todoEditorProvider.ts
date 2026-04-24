@@ -16,14 +16,24 @@ import { replaceLineRange } from "../taskCollector/taskWriter";
 // automatically — the extension does not need to reimplement any of that.
 export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     private static readonly viewType = "memoria.todoEditor";
-    private readonly md: MarkdownIt;
+
+    // Lazy-initialized on first editor open to avoid paying construction cost
+    // when no .todo.md file is opened during the session.
+    private _md: MarkdownIt | null = null;
+    private get md(): MarkdownIt {
+        return (this._md ??= new MarkdownIt({ breaks: true }).use(taskLists, { enabled: true }));
+    }
+
+    // Persistent across editor open/close to avoid re-rendering unchanged tasks.
+    private readonly mdCache = new Map<string, string>();
+
+    // Cached body→source reverse map from the task index; survives tab switches.
+    private cachedSourceByBody: Map<string, string> | null = null;
 
     constructor(
         private readonly manifest: ManifestManager,
         private readonly extensionUri: vscode.Uri,
-    ) {
-        this.md = new MarkdownIt({ breaks: true }).use(taskLists, { enabled: true });
-    }
+    ) {}
 
     static register(context: vscode.ExtensionContext, provider: TodoEditorProvider): vscode.Disposable {
         return vscode.window.registerCustomEditorProvider(
@@ -48,7 +58,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
 
         const nonce = getNonce();
         const webviewJs = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.js"));
-        webviewPanel.webview.html = getHtmlForWebview(webviewPanel.webview, nonce, webviewJs);
+        const webviewCss = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.css"));
+        webviewPanel.webview.html = getHtmlForWebview(webviewPanel.webview, nonce, webviewJs, webviewCss);
 
         // 2. Wait for webview ready signal.
         //    Without this handshake the first postMessage can arrive before the
@@ -61,14 +72,36 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 }
             });
             // Safety: if the webview never sends ready (e.g. script error),
-            // fall through after 3 s so the editor isn't permanently blank.
-            setTimeout(() => { readyListener.dispose(); resolve(); }, 3000);
+            // fall through after 1 s so the editor isn't permanently blank.
+            setTimeout(() => { readyListener.dispose(); resolve(); }, 1000);
         });
 
-        // 3. Find the initialized workspace root concurrently with webview load.
+        // 3. Read task index in parallel with webview ready handshake.
+        //    refreshTaskIndex is defined before Promise.all so it can be chained
+        //    onto findInitializedRoot — the task index read starts as soon as the
+        //    workspace root is known, without waiting for the webview ready signal.
+        let lastOpenedSourceUri: vscode.Uri | null = null;
+
+        const refreshTaskIndex = async (root: vscode.Uri | null): Promise<void> => {
+            if (!root) return;
+            const stored = await this.manifest.readTaskIndex(root);
+            if (stored) {
+                this.cachedSourceByBody = new Map();
+                for (const entry of Object.values(stored.tasks)) {
+                    if (entry.source) {
+                        const collectorBody = forward(entry.body, entry.source, stored.collectorPath);
+                        this.cachedSourceByBody.set(collectorBody, entry.source);
+                    }
+                }
+            }
+        };
+
         const roots = vscode.workspace.workspaceFolders?.map(f => f.uri) ?? [];
         const [workspaceRoot] = await Promise.all([
-            this.manifest.findInitializedRoot(roots),
+            this.manifest.findInitializedRoot(roots).then(async (root) => {
+                await refreshTaskIndex(root);
+                return root;
+            }),
             readyPromise,
         ]);
 
@@ -85,29 +118,6 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             return { task: tasks[idx], section: isCompleted ? "completed" : "active", index: idx };
         };
 
-        // 5. Caches: markdown render results, task index, body→source reverse map.
-        //    These avoid repeated I/O and O(n) scans on every pushUpdate.
-        const mdCache = new Map<string, string>();
-        let sourceByBody: Map<string, string> | null = null;
-        let lastOpenedSourceUri: vscode.Uri | null = null;
-
-        const refreshTaskIndex = async (): Promise<void> => {
-            if (!workspaceRoot) return;
-            const stored = await this.manifest.readTaskIndex(workspaceRoot);
-            if (stored) {
-                // Build a body→source reverse map for O(1) lookup when rendering tasks,
-                // avoiding an O(n) index scan per task in pushUpdate.
-                sourceByBody = new Map();
-                for (const entry of Object.values(stored.tasks)) {
-                    if (entry.source) {
-                        const collectorBody = forward(entry.body, entry.source, stored.collectorPath);
-                        sourceByBody.set(collectorBody, entry.source);
-                    }
-                }
-            }
-        };
-        await refreshTaskIndex();
-
         // 6. pushUpdate function — uses caches to avoid redundant work.
         const pushUpdate = () => {
             const text = document.getText();
@@ -120,17 +130,17 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 let sourceRelativePath: string | null = null;
                 if (isCompleted && task.suffix?.source) {
                     sourceRelativePath = task.suffix.source;
-                } else if (!isCompleted && sourceByBody) {
-                    sourceRelativePath = sourceByBody.get(task.bodyWithoutSuffix) ?? null;
+                } else if (!isCompleted && this.cachedSourceByBody) {
+                    sourceRelativePath = this.cachedSourceByBody.get(task.bodyWithoutSuffix) ?? null;
                 }
 
                 const cleanBody = stripHangingIndent(task.bodyWithoutSuffix);
 
                 // Cached markdown render — only re-render when body text changes
-                let bodyHtml = mdCache.get(cleanBody);
+                let bodyHtml = this.mdCache.get(cleanBody);
                 if (!bodyHtml) {
                     bodyHtml = this.md.render(cleanBody);
-                    mdCache.set(cleanBody, bodyHtml);
+                    this.mdCache.set(cleanBody, bodyHtml);
                 }
 
                 return {
@@ -259,8 +269,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                     // Source file write-back for collected tasks
                     if (workspaceRoot && found.suffix?.source) {
                         await writeBackToSource(workspaceRoot, found.suffix.source, oldBody, msg.newBody);
-                    } else if (workspaceRoot && sourceByBody) {
-                        const src = sourceByBody.get(oldBody);
+                    } else if (workspaceRoot && this.cachedSourceByBody) {
+                        const src = this.cachedSourceByBody.get(oldBody);
                         if (src) {
                             await writeBackToSource(workspaceRoot, src, oldBody, msg.newBody);
                         }
@@ -299,8 +309,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                     let sourcePath: string | null = null;
                     if (found.suffix?.source) {
                         sourcePath = found.suffix.source;
-                    } else if (sourceByBody) {
-                        sourcePath = sourceByBody.get(found.bodyWithoutSuffix) ?? null;
+                    } else if (this.cachedSourceByBody) {
+                        sourcePath = this.cachedSourceByBody.get(found.bodyWithoutSuffix) ?? null;
                     }
 
                     if (sourcePath) {
@@ -338,7 +348,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 }
                 case "scan": {
                     await syncTasks();
-                    await refreshTaskIndex();
+                    await refreshTaskIndex(workspaceRoot);
                     pushUpdate();
                     webviewPanel.webview.postMessage({ type: "syncDone" });
                     break;
@@ -353,8 +363,8 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                     let sourcePath: string | null = null;
                     if (found.suffix?.source) {
                         sourcePath = found.suffix.source;
-                    } else if (sourceByBody) {
-                        sourcePath = sourceByBody.get(found.bodyWithoutSuffix) ?? null;
+                    } else if (this.cachedSourceByBody) {
+                        sourcePath = this.cachedSourceByBody.get(found.bodyWithoutSuffix) ?? null;
                     }
 
                     // Remove from collector document
@@ -384,7 +394,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         disposables.push(
             vscode.workspace.onDidChangeTextDocument(e => {
                 if (e.document.uri.toString() === document.uri.toString()) {
-                    void refreshTaskIndex().then(pushUpdate);
+                    void refreshTaskIndex(workspaceRoot).then(pushUpdate);
                 }
             }),
         );
@@ -516,7 +526,7 @@ function toggleNthCheckbox(body: string, index: number, date: string): string {
     return body;
 }
 
-function getHtmlForWebview(webview: vscode.Webview, nonce: string, scriptUri: vscode.Uri): string {
+function getHtmlForWebview(webview: vscode.Webview, nonce: string, scriptUri: vscode.Uri, cssUri: vscode.Uri): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -524,9 +534,22 @@ function getHtmlForWebview(webview: vscode.Webview, nonce: string, scriptUri: vs
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
     <title>Todo Editor</title>
+    <link rel="stylesheet" href="${cssUri}">
+    <style nonce="${nonce}">
+        .loading-skeleton { padding: 16px; opacity: 0.5; }
+        .skeleton-bar { height: 48px; background: var(--vscode-editor-foreground, #888); opacity: 0.08; border-radius: 6px; margin-bottom: 8px; }
+        .skeleton-short { height: 14px; width: 120px; opacity: 0.15; margin-bottom: 16px; }
+    </style>
 </head>
 <body>
-    <div id="root" data-nonce="${nonce}"></div>
+    <div id="root" data-nonce="${nonce}">
+        <div class="loading-skeleton">
+            <div class="skeleton-bar skeleton-short"></div>
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar"></div>
+        </div>
+    </div>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

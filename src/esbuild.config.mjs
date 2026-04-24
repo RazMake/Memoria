@@ -32,6 +32,12 @@ await Promise.all([
         minify: !isDev,
     }),
     build({
+        entryPoints: ["features/todoEditor/webview/todoEditor.css"],
+        outfile: "dist/webview.css",
+        bundle: true,
+        minify: !isDev,
+    }),
+    build({
         entryPoints: ["features/contacts/webview/main.ts"],
         bundle: true,
         outfile: "dist/contacts-webview.js",
