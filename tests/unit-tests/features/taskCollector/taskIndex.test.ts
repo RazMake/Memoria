@@ -215,7 +215,7 @@ describe("taskIndex", () => {
             expect(getCollectorOrder(index, true)).toEqual(["a"]);
         });
 
-        it("should append tasks not listed in the configured order", () => {
+        it("should prepend tasks not listed in the configured order", () => {
             const index = createEmptyTaskIndex("path.md");
             upsertTask(index, { ...makeEntry("a", "notes.md"), completed: false });
             upsertTask(index, { ...makeEntry("b", "notes.md"), completed: false });
@@ -223,7 +223,7 @@ describe("taskIndex", () => {
 
             const order = getCollectorOrder(index, false);
 
-            expect(order).toEqual(["a", "b"]);
+            expect(order).toEqual(["b", "a"]);
         });
 
         it("should exclude ids whose completion status does not match the requested section", () => {

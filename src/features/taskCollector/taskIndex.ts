@@ -121,7 +121,7 @@ export function getCollectorOrder(index: StoredTaskIndex, completed: boolean): s
     });
 
     const extras = wantedIds.filter((id) => !seen.has(id));
-    return [...ordered, ...extras];
+    return [...extras, ...ordered];
 }
 
 // Must be called after any task removal: sourceOrders and collectorOrder may still reference
