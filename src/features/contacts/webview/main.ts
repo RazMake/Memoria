@@ -616,29 +616,6 @@ function createGroupCard(
     return details;
 }
 
-function buildContactTooltip(contact: ContactsViewContact, detailed: boolean): string {
-    if (!detailed) {
-        return contact.shortTitle || contact.title || contact.fullName || contact.id;
-    }
-
-    const lines: string[] = [];
-    if (contact.fullName) {
-        lines.push(contact.fullName);
-    }
-    if (contact.title) {
-        lines.push(contact.title);
-    }
-    lines.push(`Kind: ${contact.kind}`);
-    lines.push(`ID: ${contact.id}`);
-    if (contact.groupName) {
-        lines.push(`Group: ${contact.groupName}`);
-    }
-    if (contact.kind === "report" && contact.levelStartDate) {
-        lines.push(`Level since: ${contact.levelStartDate}`);
-    }
-    return lines.join("\n");
-}
-
 function createContactRow(contact: ContactsViewContact, showGroupTag: boolean): HTMLElement {
     const row = el("div", "contact-row");
     row.tabIndex = 0;
@@ -682,19 +659,7 @@ function createContactRow(contact: ContactsViewContact, showGroupTag: boolean): 
         linePrimary.appendChild(fullName);
     }
 
-    row.title = buildContactTooltip(contact, false);
-    let unsubModifiers: (() => void) | null = null;
-    row.addEventListener("mouseenter", () => {
-        row.title = buildContactTooltip(contact, modifierKeys.getState().ctrl);
-        unsubModifiers = modifierKeys.subscribe((state) => {
-            row.title = buildContactTooltip(contact, state.ctrl);
-        });
-    });
-    row.addEventListener("mouseleave", () => {
-        unsubModifiers?.();
-        unsubModifiers = null;
-        row.title = buildContactTooltip(contact, false);
-    });
+
     if (showGroupTag && contact.groupName) {
         const groupTag = el("span", "contact-group-tag");
         groupTag.textContent = contact.groupName;
