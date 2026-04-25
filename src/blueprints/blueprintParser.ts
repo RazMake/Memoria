@@ -113,6 +113,23 @@ export function parseWorkspaceTree(raw: unknown): WorkspaceEntry[] {
             result.default = entry["default"] as DefaultScope;
         }
 
+        if (entry["seedSource"] !== undefined) {
+            if (typeof entry["seedSource"] !== "string" || !entry["seedSource"].trim()) {
+                throw new Error(`Workspace entry "${name}": "seedSource" must be a non-empty string.`);
+            }
+            if (isFolder) {
+                throw new Error(`Workspace entry "${name}": folders cannot have a seedSource.`);
+            }
+            const normalizedSeedSource = normalizePath(entry["seedSource"].trim());
+            if (
+                normalizedSeedSource.startsWith("/") ||
+                normalizedSeedSource.split("/").some((s) => s === ".." || s === "." || !s)
+            ) {
+                throw new Error(`Workspace entry "${name}": "seedSource" must be a relative path without traversal segments.`);
+            }
+            result.seedSource = normalizedSeedSource;
+        }
+
         if (isFolder && Array.isArray(entry["children"])) {
             result.children = parseWorkspaceTree(entry["children"]);
         }

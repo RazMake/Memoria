@@ -80,6 +80,20 @@ describe("BlueprintRegistry", () => {
             expect(blueprints[0].id).toBe("individual-contributor");
         });
 
+        it("should skip directories starting with underscore (e.g. _shared)", async () => {
+            mockReadDirectory.mockResolvedValue([
+                ["individual-contributor", 2],
+                ["_shared", 2],
+            ]);
+            mockReadFile.mockResolvedValue(encoder.encode(VALID_YAML));
+
+            const registry = new BlueprintRegistry(extensionUri);
+            const blueprints = await registry.listBlueprints();
+
+            expect(blueprints).toHaveLength(1);
+            expect(blueprints[0].id).toBe("individual-contributor");
+        });
+
         it("should return an empty list when no blueprint directories exist", async () => {
             mockReadDirectory.mockResolvedValue([]);
 
@@ -125,6 +139,31 @@ describe("BlueprintRegistry", () => {
 
             const registry = new BlueprintRegistry(extensionUri);
             const result = await registry.getSeedFileContent("individual-contributor", "missing/file.md");
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe("getSharedSeedContent", () => {
+        it("should return file bytes when the shared seed file exists", async () => {
+            const content = encoder.encode("# Shared seed");
+            mockReadFile.mockResolvedValue(content);
+
+            const registry = new BlueprintRegistry(extensionUri);
+            const result = await registry.getSharedSeedContent("snippets/date-time.ts");
+
+            expect(result).toEqual(content);
+            expect(mockJoinPath).toHaveBeenCalledWith(
+                expect.objectContaining({ path: expect.stringContaining("blueprints") }),
+                "_shared", "snippets", "date-time.ts"
+            );
+        });
+
+        it("should return null when the shared seed file does not exist", async () => {
+            mockReadFile.mockRejectedValue(new Error("File not found"));
+
+            const registry = new BlueprintRegistry(extensionUri);
+            const result = await registry.getSharedSeedContent("missing/file.md");
 
             expect(result).toBeNull();
         });

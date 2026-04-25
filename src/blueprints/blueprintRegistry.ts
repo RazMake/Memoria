@@ -17,7 +17,9 @@ export class BlueprintRegistry {
     /** Lists all discoverable bundled blueprints with their summary info. */
     async listBlueprints(): Promise<BlueprintInfo[]> {
         const entries = await vscode.workspace.fs.readDirectory(this.blueprintsRoot);
-        const dirs = entries.filter(([, type]) => type === vscode.FileType.Directory);
+        const dirs = entries.filter(
+            ([name, type]) => type === vscode.FileType.Directory && !name.startsWith("_")
+        );
 
         // Parallel reads — avoids sequential I/O scaling with blueprint count.
         return Promise.all(
@@ -51,6 +53,20 @@ export class BlueprintRegistry {
      */
     async getSeedFileContent(blueprintId: string, relativePath: string): Promise<Uint8Array | null> {
         const seedUri = vscode.Uri.joinPath(this.blueprintsRoot, blueprintId, "files", ...relativePath.split("/"));
+        try {
+            return await vscode.workspace.fs.readFile(seedUri);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Returns the raw bytes of a shared seed file from the `_shared/` directory.
+     * Shared seed files are referenced by multiple blueprints via the `seedSource` field
+     * in workspace entries, avoiding content duplication across blueprints.
+     */
+    async getSharedSeedContent(seedSource: string): Promise<Uint8Array | null> {
+        const seedUri = vscode.Uri.joinPath(this.blueprintsRoot, "_shared", ...seedSource.split("/"));
         try {
             return await vscode.workspace.fs.readFile(seedUri);
         } catch {

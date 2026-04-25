@@ -8,8 +8,8 @@
   - Blueprint versioning UX — on activation, compares stored vs bundled SemVer; prompts user to re-initialize if the bundle is newer
   - `isNewerVersion(bundled, stored)` — exported pure utility for major.minor.patch SemVer comparison
 - **Telemetry**: Production-ready pattern with `ConsoleTelemetrySender` + lazy factory for `@vscode/extension-telemetry`
-- **Two bundled blueprints**: Individual Contributor (5 folders) and People Manager (6 folders with nested meeting types)
-- **Test coverage**: 976 unit tests passing (66 test files), 7 E2E tests passing. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
+- **Two bundled blueprints**: Individual Contributor (5 folders) and People Manager (6 folders with nested meeting types). **Shared seed files** deduplicated via `seedSource` field — 7 files moved to `resources/blueprints/_shared/`, referenced by both blueprints.
+- **Test coverage**: 1142 unit tests passing (72 test files), 7 E2E tests passing. Includes 25 unit tests for `BlueprintDecorationProvider` and 3 contract tests for `package.json` command declarations.
 - **Context key**: `memoria.workspaceInitialized` checks all workspace roots (not just first)
 - **Structural/perf improvements**: Cached reinit hashes, multi-root file watchers, parallel hash reads, extracted activate() helpers, removed dead ManifestManager.computeFileHash wrapper
 - **Task Collector feature**: Two-way sync of Markdown tasks (`- [ ]`/`- [x]`) between source files and a blueprint-defined collector file. Save-triggered sync via `SyncQueue`, self-write suppression via `PendingWrites`, Myers-style alignment for rename-safe task identity, relative path rewriting for images/links, completed-task aging and pruning, manual (collector-only) tasks, `Memoria: Sync Tasks` command. Documented in user guide.
@@ -24,7 +24,7 @@
 - **Publishing**: `publisher` field set to `RazMake`
 
 ## Current Status
-Version 0.0.1, not publicly released. All features implemented. Full telemetry coverage. `ReporterTelemetrySender` adapter enables production AppInsights telemetry. Istanbul patch persisted via `patch-package`. 1028 unit tests passing.
+Version 0.0.1, not publicly released. All features implemented. Full telemetry coverage. `ReporterTelemetrySender` adapter enables production AppInsights telemetry. Istanbul patch persisted via `patch-package`. 1142 unit tests passing, 72 test files.
 
 ## Known Issues
 - `blueprintEngine.ts` branch coverage at 90% (the `buildSeedCallback` inner function has complex branching)

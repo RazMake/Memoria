@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createRequire } from "node:module";
 import Ajv from "ajv";
@@ -24,6 +24,7 @@ const schema = JSON.parse(readFileSync(schemaPath, "utf-8"));
 const blueprintsDir = resolve(__dirname, "../../../src/resources/blueprints");
 const blueprintFolders = readdirSync(blueprintsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
+    .filter((d) => existsSync(join(blueprintsDir, d.name, "blueprint.yaml")))
     .map((d) => d.name);
 
 const ajv = new Ajv({ allErrors: true });

@@ -154,6 +154,45 @@ describe("parseWorkspaceTree", () => {
             parseWorkspaceTree([{ name: "Main.todo", default: "yes" }])
         ).toThrow('"default" must be "relative" or "includingRoot"');
     });
+
+    it("should parse seedSource on a file entry", () => {
+        const entries = parseWorkspaceTree([{ name: "file.md", seedSource: "shared/file.md" }]);
+        expect(entries[0].seedSource).toBe("shared/file.md");
+    });
+
+    it("should omit seedSource when not specified", () => {
+        const entries = parseWorkspaceTree([{ name: "file.md" }]);
+        expect(entries[0].seedSource).toBeUndefined();
+    });
+
+    it("should throw when seedSource is set on a folder", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "Folder/", seedSource: "shared/data" }])
+        ).toThrow("folders cannot have a seedSource");
+    });
+
+    it("should throw when seedSource is an empty string", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "file.md", seedSource: "" }])
+        ).toThrow('"seedSource" must be a non-empty string');
+    });
+
+    it("should throw when seedSource contains path traversal", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "file.md", seedSource: "../outside.md" }])
+        ).toThrow('"seedSource" must be a relative path');
+    });
+
+    it("should throw when seedSource is an absolute path", () => {
+        expect(() =>
+            parseWorkspaceTree([{ name: "file.md", seedSource: "/absolute/path.md" }])
+        ).toThrow('"seedSource" must be a relative path');
+    });
+
+    it("should normalize backslashes in seedSource", () => {
+        const entries = parseWorkspaceTree([{ name: "file.md", seedSource: "shared\\data\\file.md" }]);
+        expect(entries[0].seedSource).toBe("shared/data/file.md");
+    });
 });
 
 describe("parseDecorationRules", () => {

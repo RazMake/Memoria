@@ -6,7 +6,7 @@ import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
 import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, DefaultFilesEntry, TaskCollectorFeatureEntry, ContactsFeatureEntry, SnippetsFeatureEntry } from "./types";
+import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, DefaultFilesEntry, TaskCollectorFeatureEntry, ContactsFeatureEntry, SnippetsFeatureEntry, WorkspaceEntry } from "./types";
 import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 
@@ -33,10 +33,17 @@ export class BlueprintEngine {
         const contacts = extractContactsFeature(definition.features);
         const snippets = extractSnippetsFeature(definition.features);
 
+        const seedSourceMap = buildSeedSourceMap(definition.workspace);
         const { fileManifest } = await this.scaffold.scaffoldTree(
             workspaceRoot,
             definition.workspace,
-            (relativePath) => this.registry.getSeedFileContent(blueprintId, relativePath)
+            (relativePath) => {
+                const seedSource = seedSourceMap.get(relativePath);
+                if (seedSource) {
+                    return this.registry.getSharedSeedContent(seedSource);
+                }
+                return this.registry.getSeedFileContent(blueprintId, relativePath);
+            }
         );
 
         const manifest: BlueprintManifest = {
@@ -90,11 +97,20 @@ export class BlueprintEngine {
         const contacts = extractContactsFeature(newDefinition.features);
         const snippets = extractSnippetsFeature(newDefinition.features);
 
+        const seedSourceMap = buildSeedSourceMap(newDefinition.workspace);
+        const getSeedContent = (relativePath: string) => {
+            const seedSource = seedSourceMap.get(relativePath);
+            if (seedSource) {
+                return this.registry.getSharedSeedContent(seedSource);
+            }
+            return this.registry.getSeedFileContent(blueprintId, relativePath);
+        };
+
         const plan = await resolver.resolveConflicts(
             workspaceRoot,
             currentManifest,
             newDefinition,
-            (relativePath) => this.registry.getSeedFileContent(blueprintId, relativePath)
+            getSeedContent
         );
 
         if (!plan) {
@@ -128,7 +144,7 @@ export class BlueprintEngine {
         const { fileManifest } = await this.scaffold.scaffoldTree(
             workspaceRoot,
             newDefinition.workspace,
-            (relativePath) => this.registry.getSeedFileContent(blueprintId, relativePath)
+            getSeedContent
         );
 
         const updatedManifest: BlueprintManifest = {
@@ -257,4 +273,25 @@ export function mergeFeaturesConfig(
             };
         }),
     };
+}
+
+/**
+ * Walks the workspace entry tree and builds a map of relative paths to their shared seed source paths.
+ * Only file entries with a `seedSource` field are included.
+ */
+export function buildSeedSourceMap(entries: WorkspaceEntry[], prefix = ""): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const entry of entries) {
+        if (entry.isFolder) {
+            if (entry.children) {
+                const childMap = buildSeedSourceMap(entry.children, prefix + entry.name);
+                for (const [key, value] of childMap) {
+                    map.set(key, value);
+                }
+            }
+        } else if (entry.seedSource) {
+            map.set(prefix + entry.name, entry.seedSource);
+        }
+    }
+    return map;
 }

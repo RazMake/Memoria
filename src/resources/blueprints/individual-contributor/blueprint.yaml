@@ -9,6 +9,7 @@ workspace:
       - name: "Dev-Designs/"
       - name: "All.todo.md"
         default: "relative"
+        seedSource: "workstreams/All.todo.md"
   - name: "01-ToRemember/"
     children:
       - name: "Trainings/"
@@ -26,13 +27,19 @@ workspace:
           - name: "DataTypes/"
             children:
               - name: "CareerLevels.md"
+                seedSource: "contacts/DataTypes/CareerLevels.md"
               - name: "CareerPaths.md"
+                seedSource: "contacts/DataTypes/CareerPaths.md"
               - name: "InterviewTypes.md"
+                seedSource: "contacts/DataTypes/InterviewTypes.md"
               - name: "Pronouns.md"
+                seedSource: "contacts/DataTypes/Pronouns.md"
       - name: "Snippets/"
         children:
           - name: "date-time.ts"
+            seedSource: "snippets/date-time.ts"
           - name: "heading-children.ts"
+            seedSource: "snippets/heading-children.ts"
 
 features:
   - id: "taskCollector"

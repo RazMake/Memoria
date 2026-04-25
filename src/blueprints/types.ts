@@ -22,6 +22,12 @@ export interface WorkspaceEntry {
      * Omit to leave the file as a non-default entry.
      */
     default?: DefaultScope;
+    /**
+     * Relative path to a shared seed file in `resources/blueprints/_shared/`.
+     * When set, scaffold loads seed content from the shared directory instead of
+     * the blueprint's own `files/` directory. Only valid on file entries.
+     */
+    seedSource?: string;
 }
 
 /** A single decoration rule keyed by glob filter pattern. */

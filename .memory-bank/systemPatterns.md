@@ -84,6 +84,9 @@ Contacts commands follow the same pattern (`createAddPersonCommand`, `createEdit
 - `src/blueprints/workspaceUtils.ts` — shared `getWorkspaceRoots()` eliminates 3× duplicated `workspaceFolders?.map(f => f.uri) ?? []`
 - Module-level `TextDecoder`/`TextEncoder` singletons in ManifestManager and BlueprintRegistry (avoids per-call allocation)
 
+### Shared Seed Files (`seedSource`)
+Blueprint workspace entries can reference shared seed files via `seedSource: "relative/path"` instead of keeping duplicate files in each blueprint's `files/` directory. Shared seeds live in `resources/blueprints/_shared/`. The `BlueprintRegistry` provides `getSharedSeedContent(seedSource)` alongside the per-blueprint `getSeedFileContent(id, path)`. The engine's `buildSeedSourceMap()` walks the workspace tree and routes seed callbacks accordingly. `listBlueprints()` skips `_`-prefixed directories so `_shared` is never treated as a blueprint.
+
 ### Composition in Engine
 `BlueprintEngine` is a thin orchestrator that sequences calls to `BlueprintRegistry`, `FileScaffold`, and `ManifestManager`. All domain logic lives in the collaborators; the engine just sequences them.
 

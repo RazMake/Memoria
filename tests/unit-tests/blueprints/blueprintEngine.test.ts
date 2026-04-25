@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BlueprintEngine, buildFeaturesConfig, extractContactsFeature, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
+import { BlueprintEngine, buildFeaturesConfig, buildSeedSourceMap, extractContactsFeature, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
 import type { BlueprintDefinition, BlueprintFeature, FeaturesConfig } from "../../../src/blueprints/types";
 
 // BlueprintEngine uses only injected collaborators — no direct vscode API calls.
@@ -97,6 +97,7 @@ describe("BlueprintEngine", () => {
         mockRegistry = {
             getBlueprintDefinition: vi.fn().mockResolvedValue(mockDefinition),
             getSeedFileContent: vi.fn().mockResolvedValue(null),
+            getSharedSeedContent: vi.fn().mockResolvedValue(null),
         };
         mockManifest = {
             readManifest: vi.fn().mockResolvedValue(null),
@@ -264,6 +265,32 @@ describe("BlueprintEngine", () => {
             await engine.initialize(workspaceRoot, "individual-contributor");
 
             expect(mockRegistry.getSeedFileContent).toHaveBeenCalledWith("individual-contributor", "Folder/file.md");
+        });
+
+        it("should use getSharedSeedContent for entries with seedSource", async () => {
+            const sharedContent = new Uint8Array([83, 104, 97, 114, 101, 100]); // "Shared"
+            mockRegistry.getSharedSeedContent.mockResolvedValue(sharedContent);
+
+            const definitionWithSeedSource: BlueprintDefinition = {
+                ...mockDefinition,
+                workspace: [
+                    { name: "Folder/", isFolder: true, children: [
+                        { name: "file.md", isFolder: false, seedSource: "shared/file.md" },
+                    ] },
+                ],
+            };
+            mockRegistry.getBlueprintDefinition.mockResolvedValue(definitionWithSeedSource);
+
+            mockScaffold.scaffoldTree.mockImplementation(async (_root: any, _entries: any, callback: any) => {
+                await callback("Folder/file.md");
+                return { fileManifest: { "Folder/file.md": "sha256:abc" } };
+            });
+
+            const engine = new BlueprintEngine(mockRegistry, mockManifest, mockScaffold, mockFs, mockTelemetry);
+            await engine.initialize(workspaceRoot, "individual-contributor");
+
+            expect(mockRegistry.getSharedSeedContent).toHaveBeenCalledWith("shared/file.md");
+            expect(mockRegistry.getSeedFileContent).not.toHaveBeenCalled();
         });
 
         it("should write task collector config and collector path when the blueprint defines the feature", async () => {
@@ -685,5 +712,65 @@ describe("mergeFeaturesConfig", () => {
     it("should use enabledByDefault when existing config is null", () => {
         const result = mergeFeaturesConfig(baseFeatures, null);
         expect(result.features[0].enabled).toBe(true);
+    });
+});
+
+describe("buildSeedSourceMap", () => {
+    it("should return an empty map when no entries have seedSource", () => {
+        const entries = [
+            { name: "Folder/", isFolder: true, children: [{ name: "file.md", isFolder: false }] },
+        ];
+        const map = buildSeedSourceMap(entries);
+        expect(map.size).toBe(0);
+    });
+
+    it("should map relative path to seedSource for file entries", () => {
+        const entries = [
+            { name: "Folder/", isFolder: true, children: [
+                { name: "file.md", isFolder: false, seedSource: "shared/file.md" },
+            ] },
+        ];
+        const map = buildSeedSourceMap(entries);
+        expect(map.get("Folder/file.md")).toBe("shared/file.md");
+    });
+
+    it("should handle deeply nested entries", () => {
+        const entries = [
+            { name: "A/", isFolder: true, children: [
+                { name: "B/", isFolder: true, children: [
+                    { name: "deep.md", isFolder: false, seedSource: "shared/deep.md" },
+                ] },
+            ] },
+        ];
+        const map = buildSeedSourceMap(entries);
+        expect(map.get("A/B/deep.md")).toBe("shared/deep.md");
+    });
+
+    it("should include only entries with seedSource", () => {
+        const entries = [
+            { name: "Folder/", isFolder: true, children: [
+                { name: "shared.md", isFolder: false, seedSource: "shared/file.md" },
+                { name: "local.md", isFolder: false },
+            ] },
+        ];
+        const map = buildSeedSourceMap(entries);
+        expect(map.size).toBe(1);
+        expect(map.has("Folder/shared.md")).toBe(true);
+        expect(map.has("Folder/local.md")).toBe(false);
+    });
+
+    it("should handle multiple seedSource entries across the tree", () => {
+        const entries = [
+            { name: "A/", isFolder: true, children: [
+                { name: "f1.md", isFolder: false, seedSource: "shared/f1.md" },
+            ] },
+            { name: "B/", isFolder: true, children: [
+                { name: "f2.md", isFolder: false, seedSource: "shared/f2.md" },
+            ] },
+        ];
+        const map = buildSeedSourceMap(entries);
+        expect(map.size).toBe(2);
+        expect(map.get("A/f1.md")).toBe("shared/f1.md");
+        expect(map.get("B/f2.md")).toBe("shared/f2.md");
     });
 });

@@ -58,7 +58,7 @@ src/                    — Extension source (entry: extension.ts)
   blueprints/           — Blueprint subsystem (parser, registry, engine, scaffold, manifest, resolver)
   commands/             — Command handler factories
   features/decorations/ — BlueprintDecorationProvider
-  resources/blueprints/ — Bundled blueprint YAML + seed files
+  resources/blueprints/ — Bundled blueprint YAML + _shared/ seed files
 tests/
   unit-tests/           — Vitest unit tests (mirror src/ structure)
     blueprints/         — blueprintParser, blueprintRegistry, fileScaffold, manifestManager, blueprintEngine, workspaceInitConflictResolver
