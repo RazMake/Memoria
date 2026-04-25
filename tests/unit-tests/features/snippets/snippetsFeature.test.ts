@@ -351,6 +351,55 @@ describe("SnippetsFeature", () => {
             expect(mockShowQuickPick).toHaveBeenCalledTimes(2);
             expect(result).toBe("blue-lg");
         });
+
+        it("should use resolveOptions to compute dynamic options", async () => {
+            const dynamicParamSnippet: SnippetDefinition = {
+                trigger: "{dyn}",
+                label: "Dynamic",
+                glob: "**/*",
+                parameters: [
+                    {
+                        name: "choice",
+                        resolveOptions: (ctx) => [`line-${ctx.position?.line ?? "?"}`, "static"],
+                    },
+                ],
+                expand: (ctx) => ctx.params["choice"],
+            };
+            mockShowQuickPick.mockResolvedValueOnce("line-0");
+
+            const result = await feature.expandSnippet(dynamicParamSnippet, mockDocument, mockPosition);
+
+            expect(mockShowQuickPick).toHaveBeenCalledWith(
+                ["line-0", "static"],
+                { placeHolder: "Select choice" },
+            );
+            expect(result).toBe("line-0");
+        });
+
+        it("should prefer resolveOptions over static options when both present", async () => {
+            const bothSnippet: SnippetDefinition = {
+                trigger: "{both}",
+                label: "Both",
+                glob: "**/*",
+                parameters: [
+                    {
+                        name: "val",
+                        options: ["static-a", "static-b"],
+                        resolveOptions: () => ["dynamic-a", "dynamic-b"],
+                    },
+                ],
+                expand: (ctx) => ctx.params["val"],
+            };
+            mockShowQuickPick.mockResolvedValueOnce("dynamic-a");
+
+            const result = await feature.expandSnippet(bothSnippet, mockDocument, mockPosition);
+
+            expect(mockShowQuickPick).toHaveBeenCalledWith(
+                ["dynamic-a", "dynamic-b"],
+                expect.anything(),
+            );
+            expect(result).toBe("dynamic-a");
+        });
     });
 
     // ── getAllSnippets() ───────────────────────────────────────────────────

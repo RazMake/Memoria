@@ -23,11 +23,15 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
         const isContactTrigger = detected.char === "@";
         const relativePath = vscode.workspace.asRelativePath(document.uri, false);
 
+        const visibilityCtx = { document, position, params: {}, contacts: [] };
+
         const snippets = this.snippetProvider.getAllSnippets().filter((s) => {
             const matchesPrefix = isContactTrigger
                 ? s.trigger.startsWith("@")
                 : s.trigger.startsWith("{");
-            return matchesPrefix && minimatch(relativePath, s.glob);
+            if (!matchesPrefix || !minimatch(relativePath, s.glob)) return false;
+            if (s.visible && !s.visible(visibilityCtx)) return false;
+            return true;
         });
 
         if (snippets.length === 0) return undefined;

@@ -36,6 +36,7 @@ workspace:
       - name: "Snippets/"
         children:
           - name: "date-time.ts"
+          - name: "heading-children.ts"
 
 features:
   - id: "taskCollector"

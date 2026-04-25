@@ -4,6 +4,7 @@ import type { ResolvedContact } from "../contacts/contactUtils";
 export interface SnippetParameter {
     name: string;
     options?: string[];
+    resolveOptions?: (ctx: SnippetContext) => string[];
     default?: string;
 }
 
@@ -16,6 +17,7 @@ export interface SnippetDefinition {
     body?: string;
     parameters?: SnippetParameter[];
     expand?: (ctx: SnippetContext) => string;
+    visible?: (ctx: SnippetContext) => boolean;
     pathSafe?: boolean;
 }
 

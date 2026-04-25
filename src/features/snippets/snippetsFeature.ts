@@ -132,6 +132,10 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         position: vscode.Position,
         selectedText?: string,
     ): Promise<string> {
+        const contacts = this.contactsFeature?.isActive()
+            ? this.contactsFeature.getAllContacts()
+            : [];
+
         const params: Record<string, string> = {};
 
         if (definition.parameters?.length) {
@@ -141,18 +145,17 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
             } else {
                 // QuickPick cascade for each parameter.
                 for (const param of definition.parameters) {
+                    const options = param.resolveOptions
+                        ? param.resolveOptions({ document, position, params, contacts })
+                        : param.options ?? [];
                     const picked = await vscode.window.showQuickPick(
-                        param.options ?? [],
+                        options,
                         { placeHolder: `Select ${param.name}` },
                     );
                     params[param.name] = picked ?? param.default ?? "";
                 }
             }
         }
-
-        const contacts = this.contactsFeature?.isActive()
-            ? this.contactsFeature.getAllContacts()
-            : [];
 
         const ctx: SnippetContext = { document, position, params, contacts };
 

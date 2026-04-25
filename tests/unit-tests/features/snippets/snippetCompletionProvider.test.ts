@@ -199,5 +199,50 @@ describe("SnippetCompletionProvider", () => {
 
             expect(result).toBeUndefined();
         });
+
+        it("should exclude snippets whose visible predicate returns false", () => {
+            const visibleSnippet = makeSnippet({ trigger: "{vis}", label: "Visible" });
+            const hiddenSnippet = makeSnippet({
+                trigger: "{hid}",
+                label: "Hidden",
+                visible: () => false,
+            });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([visibleSnippet, hiddenSnippet]);
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result).toHaveLength(1);
+            expect(result![0].label).toBe("Visible");
+        });
+
+        it("should include snippets whose visible predicate returns true", () => {
+            const snippet = makeSnippet({
+                trigger: "{show}",
+                label: "Show",
+                visible: () => true,
+            });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result).toHaveLength(1);
+            expect(result![0].label).toBe("Show");
+        });
+
+        it("should include snippets without a visible predicate", () => {
+            const snippet = makeSnippet({ trigger: "{no-vis}", label: "NoVis" });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result).toHaveLength(1);
+            expect(result![0].label).toBe("NoVis");
+        });
     });
 });

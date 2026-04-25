@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { transform } from "sucrase";
 import type { SnippetDefinition } from "./types";
 import * as dateUtils from "./dateUtils";
+import * as markdownUtils from "./markdownUtils";
 
 // Blocked Node.js built-ins that snippet files must not require.
 const BLOCKED_MODULES = new Set([
@@ -42,6 +43,11 @@ function createSafeRequire(): (id: string) => unknown {
                 formatElapsed: dateUtils.formatElapsed,
                 formatDate: dateUtils.formatDate,
                 formatTime: dateUtils.formatTime,
+                formatDueIn: dateUtils.formatDueIn,
+                formatDueBy: dateUtils.formatDueBy,
+                findFirstHeadingBelow: markdownUtils.findFirstHeadingBelow,
+                parseHeadingChildren: markdownUtils.parseHeadingChildren,
+                parseSubHeadings: markdownUtils.parseSubHeadings,
             };
         }
         if (BLOCKED_MODULES.has(id)) {
@@ -58,5 +64,6 @@ function isValidSnippetDefinition(value: unknown): value is SnippetDefinition {
         && typeof obj["label"] === "string"
         && typeof obj["glob"] === "string"
         && (obj["body"] === undefined || typeof obj["body"] === "string")
-        && (obj["expand"] === undefined || typeof obj["expand"] === "function");
+        && (obj["expand"] === undefined || typeof obj["expand"] === "function")
+        && (obj["visible"] === undefined || typeof obj["visible"] === "function");
 }

@@ -22,7 +22,9 @@ As you type, VS Code's autocomplete list shows matching snippets. Selecting one 
 
 ## Built-in snippets
 
-The blueprint seeds a `date-time.ts` file with three snippets:
+The blueprint seeds two snippet files:
+
+### `date-time.ts`
 
 | Trigger | Label | Description |
 |---------|-------|-------------|
@@ -31,6 +33,16 @@ The blueprint seeds a `date-time.ts` file with three snippets:
 | `{now}` | Date & Time | Inserts the current date and time (`YYYY-MM-dd HH:mm`) |
 
 The `{date}` snippet is also **path-safe**, meaning it can be used by other features (e.g., the Todo Editor) even when snippets are disabled.
+
+### `heading-children.ts`
+
+| Trigger | Label | Description |
+|---------|-------|-------------|
+| `{copy-child}` | Copy Child Heading | Copies a sub-heading section from below the cursor |
+
+This snippet scans the document for the first heading below the cursor, finds its direct sub-headings, and lets you pick one to copy. The selected sub-heading's full content (heading line plus all body text) is inserted at the cursor position.
+
+The snippet only appears in the autocomplete list when there are sub-headings available below the cursor. After selecting `{copy-child}`, a QuickPick lists the sub-heading titles — pick one to insert its content.
 
 ## Creating custom snippets
 
@@ -72,10 +84,15 @@ export default snippets;
 
 Snippet files can import from the virtual `memoria-snippets` module, which exposes date/time utilities:
 
-- `formatDate(date, format)` — Formats a `Date` (`"YYYY-MM-dd"`, `"MM/dd/YYYY"`, `"dd MMM YYYY"`, `"YYYY"`)
-- `formatTime(date, format)` — Formats a `Date` (`"HH"`, `"HHs"`, `"hh"`)
+- `formatDate(date, format)` — Formats a `Date` (`"YYYY-MM-dd"`, `"MM/dd/YYYY"`, `"dddd, MMM dd, YYYY"`)
+- `formatTime(date, format)` — Formats a `Date` (`"HH:mm"`, `"HH:mm:ss"`, `"hh:mm AM/PM"`, `"hh:mm:ss AM/PM"`)
 - `elapsedSince(dateStr, now?)` — Returns `{ years, months, totalMonths }` between a date string and now
 - `formatElapsed(elapsed)` — Formats an `ElapsedTime` as a human-readable string (e.g., `"1 year, 3 months"`)
+- `formatDueIn(days, now?)` — Formats a relative due date (e.g., `"in 1 week and 3 days (by Friday, April 24, 2026)"`)
+- `formatDueBy(days, now?)` — Formats an absolute due date (e.g., `"by Friday, April 24, 2026"`)
+- `findFirstHeadingBelow(getLine, lineCount, fromLine)` — Returns the line number of the first Markdown heading at or below `fromLine`, or `null` if none exists
+- `parseHeadingChildren(getLine, lineCount, headingLine)` — Parses the top-level list items under a heading and returns each with its full block of text
+- `parseSubHeadings(getLine, lineCount, headingLine)` — Finds all sub-headings one level below the given heading and returns each with its full content block
 
 > **Security:** Snippet files run in a sandboxed environment. Node.js built-in modules (`fs`, `child_process`, `net`, etc.) are blocked.
 
