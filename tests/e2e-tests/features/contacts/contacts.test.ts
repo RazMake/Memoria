@@ -40,7 +40,7 @@ suite("Contacts feature (E2E)", () => {
         "02-MeetingNotes",
         "03-Inbox",
         "04-Archive",
-        "05-Contacts",
+        "05-Autocomplete",
         "WorkspaceInitializationBackups",
     ];
 
@@ -49,7 +49,7 @@ suite("Contacts feature (E2E)", () => {
         memoriaDir = vscode.Uri.joinPath(workspaceRoot, ".memoria");
         blueprintUri = vscode.Uri.joinPath(memoriaDir, "blueprint.json");
         featuresUri = vscode.Uri.joinPath(memoriaDir, "features.json");
-        contactsRoot = vscode.Uri.joinPath(workspaceRoot, "05-Contacts");
+        contactsRoot = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "Contacts");
         colleaguesUri = vscode.Uri.joinPath(contactsRoot, "Colleagues.md");
         pronounsUri = vscode.Uri.joinPath(contactsRoot, "DataTypes", "Pronouns.md");
     });
@@ -73,7 +73,7 @@ suite("Contacts feature (E2E)", () => {
 
             const manifest = await readJsonFile<BlueprintManifest>(blueprintUri);
             assert.ok(manifest?.contacts, "The blueprint manifest should persist the contacts config.");
-            assert.strictEqual(manifest?.contacts?.peopleFolder, "05-Contacts/", "The contacts peopleFolder should match the blueprint.");
+            assert.strictEqual(manifest?.contacts?.peopleFolder, "05-Autocomplete/Contacts/", "The contacts peopleFolder should match the blueprint.");
             assert.deepStrictEqual(
                 manifest?.contacts?.groups,
                 [{ file: "Colleagues.md", type: "colleague" }],

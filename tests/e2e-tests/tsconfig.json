@@ -13,5 +13,6 @@
         "types": ["mocha", "node"],
         "typeRoots": ["../../src/node_modules/@types"]
     },
-    "include": ["./**/*.ts"]
+    "include": ["./**/*.ts"],
+    "exclude": ["./fixtures/**"]
 }
