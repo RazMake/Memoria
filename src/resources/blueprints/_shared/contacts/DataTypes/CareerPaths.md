@@ -2,6 +2,8 @@
 - Name: Software Engineer
 - Short: SDE
 - MinimumCareerLevel: 0
+- Alternatives:
+  - Squad Leader
 
 # em
 - Name: Engineering Manager
@@ -27,3 +29,6 @@
 - Name: Group Engineering Manager
 - Short: GEM
 - MinimumCareerLevel: 7
+- Alternatives:
+  - Group Squad Leader
+  - Area Squad Leader

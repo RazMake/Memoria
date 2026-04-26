@@ -5,6 +5,13 @@ This template is meant to help managers organize their meeting notes and create 
 ## Folder Structure
 
 ```text
+📁 .github/               ← AI instruction files (agent + prompts)
+   📁 agents/
+      📄 WorkIQ.agent.md  ← WorkIQ AI agent
+   📁 prompts/
+      📄 install-workiq-mcp.prompt.md
+      📄 initialize-contacts.prompt.md
+      📄 initialize-career-data-types.prompt.md
 📁 00-Workstreams/        ← All active workstreams
    📁 Planning/           ← Planning notes, grouped by quarter
    📁 Team-Evaluations/   ← Individual team members' evaluations
@@ -41,6 +48,10 @@ This template is meant to help managers organize their meeting notes and create 
 ### Always on
 - [Open default file(s)](../features/default-files.md)
 - [Dot-Folder Hiding](../features/dot-folder-hiding.md)
+
+### Packaged AI Instructions
+
+See [Packaged AI Instructions](../features/ai-instructions.md) for details on the WorkIQ agent and prompts deployed to `.github/`.
 
 ---
 

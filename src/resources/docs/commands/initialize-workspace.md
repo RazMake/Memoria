@@ -28,6 +28,8 @@ After you confirm both steps:
 
 > **Note:** If a newer version of your blueprint is available, Memoria will prompt you to reinitialize when VS Code starts.
 
+![Conflict resolver](../media/conflict-resolver.gif)
+
 ---
 
 [⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

@@ -27,6 +27,8 @@ The sidebar is optimized for narrow widths:
 - Use the inline actions to edit, move, or delete
 - Use the `+` button to add a new contact or create a new group
 
+![Contacts sidebar](../media/contacts-sidebar.gif)
+
 ## Reference data
 
 Reference data is stored in editable Markdown files under `DataTypes/`:
@@ -44,6 +46,8 @@ Moving a person physically moves the record between group files.
 
 - **Report -> Colleague** keeps `LevelId` and `LevelStartDate` under `_droppedFields`
 - **Colleague -> Report** restores those dropped fields when available and asks for any missing report-only data before saving
+
+![Move person between groups](../media/contacts-move-person.gif)
 
 ## Commands
 

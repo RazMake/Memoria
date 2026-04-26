@@ -15,6 +15,8 @@ You can also **add tasks directly in the collector** (no source file required). 
 
 > **Source files are never modified by Memoria** except to propagate checkbox state changes (`[ ]` ↔ `[x]`) and to mark aged-out completions as done. No identity markers or comments are inserted.
 
+![Task Collector sync](../media/task-collector-sync.gif)
+
 ## Collector file
 
 The collector file path is determined by your blueprint and materialized into the workspace at init time. Its location is stored in `.memoria/` — it cannot be changed without re-initializing with a different blueprint.
@@ -84,6 +86,8 @@ Runtime settings are stored in `.memoria/task-collector.json`:
 ## Todo Editor
 
 `*.todo.md` files open in a **visual task board** by default.
+
+![Todo Editor](../media/todo-editor.gif)
 
 ### Card layout
 

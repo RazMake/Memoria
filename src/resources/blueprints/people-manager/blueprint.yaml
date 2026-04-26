@@ -4,6 +4,18 @@ description: "For managers: meeting notes, 1:1s, team contacts, and project stat
 version: "1.0.0"
 
 workspace:
+  - name: ".github/"
+    children:
+    - name: "agents/"
+      children:
+        - name: "WorkIQ.agent.md"
+          seedSource: "ai-instruction-files/agents/WorkIQ.agent.md"
+    - name: "prompts/"
+      children:
+        - name: "initialize-career-data-types.prompt.md"
+        - name: "initialize-contacts.prompt.md"
+        - name: "install-workiq-mcp.prompt.md"
+          seedSource: "ai-instruction-files/prompts/install-workiq-mcp.prompt.md"
   - name: "00-Workstreams/"
     children:
       - name: "Planning/"
@@ -17,8 +29,6 @@ workspace:
       - name: "Hiring/"
       - name: "Evaluation/"
   - name: "02-MeetingNotes/"
-    children:
-      - name: "Team-Members-1-1/"
   - name: "03-Inbox/"
   - name: "05-Archive/"
   - name: "06-Autocomplete/"
@@ -26,7 +36,11 @@ workspace:
       - name: "Contacts/"
         children:
           - name: "Team.md"
+            seedSource: "contacts/Team.md"
           - name: "Colleagues.md"
+            seedSource: "contacts/Colleagues.md"
+          - name: "Peers.md"
+            seedSource: "contacts/Peers.md"
           - name: "InterviewTemplates/"
           - name: "DataTypes/"
             children:
@@ -59,6 +73,8 @@ features:
     groups:
       - file: "Team.md"
         type: "report"
+      - file: "Peers.md"
+        type: "colleague"
       - file: "Colleagues.md"
         type: "colleague"
   - id: "snippets"
@@ -105,10 +121,6 @@ features:
         color: "terminal.ansiBrightYellow"
         badge: "🧠"
         tooltip: "Personal knowledge base."
-        propagate: true
-      - filter: "Team-Members-1-1/"
-        color: "gitDecoration.submoduleResourceForeground"
-        tooltip: "Notes from 1:1 meetings with team members."
         propagate: true
       - filter: "02-MeetingNotes/"
         color: "charts.green"

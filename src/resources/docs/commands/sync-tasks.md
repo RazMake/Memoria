@@ -22,6 +22,8 @@ Sync runs automatically on every file **save**, so manual triggering is rarely n
 
 A progress indication is shown while the sync runs. If the Task Collector is not enabled for the current workspace, an error message is shown instead.
 
+![Sync Tasks](../media/sync-tasks.gif)
+
 ---
 
 [⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [Task Collector](../features/task-collector.md) 💠 [FAQ](../faq.md)

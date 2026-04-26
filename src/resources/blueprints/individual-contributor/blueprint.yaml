@@ -4,6 +4,18 @@ description: "A personal knowledge base for developers and PMs."
 version: "1.0.0"
 
 workspace:
+  - name: ".github/"
+    children:
+    - name: "agents/"
+      children:
+        - name: "WorkIQ.agent.md"
+          seedSource: "ai-instruction-files/agents/WorkIQ.agent.md"
+    - name: "prompts/"
+      children:
+        - name: "initialize-career-data-types.prompt.md"
+        - name: "initialize-contacts.prompt.md"
+        - name: "install-workiq-mcp.prompt.md"
+          seedSource: "ai-instruction-files/prompts/install-workiq-mcp.prompt.md"
   - name: "00-Workstreams/"
     children:
       - name: "Dev-Designs/"
@@ -22,7 +34,10 @@ workspace:
     children:
       - name: "Contacts/"
         children:
+          - name: "Peers.md"
+            seedSource: "contacts/Peers.md"
           - name: "Colleagues.md"
+            seedSource: "contacts/Colleagues.md"
           - name: "InterviewTemplates/"
           - name: "DataTypes/"
             children:
@@ -53,6 +68,8 @@ features:
     enabledByDefault: true
     peopleFolder: "05-Autocomplete/Contacts/"
     groups:
+      - file: "Peers.md"
+        type: "colleague"
       - file: "Colleagues.md"
         type: "colleague"
   - id: "snippets"
