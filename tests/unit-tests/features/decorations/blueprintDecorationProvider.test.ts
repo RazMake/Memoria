@@ -26,6 +26,13 @@ vi.mock("vscode", () => ({
     ThemeColor: class {
         constructor(public id: string) {}
     },
+    workspace: {
+        getConfiguration: vi.fn(() => ({
+            inspect: vi.fn(() => ({})),
+            update: vi.fn(),
+        })),
+    },
+    ConfigurationTarget: { Workspace: 2 },
 }));
 
 // ────────────────────────────────────────────────────────────────────────────

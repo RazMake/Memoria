@@ -146,10 +146,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
     });
 
-    // Register the decoration provider eagerly so VS Code is already listening when
-    // refresh() fires the change event — otherwise the first fire is wasted.
+    // Register language providers and custom editors eagerly — they don't conflict with
+    // other extensions' decoration providers and must be available before any file is opened.
     context.subscriptions.push(
-        vscode.window.registerFileDecorationProvider(decorationProvider),
         vscode.languages.registerCompletionItemProvider(
             DECORATIONS_JSON_SELECTOR,
             new DecorationCompletionProvider(),
@@ -179,6 +178,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         featureManager.refresh(initializedRoot),
         updateDefaultFileContext(initializedRoot, roots, manifest),
     ]);
+
+    // Register the FileDecorationProvider AFTER features are refreshed (so rules are
+    // already loaded) and after the built-in git extension has registered its own provider.
+    // VS Code merges decorations from multiple providers using "last registered wins" for
+    // colors. By registering here — after the await above — our custom colors override
+    // git's "modified file" orange that appears when the Task Collector updates the
+    // collector document.
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(decorationProvider),
+    );
 
     // Check for blueprint updates in the background — this may show a dialog that blocks
     // indefinitely and must not delay decoration rendering.

@@ -6,6 +6,7 @@ import { attachSubtaskCheckboxHandlers } from './subtaskHandlers';
 import { openPopup } from './popup';
 import { showContextMenu, dismissContextMenu } from './contextMenu';
 import { annotateContacts } from './contactTooltip';
+import { interceptLocalLinks } from './linkHandler';
 
 let dragSrcId: string | null = null;
 const renderedActiveHtml = new Map<string, string>();
@@ -84,6 +85,7 @@ function renderActiveCard(activeList: HTMLElement, task: UITask): HTMLElement {
     const body = el('div', 'task-body');
     body.innerHTML = sanitizeHtml(task.bodyHtml);
     annotateContacts(body);
+    interceptLocalLinks(body);
     body.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         openPopup('edit', task);

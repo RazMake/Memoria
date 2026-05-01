@@ -389,6 +389,16 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                     }
                     break;
                 }
+                case "openLink": {
+                    // Resolve relative link against the directory of the .todo.md file
+                    const docDir = vscode.Uri.joinPath(document.uri, "..");
+                    const targetUri = vscode.Uri.joinPath(docDir, msg.href);
+                    await vscode.window.showTextDocument(targetUri, {
+                        viewColumn: vscode.ViewColumn.Beside,
+                        preserveFocus: false,
+                    });
+                    break;
+                }
                 case "scan": {
                     await syncTasks();
                     await refreshTaskIndex(workspaceRoot);

@@ -5,6 +5,7 @@
   "yaml.schemas": {
     ".vscode/blueprint.schema.json": "**/resources/blueprints/**/blueprint.yaml"
   },
+  "terminal.integrated.fontFamily": "RobotoMono Nerd Font Mono",
   "chat.tools.terminal.autoApprove": {
     "npm run build": true,
     "npm install": true,

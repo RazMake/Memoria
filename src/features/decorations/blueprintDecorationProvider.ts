@@ -57,6 +57,7 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
         this.builtDecorations = this.rules.map(buildDecoration);
         this._onDidChangeFileDecorations.fire(undefined);
+        await suppressDiagnosticDecorations(initializedRoot, enabled);
     }
 
     provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
@@ -163,6 +164,39 @@ function buildDecoration(rule: DecorationRule): vscode.FileDecoration | undefine
         rule.tooltip,
         rule.color ? new vscode.ThemeColor(rule.color) : undefined
     );
+}
+
+/**
+ * Suppresses VS Code's built-in diagnostic decorations in the Explorer when Memoria's
+ * custom Explorer Decorations feature is active.
+ *
+ * WHY: VS Code propagates warning/error severity colors from files to their parent
+ * folders. This overrides Memoria's custom folder colors (e.g. a purple "Workstreams"
+ * folder turns orange when a child file has a warning). Disabling
+ * `problems.decorations.enabled` prevents that propagation while diagnostics remain
+ * visible in the Problems panel, editor squiggles, and the status bar.
+ *
+ * The setting is applied at the workspace level so it only affects initialized
+ * workspaces and does not change the user's global preference.
+ */
+async function suppressDiagnosticDecorations(root: vscode.Uri | null, decorationsEnabled: boolean): Promise<void> {
+    if (!root) {
+        return;
+    }
+    const config = vscode.workspace.getConfiguration("problems.decorations", root);
+    const inspect = config.inspect<boolean>("enabled");
+
+    if (decorationsEnabled) {
+        // Only set when not already set at workspace level to avoid needless writes.
+        if (inspect?.workspaceValue !== false) {
+            await config.update("enabled", false, vscode.ConfigurationTarget.Workspace);
+        }
+    } else {
+        // Remove the workspace override so the user's global setting takes effect again.
+        if (inspect?.workspaceValue !== undefined) {
+            await config.update("enabled", undefined, vscode.ConfigurationTarget.Workspace);
+        }
+    }
 }
 
 /**

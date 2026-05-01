@@ -5,6 +5,7 @@ import { createCheckbox } from './checkbox';
 import { attachSubtaskCheckboxHandlers } from './subtaskHandlers';
 import { showContextMenu, dismissContextMenu } from './contextMenu';
 import { annotateContacts } from './contactTooltip';
+import { interceptLocalLinks } from './linkHandler';
 
 let completedCollapsed = true;
 
@@ -66,6 +67,7 @@ function renderCompletedCard(task: UITask): HTMLElement {
     const body = el('div', 'task-body completed-body');
     body.innerHTML = sanitizeHtml(task.bodyHtml);
     annotateContacts(body);
+    interceptLocalLinks(body);
     attachSubtaskCheckboxHandlers(body, task.id);
 
     // Source link

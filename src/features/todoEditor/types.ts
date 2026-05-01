@@ -41,4 +41,5 @@ export type ToExtensionMessage =
     | { type: 'deleteTask'; id: string }
     | { type: 'scan' }
     | { type: 'snippetQuery'; prefix: string }
-    | { type: 'snippetAccept'; trigger: string; selectedText?: string };
+    | { type: 'snippetAccept'; trigger: string; selectedText?: string }
+    | { type: 'openLink'; href: string };
