@@ -46,7 +46,7 @@ The snippet only appears in the autocomplete list when there are sub-headings av
 
 ### Snippet demos
 
-![Snippets autocomplete](../media/snippets-autocomplete.gif)
+![Snippets autocomplete](media/snippets-autocomplete.gif)
 
 ## Creating custom snippets
 

@@ -10,7 +10,7 @@ Scaffolds the workspace with a folder structure based on the selected blueprint 
 3. Select a blueprint template from the list
 4. Memoria creates the folder structure, default files, and configuration
 
-![Initialize workspace](../media/initialize-workspace.gif)
+![Initialize workspace](media/initialize-workspace.gif)
 
 See [Blueprint Templates](../blueprints/index.md) for what each template includes.
 
@@ -28,7 +28,7 @@ After you confirm both steps:
 
 > **Note:** If a newer version of your blueprint is available, Memoria will prompt you to reinitialize when VS Code starts.
 
-![Conflict resolver](../media/conflict-resolver.gif)
+![Conflict resolver](media/conflict-resolver.gif)
 
 ---
 

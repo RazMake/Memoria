@@ -1,18 +1,21 @@
 # Media Assets
 
-This folder is for GIF animations and screenshots used in the User Guide.
+GIF animations and screenshots used in the User Guide.
 
-## Required files
+VS Code's markdown preview webview restricts resource loading to the markdown file's own directory (`localResourceRoots`). Images must live in a `media/` subfolder **within the same directory** as the markdown file that references them — `../media/` paths are blocked.
 
-| File | Shows |
-|------|-------|
-| `initialize-workspace.gif` | Command Palette → blueprint selection → scaffolded result |
-| `explorer-decorations.gif` | Color-coded badges on folders, toggling on/off |
-| `contacts-sidebar.gif` | Browsing, searching, and adding contacts in the sidebar |
-| `todo-editor.gif` | Visual task board: cards, drag-drop, check/uncheck, add task |
-| `task-collector-sync.gif` | Two-way sync between source file and collector |
-| `snippets-autocomplete.gif` | Typing {date}/{time}/{now} triggers, selecting format |
-| `conflict-resolver.gif` | Reinitialization conflict resolution with diff editor |
+## File locations
+
+| File | Location | Referenced by |
+|------|----------|---------------|
+| `initialize-workspace.gif` | `docs/media/` | `getting-started.md` |
+| `initialize-workspace.gif` | `docs/commands/media/` | `commands/initialize-workspace.md` |
+| `conflict-resolver.gif` | `docs/commands/media/` | `commands/initialize-workspace.md` |
+| `explorer-decorations.gif` | `docs/features/media/` | `features/decorations.md` |
+| `contacts-sidebar.gif` | `docs/features/media/` | `features/contacts.md` |
+| `task-collector-sync.gif` | `docs/features/media/` | `features/task-collector.md` |
+| `snippets-autocomplete.gif` | `docs/features/media/` | `features/snippets.md` |
+| `todo-editor.gif` | _(not yet used)_ | — |
 
 ## Recording tips
 

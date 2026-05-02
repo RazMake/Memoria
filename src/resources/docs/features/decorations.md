@@ -8,7 +8,7 @@ Each blueprint defines decoration rules that map folders to colors, badges, and 
 
 Some decorations **propagate** to child items — for example, a decoration on `00-ToDo/` applies to all files and subfolders inside it.
 
-![Explorer Decorations](../media/explorer-decorations.gif)
+![Explorer Decorations](media/explorer-decorations.gif)
 
 ## Toggling
 

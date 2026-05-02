@@ -15,7 +15,7 @@ You can also **add tasks directly in the collector** (no source file required). 
 
 > **Source files are never modified by Memoria** except to propagate checkbox state changes (`[ ]` ↔ `[x]`) and to mark aged-out completions as done. No identity markers or comments are inserted.
 
-![Task Collector sync](../media/task-collector-sync.gif)
+![Task Collector sync](media/task-collector-sync.gif)
 
 ## Collector file
 
@@ -88,7 +88,7 @@ Runtime settings are stored in `.memoria/task-collector.json`:
 `*.todo.md` files open in a **visual task board** by default.
 
 <!-- TODO: uncomment when todo-editor.gif is recorded -->
-<!-- ![Todo Editor](../media/todo-editor.gif) -->
+<!-- ![Todo Editor](media/todo-editor.gif) -->
 
 ### Card layout
 

@@ -27,7 +27,7 @@ The sidebar is optimized for narrow widths:
 - Use the inline actions to edit, move, or delete
 - Use the `+` button to add a new contact or create a new group
 
-![Contacts sidebar](../media/contacts-sidebar.gif)
+![Contacts sidebar](media/contacts-sidebar.gif)
 
 ## Reference data
 
