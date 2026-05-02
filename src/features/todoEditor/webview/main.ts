@@ -2,7 +2,7 @@ import type { UITask } from './types';
 import { vscode, getActive, setActive, setCompleted, setContactTooltips } from './state';
 import { el } from './utils';
 import { renderActiveList, invalidateActiveCache } from './activeList';
-import { renderCompletedSection } from './completedList';
+import { renderCompletedSection, invalidateCompletedCache } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
 import { handleSnippetSuggestions, handleSnippetResult } from './snippetAutocomplete';
 
@@ -42,6 +42,7 @@ window.addEventListener('message', (e: MessageEvent) => {
     } else if (msg?.type === 'contactTooltips') {
         setContactTooltips(msg.entries);
         invalidateActiveCache();
+        invalidateCompletedCache();
         renderAll();
     } else if (msg?.type === 'snippetSuggestions') {
         handleSnippetSuggestions(msg.items);

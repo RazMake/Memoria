@@ -30,6 +30,9 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     // Persistent across editor open/close to avoid re-rendering unchanged tasks.
     private readonly mdCache = new Map<string, string>();
 
+    // Fingerprint of the last document text pushed, used to skip no-op updates.
+    private lastPushedText = "";
+
     // Cached body→source reverse map from the task index; survives tab switches.
     private cachedSourceByBody: Map<string, string> | null = null;
 
@@ -136,6 +139,12 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         // 6. pushUpdate function — uses caches to avoid redundant work.
         const pushUpdate = () => {
             const text = document.getText();
+
+            // Skip no-op: if the document text hasn't changed since last push,
+            // there's nothing new to render.
+            if (text === this.lastPushedText) return;
+            this.lastPushedText = text;
+
             const doc = parseTodoDocument(text);
 
             const toUITask = (task: ParsedCollectorTask, isCompleted: boolean, index: number): UITask => {
@@ -233,6 +242,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         const messageHandler = async (msg: ToExtensionMessage) => {
             switch (msg.type) {
                 case "ready":
+                    this.lastPushedText = ""; // Force full re-push
                     pushUpdate();
                     pushContactTooltips();
                     break;
@@ -515,16 +525,22 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             webviewPanel.webview.onDidReceiveMessage(messageHandler),
         );
 
+        // Debounce text-change updates to avoid cascading re-parses when
+        // applyEdit + save fire multiple change events in quick succession.
+        let changeTimer: ReturnType<typeof setTimeout> | null = null;
         disposables.push(
             vscode.workspace.onDidChangeTextDocument(e => {
                 if (e.document.uri.toString() === document.uri.toString()) {
-                    void refreshTaskIndex(workspaceRoot).then(pushUpdate);
+                    if (changeTimer) clearTimeout(changeTimer);
+                    changeTimer = setTimeout(pushUpdate, 80);
                 }
             }),
         );
 
         webviewPanel.onDidDispose(() => {
             this.activePanelTooltipPushers.delete(pushContactTooltips);
+            this.lastPushedText = "";
+            if (changeTimer) clearTimeout(changeTimer);
             for (const d of disposables) d.dispose();
         });
     }

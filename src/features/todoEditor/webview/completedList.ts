@@ -8,15 +8,39 @@ import { annotateContacts } from './contactTooltip';
 import { interceptLocalLinks } from './linkHandler';
 
 let completedCollapsed = true;
+/** Tracks rendered bodyHtml per task id to skip unchanged cards. */
+const renderedCompletedHtml = new Map<string, string>();
+
+export function invalidateCompletedCache(): void {
+    renderedCompletedHtml.clear();
+}
 
 export function renderCompletedSection(completedSection: HTMLElement): void {
     const currentCompleted = getCompleted();
-    completedSection.innerHTML = '';
-    if (currentCompleted.length === 0) return;
 
-    const sep = el('div', 'completed-separator');
-    const header = el('div', 'completed-header');
+    if (currentCompleted.length === 0) {
+        completedSection.innerHTML = '';
+        renderedCompletedHtml.clear();
+        return;
+    }
 
+    // Ensure structural elements exist (header row)
+    let sep = completedSection.querySelector<HTMLElement>('.completed-separator');
+    let header = completedSection.querySelector<HTMLElement>('.completed-header');
+    let list = completedSection.querySelector<HTMLElement>('.completed-list');
+
+    if (!sep || !header) {
+        completedSection.innerHTML = '';
+        renderedCompletedHtml.clear();
+
+        sep = el('div', 'completed-separator');
+        header = el('div', 'completed-header');
+        completedSection.append(sep, header);
+        list = null; // force rebuild below
+    }
+
+    // Always rebuild header content (cheap — just text + pill)
+    header.innerHTML = '';
     const chevron = el('span', 'completed-chevron');
     chevron.textContent = completedCollapsed ? '▸' : '▾';
 
@@ -27,19 +51,67 @@ export function renderCompletedSection(completedSection: HTMLElement): void {
     pill.textContent = String(currentCompleted.length);
 
     header.append(chevron, label, pill);
-    header.addEventListener('click', () => {
+    header.onclick = () => {
         completedCollapsed = !completedCollapsed;
         renderCompletedSection(completedSection);
-    });
+    };
 
-    completedSection.append(sep, header);
-
-    if (!completedCollapsed) {
-        const list = el('div', 'completed-list');
-        for (const task of currentCompleted) {
-            list.appendChild(renderCompletedCard(task));
+    if (completedCollapsed) {
+        if (list) {
+            list.remove();
         }
+        renderedCompletedHtml.clear();
+        return;
+    }
+
+    // Expanded: incrementally update the list (same strategy as activeList)
+    if (!list) {
+        list = el('div', 'completed-list');
         completedSection.appendChild(list);
+    }
+
+    const newIdSet = new Set(currentCompleted.map(t => t.id));
+
+    // Remove cards no longer present
+    for (const card of Array.from(list.querySelectorAll<HTMLElement>('.completed-card'))) {
+        const id = card.getAttribute('data-id');
+        if (!id || !newIdSet.has(id)) {
+            card.remove();
+            if (id) renderedCompletedHtml.delete(id);
+        }
+    }
+
+    // Update or insert cards in order
+    let prevCard: HTMLElement | null = null;
+    for (const task of currentCompleted) {
+        const existing = list.querySelector<HTMLElement>(`[data-id="${CSS.escape(task.id)}"]`);
+        if (existing) {
+            if (renderedCompletedHtml.get(task.id) !== task.bodyHtml) {
+                const fresh = renderCompletedCard(task);
+                existing.replaceWith(fresh);
+                renderedCompletedHtml.set(task.id, task.bodyHtml);
+                prevCard = fresh;
+            } else {
+                const expectedNext = prevCard ? prevCard.nextSibling : list.firstChild;
+                if (existing !== expectedNext) {
+                    if (prevCard) {
+                        prevCard.after(existing);
+                    } else {
+                        list.prepend(existing);
+                    }
+                }
+                prevCard = existing;
+            }
+        } else {
+            const card = renderCompletedCard(task);
+            if (prevCard) {
+                prevCard.after(card);
+            } else {
+                list.prepend(card);
+            }
+            renderedCompletedHtml.set(task.id, task.bodyHtml);
+            prevCard = card;
+        }
     }
 }
 
