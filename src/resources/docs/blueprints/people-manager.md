@@ -21,18 +21,22 @@ This template is meant to help managers organize their meeting notes and create 
    📁 Hiring/             ← The process for hiring
    📁 Evaluation/         ← Notes about evaluating people
 📁 02-MeetingNotes/       ← All meeting notes to be preserved
-   📁 Team-Members-1-1/   ← Notes based on the team 1-1s
 📁 03-Inbox/              ← Default location for new notes
 📁 05-Archive/            ← Old, unused files are preserved here
-📁 06-Contacts/           ← Contact records and reference data
-   📄 Team.md             ← Direct reports managed by the Contacts sidebar
-   📄 Colleagues.md       ← Colleagues managed by the Contacts sidebar
-   📁 InterviewTemplates/ ← Interview problems and notes
-   📁 DataTypes/          ← Reference data used by contacts
-      📄 CareerLevels.md
-      📄 CareerPaths.md
-      📄 InterviewTypes.md
-      📄 Pronouns.md
+📁 06-Autocomplete/       ← Contacts, snippets, and autocomplete data
+   📁 Contacts/           ← Contact records and reference data
+      📄 Team.md          ← Direct reports managed by the Contacts sidebar
+      📄 Peers.md         ← Peers managed by the Contacts sidebar
+      📄 Colleagues.md    ← Colleagues managed by the Contacts sidebar
+      📁 InterviewTemplates/ ← Interview problems and notes
+      📁 DataTypes/       ← Reference data used by contacts
+         📄 CareerLevels.md
+         📄 CareerPaths.md
+         📄 InterviewTypes.md
+         📄 Pronouns.md
+   📁 Snippets/           ← TypeScript snippet files for text expansion
+      📄 date-time.ts     ← Date, time, and now snippets
+      📄 heading-children.ts ← Copy sub-heading content
 ```
 
 ## Features
@@ -44,6 +48,7 @@ This template is meant to help managers organize their meeting notes and create 
 | [Task Collector](../features/task-collector.md) | ✅ Yes |
 | [Contacts](../features/contacts.md) | ✅ Yes |
 | [Explorer Decorations](../features/decorations.md) | ✅ Yes |
+| [Snippets](../features/snippets.md) | ✅ Yes |
 
 ### Always on
 - [Open default file(s)](../features/default-files.md)

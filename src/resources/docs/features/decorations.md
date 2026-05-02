@@ -30,7 +30,7 @@ Decoration rules are also updated **live** — any saved change to `decorations.
 ## Troubleshooting
 
 - **Badges/colors not showing?** Make sure the feature is enabled via **Memoria: Manage features**
-- **Wrong colors?** Decoration rules come from the blueprint — they cannot be customized outside of blueprint definitions
+- **Wrong colors?** Edit the rules in `.memoria/decorations.json` — changes are picked up live. Color values use VS Code theme color IDs (e.g., `charts.yellow`, `charts.blue`) so they adapt to your current theme
 - **Still not working?** Try reloading VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**)
 
 ---

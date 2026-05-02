@@ -41,7 +41,7 @@ This menu item only appears when:
 
 ### Can I customize the decoration colors?
 
-Decoration colors are defined in the blueprint template and use VS Code theme colors (e.g., `charts.yellow`, `charts.blue`). Custom decoration rules are not currently supported outside of blueprint definitions. See [Explorer Decorations](features/decorations.md) for details.
+Yes. Edit the rules in `.memoria/decorations.json` — the file supports auto-completion and an inline color picker. Changes are reflected in the Explorer immediately after saving. Color values use VS Code theme color IDs (e.g., `charts.yellow`, `charts.blue`) so they adapt to your current theme. See [Explorer Decorations](features/decorations.md) for details.
 
 ---
 
@@ -83,6 +83,22 @@ Check `completedRetentionDays` in `.memoria/task-collector.json`. If set to `0`,
 ### Can I add tasks directly in the collector without a source file?
 
 Yes. Type a task (`- [ ] …`) anywhere in the `# To do` section of the collector, save it, and Memoria will register it as a manual (collector-only) task. Manual tasks have no source suffix and do not propagate back to any file.
+
+---
+
+## Snippets
+
+### Snippets are not appearing in autocomplete
+
+Make sure the Snippets feature is enabled via **Memoria: Manage features** and that you are editing a Markdown file matching the snippet's `glob` pattern. Snippet triggers use `{trigger}` syntax (e.g., `{date}`) — start typing the trigger including the opening brace.
+
+### Snippet file shows a compile error
+
+Memoria compiles `.ts` snippet files using an in-memory TypeScript transpiler. Only the `memoria-snippets` module can be imported — Node.js built-in modules and other packages are blocked for security. Check the VS Code notification area for details on the error.
+
+### Contact snippets are missing
+
+Contact snippets (the `@id` triggers) require both the **Snippets** and **Contacts** features to be enabled, and at least one contact must be loaded. Enable both features via **Memoria: Manage features**.
 
 ---
 
