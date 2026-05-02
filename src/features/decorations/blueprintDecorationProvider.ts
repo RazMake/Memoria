@@ -27,8 +27,6 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     private builtDecorations: (vscode.FileDecoration | undefined)[] = [];
     /** All workspace root paths to decorate (not just the initialized one). */
     private rootPaths: string[] = [];
-    /** Tracks whether diagnostic suppression is currently active so the config watcher can re-apply it. */
-    private suppressionRoot: vscode.Uri | null = null;
 
     constructor(private readonly manifest: ManifestManager) {}
 
@@ -59,26 +57,7 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
         this.builtDecorations = this.rules.map(buildDecoration);
         this._onDidChangeFileDecorations.fire(undefined);
-        this.suppressionRoot = (initializedRoot && enabled) ? initializedRoot : null;
         await suppressDiagnosticDecorations(initializedRoot, enabled);
-    }
-
-    /**
-     * Returns a disposable that watches for external changes to `problems.decorations.enabled`
-     * and re-suppresses them while custom decorations are active.
-     *
-     * WHY: The suppression writes `problems.decorations.enabled: false` into
-     * `.vscode/settings.json`. If that file is overwritten externally (git pull,
-     * another editor, a script) the setting is lost and diagnostic colors reappear
-     * on folders, overriding Memoria's custom colors. This listener detects the
-     * change and re-applies the suppression.
-     */
-    watchDiagnosticSuppression(): vscode.Disposable {
-        return vscode.workspace.onDidChangeConfiguration((e) => {
-            if (this.suppressionRoot && e.affectsConfiguration("problems.decorations.enabled")) {
-                void suppressDiagnosticDecorations(this.suppressionRoot, true);
-            }
-        });
     }
 
     provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
@@ -116,7 +95,6 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
     dispose(): void {
         this._onDidChangeFileDecorations.dispose();
-        this.suppressionRoot = null;
     }
 }
 
@@ -198,25 +176,36 @@ function buildDecoration(rule: DecorationRule): vscode.FileDecoration | undefine
  * `problems.decorations.enabled` prevents that propagation while diagnostics remain
  * visible in the Problems panel, editor squiggles, and the status bar.
  *
- * The setting is applied at the workspace level so it only affects initialized
- * workspaces and does not change the user's global preference.
+ * `outline.problems.badges` is explicitly kept enabled so problem indicators still
+ * appear inside the Outline view within the file.
+ *
+ * The settings are applied at the workspace level so they only affect initialized
+ * workspaces and do not change the user's global preferences.
  */
 async function suppressDiagnosticDecorations(root: vscode.Uri | null, decorationsEnabled: boolean): Promise<void> {
     if (!root) {
         return;
     }
-    const config = vscode.workspace.getConfiguration("problems.decorations", root);
-    const inspect = config.inspect<boolean>("enabled");
+    const problemsConfig = vscode.workspace.getConfiguration("problems.decorations", root);
+    const problemsInspect = problemsConfig.inspect<boolean>("enabled");
+    const outlineConfig = vscode.workspace.getConfiguration("outline.problems", root);
+    const outlineInspect = outlineConfig.inspect<boolean>("badges");
 
     if (decorationsEnabled) {
         // Only set when not already set at workspace level to avoid needless writes.
-        if (inspect?.workspaceValue !== false) {
-            await config.update("enabled", false, vscode.ConfigurationTarget.Workspace);
+        if (problemsInspect?.workspaceValue !== false) {
+            await problemsConfig.update("enabled", false, vscode.ConfigurationTarget.Workspace);
+        }
+        if (outlineInspect?.workspaceValue !== true) {
+            await outlineConfig.update("badges", true, vscode.ConfigurationTarget.Workspace);
         }
     } else {
-        // Remove the workspace override so the user's global setting takes effect again.
-        if (inspect?.workspaceValue !== undefined) {
-            await config.update("enabled", undefined, vscode.ConfigurationTarget.Workspace);
+        // Remove the workspace overrides so the user's global settings take effect again.
+        if (problemsInspect?.workspaceValue !== undefined) {
+            await problemsConfig.update("enabled", undefined, vscode.ConfigurationTarget.Workspace);
+        }
+        if (outlineInspect?.workspaceValue !== undefined) {
+            await outlineConfig.update("badges", undefined, vscode.ConfigurationTarget.Workspace);
         }
     }
 }
