@@ -12,8 +12,6 @@ It opens one or more pre-configured files for a folder, side by side in the edit
 3. If any open files have unsaved changes, a checkbox list appears so you can choose which files to save (_before closing_) — unchecked files are discarded
 4. All current editors are closed and the default files open side by side
 
-![Open default files](../media/open-default-files.gif)
-
 > **Tip:** Default files are defined in the blueprint template and configured in `.memoria/default-files.json`. See [the Default Files feature](../features/default-files.md) and [default-files.json](../configuration/default-files-json.md) for more details.
 
 ---

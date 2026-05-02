@@ -1,6 +1,6 @@
 # jodoe
 - Nickname: John
 - FullName: John Doe
-- Title: Principal Squad Leader
-- CareerPathKey: sl
+- Title: Principal Engineering Manager
+- CareerPathKey: em
 - PronounsKey: he/him

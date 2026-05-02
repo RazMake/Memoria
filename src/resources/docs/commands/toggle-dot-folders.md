@@ -10,8 +10,6 @@ Hides or shows dot-folders (directories starting with `.`) in the VS Code Explor
 
 Memoria tracks which exclusions it owns in `.memoria/dotfolders.json`, so it never interferes with your own `files.exclude` entries.
 
-![Toggle dot-folders](../media/toggle-dot-folders.gif)
-
 ---
 
 [⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

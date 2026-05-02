@@ -13,15 +13,9 @@ To get started, first thing you need to do is to initialize your workspace, by f
    Note: _The extension supports both normal and multi-root workspaces_
 4. After the workspace is initialized, additional [commands](commands/index.md) will be available
 
-## Initialization walkthrough videos
-
-### Initializing a normal workspace
+## Initialization walkthrough
 
 ![Initialize workspace](media/initialize-workspace.gif)
-
-### Initializing a multi root workspace
-
-![Initialize multi-root workspace](media/initialize-multi-root.gif)
 
 ## Need Help?
 

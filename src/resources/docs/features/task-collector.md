@@ -87,7 +87,8 @@ Runtime settings are stored in `.memoria/task-collector.json`:
 
 `*.todo.md` files open in a **visual task board** by default.
 
-![Todo Editor](../media/todo-editor.gif)
+<!-- TODO: uncomment when todo-editor.gif is recorded -->
+<!-- ![Todo Editor](../media/todo-editor.gif) -->
 
 ### Card layout
 

@@ -9,8 +9,6 @@ Features available in the picker depend on your blueprint.
 
 Changes are saved to `.memoria/features.json` and take effect immediately.
 
-![Manage features](../media/manage-features.gif)
-
 ---
 
 [⬅️ **Back** to Commands](index.md) 💠 [Getting Started](../getting-started.md) 💠 [FAQ](../faq.md)

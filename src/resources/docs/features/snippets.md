@@ -48,8 +48,6 @@ The snippet only appears in the autocomplete list when there are sub-headings av
 
 ![Snippets autocomplete](../media/snippets-autocomplete.gif)
 
-![Copy child heading](../media/snippets-copy-child.gif)
-
 ## Creating custom snippets
 
 Add a new `.ts` file to the Snippets folder. Each file must export a `SnippetDefinition` array (default export or named export):
@@ -136,8 +134,6 @@ Typing `@` followed by a contact's id, nickname, or full name shows matching con
 - _(Reports only)_ Nickname (level), Full Name (level), Full Name (level, for X months - since MM-dd-YYYY)
 
 Contact snippets update automatically when contacts are added, edited, or removed.
-
-![Contact snippets](../media/snippets-contact.gif)
 
 ## Detailed contact hover
 

@@ -100,12 +100,12 @@ features:
         tooltip: "Information about current workstreams, todos, etc."
         propagate: true
       - filter: "01-ToRemember/"
-        color: "charts.yellow"
+        color: "terminal.ansiBrightYellow"
         badge: "🧠"
         tooltip: "Personal knowledge base."
         propagate: true
       - filter: "02-MeetingNotes/"
-        color: "terminal.ansiBrightYellow"
+        color: "charts.green"
         tooltip: "Meeting notes to be preserved for later references."
         propagate: true
       - filter: "03-Inbox/"
