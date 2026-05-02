@@ -47,4 +47,20 @@ await Promise.all([
         sourcemap: isDev,
         minify: !isDev,
     }),
+    build({
+        entryPoints: ["blueprints/webview/conflictDiffMain.ts"],
+        bundle: true,
+        outfile: "dist/conflict-diff.js",
+        format: "iife",
+        platform: "browser",
+        target: "es2022",
+        sourcemap: isDev,
+        minify: !isDev,
+    }),
+    build({
+        entryPoints: ["blueprints/webview/conflictDiff.css"],
+        outfile: "dist/conflict-diff.css",
+        bundle: true,
+        minify: !isDev,
+    }),
 ]);

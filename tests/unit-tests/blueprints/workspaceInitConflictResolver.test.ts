@@ -5,10 +5,11 @@ import type { BlueprintDefinition, BlueprintManifest } from "../../../src/bluepr
 
 const mockReadDirectory = vi.fn();
 const mockReadFile = vi.fn();
+const mockWriteFile = vi.fn();
 const mockCreateDirectory = vi.fn();
 const mockCopy = vi.fn();
 const mockShowQuickPick = vi.fn();
-const mockExecuteCommand = vi.fn();
+const mockCreateWebviewPanel = vi.fn();
 const mockJoinPath = vi.fn((base: any, ...segments: string[]) => ({
     ...base,
     path: [base.path, ...segments].join("/"),
@@ -16,19 +17,19 @@ const mockJoinPath = vi.fn((base: any, ...segments: string[]) => ({
 
 vi.mock("vscode", () => ({
     FileType: { Directory: 2, File: 1 },
+    ViewColumn: { Active: 1 },
     workspace: {
         fs: {
             readDirectory: (...args: any[]) => mockReadDirectory(...args),
             readFile: (...args: any[]) => mockReadFile(...args),
+            writeFile: (...args: any[]) => mockWriteFile(...args),
             createDirectory: (...args: any[]) => mockCreateDirectory(...args),
             copy: (...args: any[]) => mockCopy(...args),
         },
     },
     window: {
         showQuickPick: (...args: any[]) => mockShowQuickPick(...args),
-    },
-    commands: {
-        executeCommand: (...args: any[]) => mockExecuteCommand(...args),
+        createWebviewPanel: (...args: any[]) => mockCreateWebviewPanel(...args),
     },
     Uri: {
         joinPath: (...args: any[]) => mockJoinPath(...args),
@@ -38,6 +39,7 @@ vi.mock("vscode", () => ({
 const mockFs = {
     readDirectory: (...args: any[]) => mockReadDirectory(...args),
     readFile: (...args: any[]) => mockReadFile(...args),
+    writeFile: (...args: any[]) => mockWriteFile(...args),
     createDirectory: (...args: any[]) => mockCreateDirectory(...args),
     copy: (...args: any[]) => mockCopy(...args),
 } as any;
@@ -45,6 +47,26 @@ const mockFs = {
 const encoder = new TextEncoder();
 const workspaceRoot = { path: "/workspace" } as any;
 const cleanupRoot = { path: "/workspace/WorkspaceInitializationBackups" } as any;
+const extensionUri = { path: "/ext" } as any;
+
+function createMockWebviewPanel() {
+    const messageListeners: Array<(msg: any) => void> = [];
+    return {
+        webview: {
+            html: "",
+            options: {},
+            cspSource: "mock-csp",
+            asWebviewUri: (uri: any) => uri,
+            onDidReceiveMessage: (cb: (msg: any) => void) => {
+                messageListeners.push(cb);
+                return { dispose: vi.fn() };
+            },
+            postMessage: vi.fn(),
+        },
+        dispose: vi.fn(),
+        _messageListeners: messageListeners,
+    };
+}
 
 const blueprintDefinition: BlueprintDefinition = {
     id: "individual-contributor",
@@ -83,7 +105,8 @@ describe("WorkspaceInitConflictResolver", () => {
         vi.resetAllMocks();
         mockCreateDirectory.mockResolvedValue(undefined);
         mockCopy.mockResolvedValue(undefined);
-        mockExecuteCommand.mockResolvedValue(undefined);
+        mockWriteFile.mockResolvedValue(undefined);
+        mockCreateWebviewPanel.mockReturnValue(createMockWebviewPanel());
     });
 
     describe("resolveConflicts — Phase A categorization", () => {
@@ -95,7 +118,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockReadFile.mockResolvedValue(originalContent);
             // No QuickPick shown: no extra folders, no conflicts
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -115,7 +138,7 @@ describe("WorkspaceInitConflictResolver", () => {
             // No extra folders → folder picker not called; conflict found → file picker shown
             mockShowQuickPick.mockResolvedValueOnce([]); // file picker: no files selected for diff
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -135,7 +158,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockShowQuickPick.mockResolvedValueOnce([]); // file picker: no files selected for diff
 
             const getSeedContent = async (_path: string) => seedContent;
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, manifest, blueprintDefinition, getSeedContent);
 
             expect(plan).toBeDefined();
@@ -155,7 +178,7 @@ describe("WorkspaceInitConflictResolver", () => {
             // No extra folders, no conflicts → no QuickPick shown
 
             const getSeedContent = async (_path: string) => seedContent;
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, manifest, blueprintDefinition, getSeedContent);
 
             expect(plan).toBeDefined();
@@ -174,7 +197,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockReadFile.mockRejectedValue(new Error("File not found"));
             // No extra folders, no conflicts → no QuickPick shown
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -198,7 +221,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockReadFile.mockResolvedValue(originalContent);
             // No extra folders (system folders excluded), no conflicts → no QuickPick shown
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -226,7 +249,7 @@ describe("WorkspaceInitConflictResolver", () => {
             // No file conflicts → file picker not called
             mockShowQuickPick.mockResolvedValueOnce([]); // folder picker: ExtraFolder unchecked → foldersToCleanup = ["ExtraFolder"]
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -267,7 +290,7 @@ describe("WorkspaceInitConflictResolver", () => {
                 .mockResolvedValueOnce([{ label: "E" }]) // folder picker: E kept → foldersToCleanup = []
                 .mockResolvedValueOnce([]); // file picker: no files selected for diff
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, manifest, blueprintWithABCD, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -304,7 +327,7 @@ describe("WorkspaceInitConflictResolver", () => {
                 workspace: [{ name: "NewFolder/", isFolder: true }],
             };
             const oldManifest: BlueprintManifest = { ...existingManifest, blueprintId: "original-id" };
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, oldManifest, differentBlueprint, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -339,7 +362,7 @@ describe("WorkspaceInitConflictResolver", () => {
                 workspace: [{ name: "NewFolder/", isFolder: true }],
             };
             const oldManifest: BlueprintManifest = { ...existingManifest, blueprintId: "original-id" };
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, oldManifest, differentBlueprint, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -359,7 +382,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockReadFile.mockResolvedValue(originalContent);
             // No extra folders and no conflicts → neither QuickPick should appear
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeDefined();
@@ -381,7 +404,7 @@ describe("WorkspaceInitConflictResolver", () => {
             mockReadFile.mockResolvedValue(originalContent);
             mockShowQuickPick.mockResolvedValue(undefined); // user cancels folder picker
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeUndefined();
@@ -393,7 +416,7 @@ describe("WorkspaceInitConflictResolver", () => {
             // No extra folders → folder picker is NOT called. Only file picker is shown.
             mockShowQuickPick.mockResolvedValue(undefined); // file picker cancelled
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const plan = await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             expect(plan).toBeUndefined();
@@ -405,7 +428,7 @@ describe("WorkspaceInitConflictResolver", () => {
             // No extra folders → folder picker NOT called. File picker is shown and cancelled.
             mockShowQuickPick.mockResolvedValue(undefined); // file picker cancelled
 
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.resolveConflicts(workspaceRoot, existingManifest, blueprintDefinition, noSeedContent);
 
             // Backup should have been made in Phase A before the cancel
@@ -416,7 +439,7 @@ describe("WorkspaceInitConflictResolver", () => {
     describe("promptFolderCleanup", () => {
         it("should show a multi-select QuickPick with all extra folders, all checked by default", async () => {
             mockShowQuickPick.mockResolvedValue([]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.promptFolderCleanup(["FolderA", "FolderB"]);
 
             expect(mockShowQuickPick).toHaveBeenCalledWith(
@@ -431,7 +454,7 @@ describe("WorkspaceInitConflictResolver", () => {
         it("should return the folders that were unchecked by the user (to move to cleanup)", async () => {
             // User keeps only FolderA checked — FolderB is unchecked (to remove)
             mockShowQuickPick.mockResolvedValue([{ label: "FolderA" }]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFolderCleanup(["FolderA", "FolderB"]);
 
             expect(result).toEqual(["FolderB"]);
@@ -439,7 +462,7 @@ describe("WorkspaceInitConflictResolver", () => {
 
         it("should return an empty array when the user keeps all folders (all checked)", async () => {
             mockShowQuickPick.mockResolvedValue([{ label: "FolderA" }, { label: "FolderB" }]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFolderCleanup(["FolderA", "FolderB"]);
 
             expect(result).toEqual([]);
@@ -447,7 +470,7 @@ describe("WorkspaceInitConflictResolver", () => {
 
         it("should return undefined when the user cancels the QuickPick", async () => {
             mockShowQuickPick.mockResolvedValue(undefined);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFolderCleanup(["FolderA"]);
 
             expect(result).toBeUndefined();
@@ -457,7 +480,7 @@ describe("WorkspaceInitConflictResolver", () => {
     describe("promptFileMerge", () => {
         it("should show a multi-select QuickPick with all conflicting files, none checked by default", async () => {
             mockShowQuickPick.mockResolvedValue([]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.promptFileMerge(["00-ToDo/Main.todo", "01-Notes/README.md"]);
 
             expect(mockShowQuickPick).toHaveBeenCalledWith(
@@ -471,7 +494,7 @@ describe("WorkspaceInitConflictResolver", () => {
 
         it("should return the paths of files the user checked", async () => {
             mockShowQuickPick.mockResolvedValue([{ label: "00-ToDo/Main.todo" }]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFileMerge(["00-ToDo/Main.todo", "01-Notes/README.md"]);
 
             expect(result).toEqual(["00-ToDo/Main.todo"]);
@@ -479,7 +502,7 @@ describe("WorkspaceInitConflictResolver", () => {
 
         it("should return an empty array when the user checks nothing", async () => {
             mockShowQuickPick.mockResolvedValue([]);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFileMerge(["00-ToDo/Main.todo"]);
 
             expect(result).toEqual([]);
@@ -487,7 +510,7 @@ describe("WorkspaceInitConflictResolver", () => {
 
         it("should return undefined when the user cancels the QuickPick", async () => {
             mockShowQuickPick.mockResolvedValue(undefined);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             const result = await resolver.promptFileMerge(["00-ToDo/Main.todo"]);
 
             expect(result).toBeUndefined();
@@ -495,77 +518,147 @@ describe("WorkspaceInitConflictResolver", () => {
     });
 
     describe("openDiffEditors", () => {
-        it("should open a merge editor for each file path", async () => {
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+        it("should create a webview panel for each file path", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.openDiffEditors(workspaceRoot, cleanupRoot, [
                 "00-ToDo/Main.todo",
                 "01-Notes/README.md",
             ]);
 
-            expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
-            expect(mockExecuteCommand).toHaveBeenCalledWith(
-                "vscode.openMergeEditor",
-                expect.objectContaining({
-                    base: expect.objectContaining({ path: "/workspace/WorkspaceInitializationBackups/00-ToDo/Main.todo" }),
-                    input1: expect.objectContaining({ uri: expect.objectContaining({ path: "/workspace/WorkspaceInitializationBackups/00-ToDo/Main.todo" }), title: "Your Version" }),
-                    input2: expect.objectContaining({ uri: expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }), title: "New Blueprint" }),
-                    output: expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
-                })
+            expect(mockCreateWebviewPanel).toHaveBeenCalledTimes(2);
+            expect(mockCreateWebviewPanel).toHaveBeenCalledWith(
+                "memoria.conflictDiff",
+                "Merge: Main.todo",
+                expect.anything(),
+                expect.objectContaining({ enableScripts: true }),
+            );
+            expect(mockCreateWebviewPanel).toHaveBeenCalledWith(
+                "memoria.conflictDiff",
+                "Merge: README.md",
+                expect.anything(),
+                expect.objectContaining({ enableScripts: true }),
             );
         });
 
-        it("should fall back to vscode.diff when merge editor is unavailable", async () => {
-            mockExecuteCommand
-                .mockRejectedValueOnce(new Error("command 'vscode.openMergeEditor' not found"))
-                .mockResolvedValue(undefined);
-
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+        it("should read both backup and workspace files", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
 
-            expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
-            expect(mockExecuteCommand).toHaveBeenNthCalledWith(1, "vscode.openMergeEditor", expect.anything());
-            expect(mockExecuteCommand).toHaveBeenNthCalledWith(
-                2,
-                "vscode.diff",
+            // Should read backup (pre-existing) and workspace (new) file
+            expect(mockReadFile).toHaveBeenCalledWith(
                 expect.objectContaining({ path: "/workspace/WorkspaceInitializationBackups/00-ToDo/Main.todo" }),
+            );
+            expect(mockReadFile).toHaveBeenCalledWith(
                 expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
-                "Merge: Main.todo (old ↔ new)"
             );
         });
 
-        it("should open diff editors in batches of 10", async () => {
-            const filePaths = Array.from({ length: 25 }, (_, i) => `folder/file${i}.md`);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
-            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, filePaths);
+        it("should send init message when webview signals ready", async () => {
+            const preContent = encoder.encode("# pre-existing");
+            const newContent = encoder.encode("# new version");
+            mockReadFile
+                .mockResolvedValueOnce(preContent)
+                .mockResolvedValueOnce(newContent);
 
-            // All 25 diff editors should be opened
-            expect(mockExecuteCommand).toHaveBeenCalledTimes(25);
+            const mockPanel = createMockWebviewPanel();
+            mockCreateWebviewPanel.mockReturnValue(mockPanel);
+
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            // Simulate webview sending ready
+            for (const listener of mockPanel._messageListeners) {
+                listener({ type: "ready" });
+            }
+
+            expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "init",
+                    fileName: "Main.todo",
+                    preExisting: "# pre-existing",
+                    newVersion: "# new version",
+                }),
+            );
         });
 
-        it("should process exactly 3 batches for 25 files (10, 10, 5)", async () => {
-            // We track the order of execution by using sequential mock implementation
-            const batchSizes: number[] = [];
-            let currentBatchSize = 0;
-            let lastResolvedCount = 0;
+        it("should write pre-existing content and dispose on keepPreExisting message", async () => {
+            const preContent = encoder.encode("# pre-existing");
+            const newContent = encoder.encode("# new version");
+            mockReadFile
+                .mockResolvedValueOnce(preContent)
+                .mockResolvedValueOnce(newContent);
 
-            mockExecuteCommand.mockImplementation(() => {
-                currentBatchSize++;
-                return Promise.resolve();
-            });
+            const mockPanel = createMockWebviewPanel();
+            mockCreateWebviewPanel.mockReturnValue(mockPanel);
 
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            // Simulate keepPreExisting message
+            for (const listener of mockPanel._messageListeners) {
+                await listener({ type: "keepPreExisting" });
+            }
+
+            expect(mockWriteFile).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+                expect.any(Uint8Array),
+            );
+            expect(mockPanel.dispose).toHaveBeenCalled();
+        });
+
+        it("should dispose without writing on keepNewVersion message", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
+
+            const mockPanel = createMockWebviewPanel();
+            mockCreateWebviewPanel.mockReturnValue(mockPanel);
+
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            for (const listener of mockPanel._messageListeners) {
+                await listener({ type: "keepNewVersion" });
+            }
+
+            expect(mockWriteFile).not.toHaveBeenCalled();
+            expect(mockPanel.dispose).toHaveBeenCalled();
+        });
+
+        it("should write merged content on applyMerge message", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
+
+            const mockPanel = createMockWebviewPanel();
+            mockCreateWebviewPanel.mockReturnValue(mockPanel);
+
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            for (const listener of mockPanel._messageListeners) {
+                await listener({ type: "applyMerge", content: "# merged content" });
+            }
+
+            expect(mockWriteFile).toHaveBeenCalledWith(
+                expect.objectContaining({ path: "/workspace/00-ToDo/Main.todo" }),
+                expect.any(Uint8Array),
+            );
+            expect(mockPanel.dispose).toHaveBeenCalled();
+        });
+
+        it("should open panels in batches of 10", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
             const filePaths = Array.from({ length: 25 }, (_, i) => `folder/file${i}.md`);
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.openDiffEditors(workspaceRoot, cleanupRoot, filePaths);
 
-            // All 25 should be called
-            expect(mockExecuteCommand).toHaveBeenCalledTimes(25);
+            expect(mockCreateWebviewPanel).toHaveBeenCalledTimes(25);
         });
 
         it("should do nothing when filePaths is empty", async () => {
-            const resolver = new WorkspaceInitConflictResolver(mockFs);
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
             await resolver.openDiffEditors(workspaceRoot, cleanupRoot, []);
 
-            expect(mockExecuteCommand).not.toHaveBeenCalled();
+            expect(mockCreateWebviewPanel).not.toHaveBeenCalled();
         });
     });
 });

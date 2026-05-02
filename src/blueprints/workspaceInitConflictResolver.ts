@@ -16,6 +16,7 @@
 
 import * as vscode from "vscode";
 import { computeFileHash } from "./hashUtils";
+import { getNonce, getConflictDiffHtml } from "./conflictDiffHtml";
 import type {
     BlueprintDefinition,
     BlueprintManifest,
@@ -25,7 +26,8 @@ import type {
 
 export class WorkspaceInitConflictResolver {
     constructor(
-        private readonly fs: typeof vscode.workspace.fs
+        private readonly fs: typeof vscode.workspace.fs,
+        private readonly extensionUri: vscode.Uri,
     ) {}
 
     /**
@@ -127,16 +129,12 @@ export class WorkspaceInitConflictResolver {
     }
 
     /**
-     * Opens VS Code merge editors for the given file paths in batches of 10.
-     * Attempts to use the 3-way merge editor (with accept/discard buttons per hunk).
-     * Falls back to the standard diff editor if the merge editor command is unavailable
-     * (vscode.openMergeEditor is an internal command that may not always be registered).
+     * Opens custom conflict-diff webview panels for the given file paths in batches of 10.
+     * Each panel shows a line-by-line diff with per-hunk Keep/Ignore buttons plus
+     * whole-file "Keep Pre-existing Version" / "Keep New Version" actions.
      *
-     * Merge editor layout:
-     *   Base + input1: backup in WorkspaceInitializationBackups/ (old user version).
-     *   Input2 + output: new blueprint file in the workspace root.
-     * Standard diff layout:
-     *   Left: backup (old), Right: workspace file (new blueprint, editable).
+     * Left side (deleted lines): backup in WorkspaceInitializationBackups/ (old user version).
+     * Right side (inserted lines): new blueprint file in the workspace root.
      */
     async openDiffEditors(
         workspaceRoot: vscode.Uri,
@@ -147,26 +145,79 @@ export class WorkspaceInitConflictResolver {
         for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
             const batch = filePaths.slice(i, i + BATCH_SIZE);
             await Promise.all(
-                batch.map(async (relativePath) => {
-                    const segments = relativePath.split("/");
-                    const fileName = segments[segments.length - 1];
-                    const backupUri = vscode.Uri.joinPath(cleanupRoot, ...segments);
-                    const workspaceUri = vscode.Uri.joinPath(workspaceRoot, ...segments);
-                    try {
-                        await vscode.commands.executeCommand("vscode.openMergeEditor", {
-                            base: backupUri,
-                            input1: { uri: backupUri, title: "Your Version" },
-                            input2: { uri: workspaceUri, title: "New Blueprint" },
-                            output: workspaceUri,
-                        });
-                    } catch {
-                        // Merge editor unavailable — fall back to the standard diff editor.
-                        const title = `Merge: ${fileName} (old ↔ new)`;
-                        await vscode.commands.executeCommand("vscode.diff", backupUri, workspaceUri, title);
-                    }
-                })
+                batch.map((relativePath) =>
+                    this.openSingleDiffPanel(workspaceRoot, cleanupRoot, relativePath)
+                )
             );
         }
+    }
+
+    private async openSingleDiffPanel(
+        workspaceRoot: vscode.Uri,
+        cleanupRoot: vscode.Uri,
+        relativePath: string,
+    ): Promise<void> {
+        const segments = relativePath.split("/");
+        const fileName = segments[segments.length - 1];
+        const backupUri = vscode.Uri.joinPath(cleanupRoot, ...segments);
+        const workspaceUri = vscode.Uri.joinPath(workspaceRoot, ...segments);
+
+        // Read both files in parallel.
+        const [preExistingBytes, newVersionBytes] = await Promise.all([
+            this.fs.readFile(backupUri),
+            this.fs.readFile(workspaceUri),
+        ]);
+        const preExisting = new TextDecoder().decode(preExistingBytes);
+        const newVersion = new TextDecoder().decode(newVersionBytes);
+
+        // Create webview panel.
+        const panel = vscode.window.createWebviewPanel(
+            "memoria.conflictDiff",
+            `Merge: ${fileName}`,
+            vscode.ViewColumn.Active,
+            {
+                enableScripts: true,
+                localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "dist")],
+            },
+        );
+
+        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
+        const nonce = getNonce();
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "conflict-diff.js"));
+        const cssUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "conflict-diff.css"));
+        panel.webview.html = getConflictDiffHtml(panel.webview, nonce, scriptUri, cssUri);
+
+        // Send init data once the webview script is ready.
+        let initSent = false;
+        const sendInit = () => {
+            if (initSent) return;
+            initSent = true;
+            panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
+        };
+
+        panel.webview.onDidReceiveMessage(async (msg) => {
+            switch (msg?.type) {
+                case "ready":
+                    sendInit();
+                    break;
+                case "keepPreExisting":
+                    await this.fs.writeFile(workspaceUri, new TextEncoder().encode(preExisting));
+                    panel.dispose();
+                    break;
+                case "keepNewVersion":
+                    panel.dispose();
+                    break;
+                case "applyMerge":
+                    if (typeof msg.content === "string") {
+                        await this.fs.writeFile(workspaceUri, new TextEncoder().encode(msg.content));
+                    }
+                    panel.dispose();
+                    break;
+            }
+        });
+
+        // Fallback: send init after 1 s if the ready signal never arrives.
+        setTimeout(sendInit, 1000);
     }
 
     /**

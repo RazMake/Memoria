@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const manifest = new ManifestManager(vscode.workspace.fs, telemetry);
     const scaffold = new FileScaffold(vscode.workspace.fs);
     const engine = new BlueprintEngine(registry, manifest, scaffold, vscode.workspace.fs, telemetry);
-    const resolver = new WorkspaceInitConflictResolver(vscode.workspace.fs);
+    const resolver = new WorkspaceInitConflictResolver(vscode.workspace.fs, context.extensionUri);
 
     const decorationProvider = new BlueprintDecorationProvider(manifest);
     const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
