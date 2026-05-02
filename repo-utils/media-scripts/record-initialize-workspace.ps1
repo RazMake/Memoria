@@ -1,13 +1,6 @@
-$target = "src/resources/docs/media/initialize-workspace.gif"
-
 # Recording script: Initialize workspace
 # ========================================
 # Shows: Command Palette → blueprint selection → scaffolded result
-#
-# Prerequisites:
-#   - Clean VS Code window with an empty folder open
-#   - Dark Modern theme, ~800×500px capture area
-#   - Memoria extension installed
 #
 # Steps:
 #   1. Open the Command Palette (Ctrl+Shift+P)
@@ -17,3 +10,63 @@ $target = "src/resources/docs/media/initialize-workspace.gif"
 #   5. Wait for scaffolding to complete (progress notification)
 #   6. Show the Explorer panel with the newly created folder structure
 #   7. Pause briefly to let the viewer see the result
+
+$ErrorActionPreference = "Stop"
+. "$PSScriptRoot\_recording-settings.ps1"
+
+$target   = Join-Path $MediaOutputDir "initialize-workspace.gif"
+$fixture  = New-CleanFixture "initialize-workspace"
+
+# --- Setup: empty folder with theme settings ----------------------------------
+New-Item (Join-Path $fixture ".vscode") -ItemType Directory -Force | Out-Null
+Set-Content (Join-Path $fixture ".vscode/settings.json") -Value @"
+{
+    "workbench.colorTheme": "Default Dark Modern",
+    "editor.minimap.enabled": false,
+    "editor.fontSize": 14,
+    "workbench.secondarySideBar.visible": false,
+    "chat.commandCenter.enabled": false,
+    "workbench.startupEditor": "none",
+    "workbench.tips.enabled": false,
+    "security.workspace.trust.enabled": false,
+    "problems.decorations.enabled": false
+}
+"@ -Encoding UTF8
+
+# --- Launch VS Code -----------------------------------------------------------
+Start-VSCode -FolderPath $fixture
+
+# --- Start recording ----------------------------------------------------------
+Start-Recording
+
+# Focus Explorer
+Send-Keys "^+e" $DelayShort
+
+# Step 1: Open Command Palette
+Open-CommandPalette
+
+# Step 2-3: Type and select the command
+Type-Text "Memoria: Initialize workspace" $DelayShort
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys "{ENTER}" $DelayQuickPick
+
+# Step 4: Blueprint picker — browse, then select
+Start-Sleep -Milliseconds $DelayPause
+Send-Keys "{DOWN}" $DelayAfterKeystroke
+Send-Keys "{DOWN}" $DelayAfterKeystroke
+Send-Keys "{UP}" $DelayAfterKeystroke
+Send-Keys "{UP}" $DelayAfterKeystroke
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys "{ENTER}" $DelayAfterCommand
+
+# Step 5: Wait for scaffolding
+Start-Sleep -Milliseconds ($DelayPause * 2)
+
+# Step 6: Focus Explorer to show folder structure
+Send-Keys "^+e" $DelayPause
+
+# Step 7: Pause for viewer
+Start-Sleep -Milliseconds ($DelayPause * 2)
+
+# --- Stop recording -----------------------------------------------------------
+Stop-Recording -OutputFile $target

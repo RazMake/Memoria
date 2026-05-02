@@ -107,8 +107,6 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         const config = await this.readConfig();
         this.queue = new SyncQueue((job) => this.handleJob(job), config.debounceMs);
-        // Uses workspace-level event subscriptions (not FileSystemWatcher) because task tracking
-        // spans all markdown files matching configurable include/exclude globs across the workspace.
         this.subscriptions = [
             vscode.workspace.onDidSaveTextDocument((document) => {
                 void this.handleSave(document);
@@ -123,6 +121,19 @@ export class TaskCollectorFeature implements vscode.Disposable {
                 void this.handleWorkspaceFoldersChanged();
             }),
         ];
+
+        // FileSystemWatcher detects external file changes (edits from other editors, git
+        // operations, scripts, etc.) that onDidSaveTextDocument does not cover. When a save
+        // happens inside VS Code, both the save listener and the watcher fire — the SyncQueue
+        // debounce collapses them into a single sync pass.
+        for (const folder of vscode.workspace.workspaceFolders ?? []) {
+            const mdWatcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(folder, "**/*.md"),
+            );
+            mdWatcher.onDidChange((uri) => void this.handleExternalChange(uri));
+            mdWatcher.onDidCreate((uri) => void this.handleExternalChange(uri));
+            this.subscriptions.push(mdWatcher);
+        }
 
         if (config.syncOnStartup) {
             queueMicrotask(() => {
@@ -192,6 +203,38 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         // Same fire-and-forget pattern: errors are reported via telemetry and not re-thrown.
         this.queue?.enqueue({ kind: "source", uri: document.uri.toString() }).catch((error) => {
+            this.reportError("taskCollector.reconcileFailed", error, true);
+        });
+    }
+
+    // Handles FileSystemWatcher events (onDidChange / onDidCreate) so that external edits
+    // (other editors, git, scripts) trigger task collection without requiring a VS Code save.
+    private async handleExternalChange(uri: vscode.Uri): Promise<void> {
+        if (!this.queue || !this.workspaceRoot || !this.collectorPath) {
+            return;
+        }
+
+        if (!isMarkdownPath(uri.path)) {
+            return;
+        }
+
+        if (this.isCollectorUri(uri)) {
+            void this.queue.enqueue({ kind: "collector", uri: uri.toString() }).catch((error) => {
+                this.reportError("taskCollector.reconcileFailed", error, true);
+            });
+            return;
+        }
+
+        const config = await this.readConfig();
+        if (!this.queue) {
+            return;
+        }
+
+        if (!(await this.isTrackedSourceUri(uri, config))) {
+            return;
+        }
+
+        this.queue?.enqueue({ kind: "source", uri: uri.toString() }).catch((error) => {
             this.reportError("taskCollector.reconcileFailed", error, true);
         });
     }

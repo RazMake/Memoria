@@ -51,11 +51,14 @@ type SaveListener = (document: MockTextDocument) => void;
 type RenameListener = (event: { files: Array<{ oldUri: MockUri; newUri: MockUri }> }) => void;
 type DeleteListener = (event: { files: MockUri[] }) => void;
 type FoldersChangedListener = () => void;
+type FsWatcherChangeListener = (uri: MockUri) => void;
 
 let saveListeners: SaveListener[] = [];
 let renameListeners: RenameListener[] = [];
 let deleteListeners: DeleteListener[] = [];
 let foldersChangedListeners: FoldersChangedListener[] = [];
+let fsWatcherChangeListeners: FsWatcherChangeListener[] = [];
+let fsWatcherCreateListeners: FsWatcherChangeListener[] = [];
 
 const mockOnDidSaveTextDocument = vi.fn((listener: SaveListener) => {
     saveListeners.push(listener);
@@ -83,6 +86,32 @@ const mockFindFiles = vi.fn(async () => []);
 const mockShowErrorMessage = vi.fn();
 const mockShowWarningMessage = vi.fn();
 const mockShowInformationMessage = vi.fn();
+
+const mockCreateFileSystemWatcher = vi.fn(() => {
+    const changeListeners: FsWatcherChangeListener[] = [];
+    const createListeners: FsWatcherChangeListener[] = [];
+    return {
+        onDidChange: (listener: FsWatcherChangeListener) => {
+            changeListeners.push(listener);
+            fsWatcherChangeListeners.push(listener);
+            return { dispose: () => { fsWatcherChangeListeners = fsWatcherChangeListeners.filter((l) => l !== listener); } };
+        },
+        onDidCreate: (listener: FsWatcherChangeListener) => {
+            createListeners.push(listener);
+            fsWatcherCreateListeners.push(listener);
+            return { dispose: () => { fsWatcherCreateListeners = fsWatcherCreateListeners.filter((l) => l !== listener); } };
+        },
+        onDidDelete: vi.fn(() => ({ dispose: vi.fn() })),
+        dispose: () => {
+            for (const l of changeListeners) {
+                fsWatcherChangeListeners = fsWatcherChangeListeners.filter((cl) => cl !== l);
+            }
+            for (const l of createListeners) {
+                fsWatcherCreateListeners = fsWatcherCreateListeners.filter((cl) => cl !== l);
+            }
+        },
+    };
+});
 
 let mockWorkspaceFolders: Array<{ uri: MockUri; name: string; index: number }> = [];
 const mockGetWorkspaceFolder = vi.fn((uri: MockUri) => {
@@ -134,6 +163,7 @@ vi.mock("vscode", () => {
             onDidRenameFiles: (...args: [RenameListener]) => mockOnDidRenameFiles(...args),
             onDidDeleteFiles: (...args: [DeleteListener]) => mockOnDidDeleteFiles(...args),
             onDidChangeWorkspaceFolders: (...args: [FoldersChangedListener]) => mockOnDidChangeWorkspaceFolders(...args),
+            createFileSystemWatcher: (...args: unknown[]) => mockCreateFileSystemWatcher(...args as []),
             openTextDocument: (...args: [MockUri]) => mockOpenTextDocument(...args),
             applyEdit: (...args: [unknown]) => mockApplyEdit(...args),
             findFiles: (...args: [unknown]) => mockFindFiles(...args),
@@ -202,6 +232,8 @@ describe("TaskCollectorFeature", () => {
         renameListeners = [];
         deleteListeners = [];
         foldersChangedListeners = [];
+        fsWatcherChangeListeners = [];
+        fsWatcherCreateListeners = [];
         mockWorkspaceFolders = [
             { uri: workspaceRoot, name: "workspace", index: 0 },
         ];
@@ -222,6 +254,9 @@ describe("TaskCollectorFeature", () => {
             expect(mockOnDidRenameFiles).toHaveBeenCalledOnce();
             expect(mockOnDidDeleteFiles).toHaveBeenCalledOnce();
             expect(mockOnDidChangeWorkspaceFolders).toHaveBeenCalledOnce();
+            expect(mockCreateFileSystemWatcher).toHaveBeenCalledOnce();
+            expect(fsWatcherChangeListeners.length).toBe(1);
+            expect(fsWatcherCreateListeners.length).toBe(1);
         });
 
         it("should not register listeners when config has no collectorPath", async () => {
@@ -262,9 +297,12 @@ describe("TaskCollectorFeature", () => {
         it("should dispose listeners when transitioning from enabled to disabled", async () => {
             await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
             expect(saveListeners.length).toBe(1);
+            expect(fsWatcherChangeListeners.length).toBe(1);
 
             await feature.refresh(workspaceRoot as any, false, [workspaceRoot as any]);
             expect(saveListeners.length).toBe(0);
+            expect(fsWatcherChangeListeners.length).toBe(0);
+            expect(fsWatcherCreateListeners.length).toBe(0);
         });
 
         it("should be safe to disable when never enabled", async () => {
@@ -430,6 +468,8 @@ describe("TaskCollectorFeature", () => {
             expect(renameListeners.length).toBe(0);
             expect(deleteListeners.length).toBe(0);
             expect(foldersChangedListeners.length).toBe(0);
+            expect(fsWatcherChangeListeners.length).toBe(0);
+            expect(fsWatcherCreateListeners.length).toBe(0);
         });
 
         it("should be safe to dispose when never enabled", () => {
@@ -827,6 +867,96 @@ describe("TaskCollectorFeature", () => {
 
             const result = await feature.syncNow();
             expect(result).toBe(true);
+        });
+    });
+
+    describe("handleExternalChange — FileSystemWatcher", () => {
+        it("should queue a source job when an external change is detected on a tracked file", async () => {
+            const sourceUri = createUri("/workspace/notes.md");
+            const doc = createMockTextDocument(sourceUri, "- [ ] External task\n");
+            mockGetWorkspaceFolder.mockReturnValue(mockWorkspaceFolders[0]);
+            mockOpenTextDocument.mockResolvedValue(doc);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            expect(fsWatcherChangeListeners.length).toBe(1);
+            fsWatcherChangeListeners[0](sourceUri);
+
+            await vi.waitFor(() => {
+                // readTaskCollectorConfig is called during start and again inside handleExternalChange
+                expect(mockManifest.readTaskCollectorConfig).toHaveBeenCalledTimes(2);
+            });
+        });
+
+        it("should queue a source job when a new tracked file is created externally", async () => {
+            const sourceUri = createUri("/workspace/new-file.md");
+            const doc = createMockTextDocument(sourceUri, "- [ ] New task\n");
+            mockGetWorkspaceFolder.mockReturnValue(mockWorkspaceFolders[0]);
+            mockOpenTextDocument.mockResolvedValue(doc);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            expect(fsWatcherCreateListeners.length).toBe(1);
+            fsWatcherCreateListeners[0](sourceUri);
+
+            await vi.waitFor(() => {
+                expect(mockManifest.readTaskCollectorConfig).toHaveBeenCalledTimes(2);
+            });
+        });
+
+        it("should queue a collector job when the collector file changes externally", async () => {
+            const collectorUri = createUri("/workspace/.memoria/tasks.md");
+            const collectorDoc = createMockTextDocument(collectorUri, "- [ ] Edited externally\n");
+            mockOpenTextDocument.mockResolvedValue(collectorDoc as any);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            fsWatcherChangeListeners[0](collectorUri);
+
+            await vi.waitFor(() => {
+                // Collector reconciliation path should fire
+                expect(mockManifest.readTaskCollectorConfig).toHaveBeenCalledTimes(2);
+            });
+        });
+
+        it("should ignore non-markdown files from the watcher", async () => {
+            const jsonUri = createUri("/workspace/data.json");
+            mockGetWorkspaceFolder.mockReturnValue(mockWorkspaceFolders[0]);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+            const configCallsBefore = mockManifest.readTaskCollectorConfig.mock.calls.length;
+
+            fsWatcherChangeListeners[0](jsonUri);
+
+            await Promise.resolve();
+            expect(mockManifest.readTaskCollectorConfig.mock.calls.length).toBe(configCallsBefore);
+        });
+
+        it("should ignore untracked markdown files from the watcher", async () => {
+            mockManifest = createMockManifest({
+                taskCollectorConfig: {
+                    completedRetentionDays: 7,
+                    syncOnStartup: false,
+                    include: ["**/*.md"],
+                    exclude: ["vendor/**"],
+                    debounceMs: 0,
+                },
+            });
+            mockManifest.readManifest.mockResolvedValue({
+                taskCollector: { collectorPath: ".memoria/tasks.md" },
+            });
+            feature = new TaskCollectorFeature(mockManifest as any, mockTelemetry as any, () => new Date("2026-04-21T12:00:00Z"));
+
+            const vendorUri = createUri("/workspace/vendor/lib.md");
+            mockGetWorkspaceFolder.mockReturnValue(mockWorkspaceFolders[0]);
+            mockOpenTextDocument.mockRejectedValue(new Error("not found"));
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            fsWatcherChangeListeners[0](vendorUri);
+
+            await Promise.resolve();
+            expect(mockShowErrorMessage).not.toHaveBeenCalled();
         });
     });
 });

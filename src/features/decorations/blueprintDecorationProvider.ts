@@ -27,6 +27,8 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
     private builtDecorations: (vscode.FileDecoration | undefined)[] = [];
     /** All workspace root paths to decorate (not just the initialized one). */
     private rootPaths: string[] = [];
+    /** Tracks whether diagnostic suppression is currently active so the config watcher can re-apply it. */
+    private suppressionRoot: vscode.Uri | null = null;
 
     constructor(private readonly manifest: ManifestManager) {}
 
@@ -57,7 +59,26 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
         this.builtDecorations = this.rules.map(buildDecoration);
         this._onDidChangeFileDecorations.fire(undefined);
+        this.suppressionRoot = (initializedRoot && enabled) ? initializedRoot : null;
         await suppressDiagnosticDecorations(initializedRoot, enabled);
+    }
+
+    /**
+     * Returns a disposable that watches for external changes to `problems.decorations.enabled`
+     * and re-suppresses them while custom decorations are active.
+     *
+     * WHY: The suppression writes `problems.decorations.enabled: false` into
+     * `.vscode/settings.json`. If that file is overwritten externally (git pull,
+     * another editor, a script) the setting is lost and diagnostic colors reappear
+     * on folders, overriding Memoria's custom colors. This listener detects the
+     * change and re-applies the suppression.
+     */
+    watchDiagnosticSuppression(): vscode.Disposable {
+        return vscode.workspace.onDidChangeConfiguration((e) => {
+            if (this.suppressionRoot && e.affectsConfiguration("problems.decorations.enabled")) {
+                void suppressDiagnosticDecorations(this.suppressionRoot, true);
+            }
+        });
     }
 
     provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
@@ -95,6 +116,7 @@ export class BlueprintDecorationProvider implements vscode.FileDecorationProvide
 
     dispose(): void {
         this._onDidChangeFileDecorations.dispose();
+        this.suppressionRoot = null;
     }
 }
 

@@ -16,8 +16,7 @@
         "Other"
     ],
     "activationEvents": [
-        "workspaceContains:.memoria/blueprint.json",
-        "onCustomEditor:memoria.todoEditor"
+        "workspaceContains:.memoria/blueprint.json"
     ],
     "main": "./dist/extension.js",
     "contributes": {

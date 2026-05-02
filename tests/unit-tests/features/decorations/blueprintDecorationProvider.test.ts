@@ -10,6 +10,11 @@ import {
 
 const mockReadDecorations = vi.fn<any, any>();
 
+type ConfigChangeListener = (e: { affectsConfiguration: (section: string) => boolean }) => void;
+let configChangeListeners: ConfigChangeListener[] = [];
+
+const mockConfigUpdate = vi.fn();
+
 vi.mock("vscode", () => ({
     EventEmitter: class {
         fire = vi.fn();
@@ -29,8 +34,12 @@ vi.mock("vscode", () => ({
     workspace: {
         getConfiguration: vi.fn(() => ({
             inspect: vi.fn(() => ({})),
-            update: vi.fn(),
+            update: mockConfigUpdate,
         })),
+        onDidChangeConfiguration: (listener: ConfigChangeListener) => {
+            configChangeListeners.push(listener);
+            return { dispose: () => { configChangeListeners = configChangeListeners.filter((l) => l !== listener); } };
+        },
     },
     ConfigurationTarget: { Workspace: 2 },
 }));
@@ -200,6 +209,7 @@ describe("matchesFilter", () => {
 describe("BlueprintDecorationProvider", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        configChangeListeners = [];
     });
 
     // ── refresh ──────────────────────────────────────────────────────────────
@@ -454,6 +464,82 @@ describe("BlueprintDecorationProvider", () => {
 
             const emitter = (provider as any)._onDidChangeFileDecorations;
             expect(emitter.dispose).toHaveBeenCalled();
+        });
+    });
+
+    describe("watchDiagnosticSuppression", () => {
+        it("should re-suppress when problems.decorations.enabled changes while decorations are active", async () => {
+            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            const watcher = provider.watchDiagnosticSuppression();
+
+            await provider.refresh(workspaceRoot, true);
+            mockConfigUpdate.mockClear();
+
+            // Simulate external change to problems.decorations.enabled
+            for (const listener of configChangeListeners) {
+                listener({ affectsConfiguration: (s: string) => s === "problems.decorations.enabled" });
+            }
+
+            // Allow the void promise to flush
+            await Promise.resolve();
+            expect(mockConfigUpdate).toHaveBeenCalled();
+
+            watcher.dispose();
+        });
+
+        it("should not re-suppress when decorations are disabled", async () => {
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            const watcher = provider.watchDiagnosticSuppression();
+
+            await provider.refresh(workspaceRoot, false);
+            mockConfigUpdate.mockClear();
+
+            for (const listener of configChangeListeners) {
+                listener({ affectsConfiguration: (s: string) => s === "problems.decorations.enabled" });
+            }
+
+            await Promise.resolve();
+            expect(mockConfigUpdate).not.toHaveBeenCalled();
+
+            watcher.dispose();
+        });
+
+        it("should not re-suppress for unrelated config changes", async () => {
+            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            const watcher = provider.watchDiagnosticSuppression();
+
+            await provider.refresh(workspaceRoot, true);
+            mockConfigUpdate.mockClear();
+
+            for (const listener of configChangeListeners) {
+                listener({ affectsConfiguration: (s: string) => s === "editor.fontSize" });
+            }
+
+            await Promise.resolve();
+            expect(mockConfigUpdate).not.toHaveBeenCalled();
+
+            watcher.dispose();
+        });
+
+        it("should stop re-suppressing after decorations are disabled via refresh", async () => {
+            mockReadDecorations.mockResolvedValue({ rules: defaultRules });
+            const provider = new BlueprintDecorationProvider(makeManifest());
+            const watcher = provider.watchDiagnosticSuppression();
+
+            await provider.refresh(workspaceRoot, true);
+            await provider.refresh(workspaceRoot, false);
+            mockConfigUpdate.mockClear();
+
+            for (const listener of configChangeListeners) {
+                listener({ affectsConfiguration: (s: string) => s === "problems.decorations.enabled" });
+            }
+
+            await Promise.resolve();
+            expect(mockConfigUpdate).not.toHaveBeenCalled();
+
+            watcher.dispose();
         });
     });
 });

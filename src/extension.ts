@@ -187,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // collector document.
     context.subscriptions.push(
         vscode.window.registerFileDecorationProvider(decorationProvider),
+        decorationProvider.watchDiagnosticSuppression(),
     );
 
     // Check for blueprint updates in the background — this may show a dialog that blocks
