@@ -55,3 +55,28 @@ export function handleFormatKey(e: KeyboardEvent, input: HTMLInputElement | HTML
     input.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
 }
+
+/**
+ * Handles the `[` key when text is selected: wraps with `[text]()`
+ * and places the cursor between the parentheses.
+ * Returns true if the key was consumed.
+ */
+export function handleBracketKey(e: KeyboardEvent, input: HTMLInputElement | HTMLTextAreaElement): boolean {
+    if (e.key !== '[' || e.ctrlKey || e.altKey || e.metaKey) return false;
+
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    if (start === end) return false; // no selection
+
+    e.preventDefault();
+    const value = input.value;
+    const selected = value.slice(start, end);
+
+    const newValue = value.slice(0, start) + '[' + selected + ']()' + value.slice(end);
+    input.value = newValue;
+    // Put cursor between ()
+    input.setSelectionRange(start + selected.length + 3, start + selected.length + 3);
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+}

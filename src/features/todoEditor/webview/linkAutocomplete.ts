@@ -141,9 +141,14 @@ function acceptLinkItem(item: LinkSuggestion): void {
     }
 
     activeInput.focus();
-    // Suppress re-triggering from the synthetic input event
-    suppressNextInput = true;
-    // Fire input event so auto-grow works
+    // When accepting a directory (insertText ends with '/'), let the synthetic
+    // input event re-trigger autocomplete so the folder's contents are shown
+    // immediately. For files and headings we suppress re-triggering.
+    const isDirectory = !completingHeading && item.insertText.endsWith('/');
+    if (!isDirectory) {
+        suppressNextInput = true;
+    }
+    // Fire input event so auto-grow works (and re-triggers for directories)
     activeInput.dispatchEvent(new Event('input', { bubbles: true }));
     hideLinkDropdown();
 }

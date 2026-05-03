@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleFormatKey } from "../../../../src/features/todoEditor/webview/formatShortcuts";
+import { handleFormatKey, handleBracketKey } from "../../../../src/features/todoEditor/webview/formatShortcuts";
 
 function makeInput(value: string, selStart: number, selEnd?: number): HTMLInputElement {
     const input = {
@@ -136,5 +136,69 @@ describe("handleFormatKey", () => {
             expect(input.value).toBe("[full text]()");
             expect(input.setSelectionRange).toHaveBeenCalledWith(12, 12);
         });
+    });
+});
+
+describe("handleBracketKey", () => {
+    function makeBracketEvent(key = "["): KeyboardEvent {
+        return {
+            key,
+            ctrlKey: false,
+            altKey: false,
+            metaKey: false,
+            preventDefault: vi.fn(),
+            target: { tagName: "INPUT" },
+        } as unknown as KeyboardEvent;
+    }
+
+    it("should wrap selected text in []() with cursor between ()", () => {
+        const input = makeInput("click here", 6, 10); // "here" selected
+        const e = makeBracketEvent();
+        const result = handleBracketKey(e, input);
+        expect(result).toBe(true);
+        expect(input.value).toBe("click [here]()");
+        expect(input.setSelectionRange).toHaveBeenCalledWith(13, 13);
+    });
+
+    it("should return false when nothing is selected", () => {
+        const input = makeInput("hello", 3);
+        const e = makeBracketEvent();
+        expect(handleBracketKey(e, input)).toBe(false);
+    });
+
+    it("should return false for keys other than [", () => {
+        const input = makeInput("hello", 0, 5);
+        const e = makeBracketEvent("]");
+        expect(handleBracketKey(e, input)).toBe(false);
+    });
+
+    it("should return false when Ctrl is held", () => {
+        const input = makeInput("hello", 0, 5);
+        const e = { ...makeBracketEvent(), ctrlKey: true } as unknown as KeyboardEvent;
+        expect(handleBracketKey(e, input)).toBe(false);
+    });
+
+    it("should call preventDefault", () => {
+        const input = makeInput("hello", 0, 5);
+        const e = makeBracketEvent();
+        handleBracketKey(e, input);
+        expect(e.preventDefault).toHaveBeenCalled();
+    });
+
+    it("should dispatch input event for auto-grow", () => {
+        const input = makeInput("hello", 0, 5);
+        const e = makeBracketEvent();
+        handleBracketKey(e, input);
+        expect(input.dispatchEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "input" }),
+        );
+    });
+
+    it("should handle full text selected", () => {
+        const input = makeInput("full text", 0, 9);
+        const e = makeBracketEvent();
+        handleBracketKey(e, input);
+        expect(input.value).toBe("[full text]()");
+        expect(input.setSelectionRange).toHaveBeenCalledWith(12, 12);
     });
 });

@@ -4,7 +4,7 @@ import { el } from './utils';
 import { onPopupInput, onPopupKeydown, isDropdownVisible, disposeAutocomplete } from './snippetAutocomplete';
 import { onLinkInput, onLinkKeydown, isLinkDropdownVisible, disposeLinkAutocomplete } from './linkAutocomplete';
 import { highlightAfterEdit } from './keyboardNav';
-import { handleFormatKey } from './formatShortcuts';
+import { handleFormatKey, handleBracketKey } from './formatShortcuts';
 
 let popupMode: 'add' | 'edit' | null = null;
 let popupEditId: string | null = null;
@@ -87,6 +87,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
         if (onPopupKeydown(e)) { e.preventDefault(); return; }
         if (onLinkKeydown(e)) { e.preventDefault(); return; }
         if (handleFormatKey(e, activeInput)) return;
+        if (handleBracketKey(e, activeInput)) return;
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             confirmPopup();
@@ -107,6 +108,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
         if (onPopupKeydown(e)) { e.preventDefault(); return; }
         if (onLinkKeydown(e)) { e.preventDefault(); return; }
         if (handleFormatKey(e, activeInput)) return;
+        if (handleBracketKey(e, activeInput)) return;
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             confirmPopup();
