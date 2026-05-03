@@ -17,6 +17,7 @@
 import * as vscode from "vscode";
 import { computeFileHash } from "./hashUtils";
 import { getNonce, getConflictDiffHtml } from "./conflictDiffHtml";
+import { textDecoder, textEncoder } from "../utils/encoding";
 import type {
     BlueprintDefinition,
     BlueprintManifest,
@@ -167,8 +168,8 @@ export class WorkspaceInitConflictResolver {
             this.fs.readFile(backupUri),
             this.fs.readFile(workspaceUri),
         ]);
-        const preExisting = new TextDecoder().decode(preExistingBytes);
-        const newVersion = new TextDecoder().decode(newVersionBytes);
+        const preExisting = textDecoder.decode(preExistingBytes);
+        const newVersion = textDecoder.decode(newVersionBytes);
 
         // Create webview panel.
         const panel = vscode.window.createWebviewPanel(
@@ -192,7 +193,11 @@ export class WorkspaceInitConflictResolver {
         const sendInit = () => {
             if (initSent) return;
             initSent = true;
-            panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
+            try {
+                panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
+            } catch {
+                // Panel was disposed before the timeout fired — nothing to do.
+            }
         };
 
         panel.webview.onDidReceiveMessage(async (msg) => {
@@ -201,7 +206,7 @@ export class WorkspaceInitConflictResolver {
                     sendInit();
                     break;
                 case "keepPreExisting":
-                    await this.fs.writeFile(workspaceUri, new TextEncoder().encode(preExisting));
+                    await this.fs.writeFile(workspaceUri, textEncoder.encode(preExisting));
                     panel.dispose();
                     break;
                 case "keepNewVersion":
@@ -209,7 +214,7 @@ export class WorkspaceInitConflictResolver {
                     break;
                 case "applyMerge":
                     if (typeof msg.content === "string") {
-                        await this.fs.writeFile(workspaceUri, new TextEncoder().encode(msg.content));
+                        await this.fs.writeFile(workspaceUri, textEncoder.encode(msg.content));
                     }
                     panel.dispose();
                     break;

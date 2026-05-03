@@ -3,6 +3,7 @@
 //   • Collector document — same task list format plus optional suffix lines that carry
 //     metadata (source path and completion date) appended by the formatter.
 import { TASK_LINE_RE, isChecked } from "../../utils/markdownCheckbox";
+import { escapeRegExp } from "../../utils/regex";
 import type {
     CollectorSection,
     ParsedCollectorDocument,
@@ -250,10 +251,6 @@ function parseFenceState(line: string): FenceState | null {
 
 function isFenceBoundary(line: string, fence: FenceState): boolean {
     return new RegExp(`^${escapeRegExp(fence.marker)}{${fence.length},}`).test(line.trimStart());
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**

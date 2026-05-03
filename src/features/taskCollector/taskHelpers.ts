@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
+import { isMarkdownPath } from "../../utils/markdown";
 import type { TaskBlock, TaskIndexEntry } from "./types";
+
+export { isMarkdownPath };
 
 export interface SourceContext {
     uri: vscode.Uri;
@@ -16,10 +19,6 @@ export interface IndexedTaskLocation {
 
 export function isMarkdownDocument(document: vscode.TextDocument): boolean {
     return isMarkdownPath(document.uri.path);
-}
-
-export function isMarkdownPath(value: string): boolean {
-    return value.toLowerCase().endsWith(".md");
 }
 
 export async function openTextDocumentIfPresent(uri: vscode.Uri): Promise<vscode.TextDocument | null> {

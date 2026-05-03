@@ -1,5 +1,5 @@
 import type { ResolvedContact } from "./contactUtils";
-import { elapsedSince, formatElapsed } from "../snippets/dateUtils";
+import { elapsedSince, formatElapsed } from "../../utils/dateUtils";
 
 /**
  * Builds contact tooltip content as a markdown string.

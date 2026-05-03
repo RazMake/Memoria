@@ -1,4 +1,4 @@
-import { ageInDays, formatISODate } from "../snippets/dateUtils";
+import { ageInDays, formatISODate } from "../../utils/dateUtils";
 import type { TaskIndexEntry } from "./types";
 
 export { ageInDays };

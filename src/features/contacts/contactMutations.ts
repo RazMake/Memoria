@@ -20,8 +20,10 @@ import type {
     ContactsReferenceData,
     PronounsReference,
 } from "./types";
+import { textEncoder } from "../../utils/encoding";
+import { isMarkdownPath } from "../../utils/markdown";
 
-const encoder = new TextEncoder();
+const encoder = textEncoder;
 
 const INVALID_GROUP_NAME_RE = /[\\/:*?"<>|]/;
 
@@ -194,7 +196,7 @@ export async function writeTextFile(
 
 export function toCustomGroupFileName(name: string): string {
     const trimmedName = name.trim();
-    const baseName = trimmedName.toLowerCase().endsWith(".md")
+    const baseName = isMarkdownPath(trimmedName)
         ? trimmedName.slice(0, -3).trim()
         : trimmedName;
 

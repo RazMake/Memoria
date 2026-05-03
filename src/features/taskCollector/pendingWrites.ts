@@ -6,8 +6,9 @@
 // source or collector file, the save event would trigger another sync pass. This module
 // tracks which URIs have pending writes so the sync handler can skip them.
 import { computeFileHash } from "../../blueprints/hashUtils";
+import { textEncoder } from "../../utils/encoding";
 
-const encoder = new TextEncoder();
+const encoder = textEncoder;
 
 interface PendingWriteRecord {
     hash: string;

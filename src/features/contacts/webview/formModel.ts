@@ -1,3 +1,4 @@
+import { isMarkdownPath } from "../../../utils/markdown";
 import { generateTitle } from "../titleGenerator";
 import type { CareerLevelReference, CareerPathReference, Contact, ContactKind, ContactTitlePair, ContactsViewContact, ContactsViewFormRequest, ContactsViewSnapshot } from "../types";
 import { formatIsoDateForDisplay } from "./dateInput";
@@ -496,7 +497,7 @@ function findCareerLevel(snapshot: ContactsViewSnapshot, key: string): CareerLev
 
 function toCustomGroupFileName(name: string): string {
     const trimmedName = name.trim();
-    const baseName = trimmedName.toLowerCase().endsWith(".md")
+    const baseName = isMarkdownPath(trimmedName)
         ? trimmedName.slice(0, -3).trim()
         : trimmedName;
 

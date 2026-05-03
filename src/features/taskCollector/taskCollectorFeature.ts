@@ -3,12 +3,12 @@
 // reacting to file save and rename events, dispatching sync jobs through the queue, reconciling
 // source and collector documents, and running the aging pass. It is the single entry point for
 // all task collector logic within a given workspace activation.
-import * as path from "node:path";
 import * as vscode from "vscode";
 import { minimatch } from "minimatch";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../../telemetry";
 import { normalizePath } from "../../utils/path";
+import { isMarkdownPath } from "../../utils/markdown";
 import { formatDate, isTaskExpired } from "./aging";
 import { alignTaskSequences, computeTaskFingerprint } from "./taskAlignment";
 import { renderCollector } from "./collectorFormatter";
@@ -16,9 +16,23 @@ import { PendingWrites } from "./pendingWrites";
 import { forward, reverse } from "./pathRewriter";
 import { applySourceRenames, type SourceRename } from "./renameHandler";
 import { SyncQueue } from "./syncQueue";
-import { DEFAULT_TASK_COLLECTOR_CONFIG, generateTaskId, getCollectorOrder, getSourceDisplayPath, getTasksForSource, hydrateTaskIndex, makeSourceKey, pruneOrderReferences, removeTask, upsertTask } from "./taskIndex";
+import { DEFAULT_TASK_COLLECTOR_CONFIG, generateTaskId, getCollectorOrder, getSourceDisplayPath, getTasksForSource, hydrateTaskIndex, pruneOrderReferences, removeTask, upsertTask } from "./taskIndex";
 import { parseCollectorDocument, parseTaskBlocks, markSubtasksCompleted } from "./taskParser";
 import { renderDoneBlock, renderTaskBlock, replaceLineRange, TaskWriter } from "./taskWriter";
+import { isMarkdownDocument, openTextDocumentIfPresent, stringArrayEqual, taskEntriesEqual, type SourceContext, type IndexedTaskLocation } from "./taskHelpers";
+import {
+    describeUri as describeUriHelper,
+    resolveSourceUri as resolveSourceUriHelper,
+    findTrackedSources as findTrackedSourcesHelper,
+    getCollectorUri as getCollectorUriHelper,
+} from "./taskCollectorPathResolver";
+import {
+    toSourceSnapshot,
+    toCollectorSnapshot,
+    toCollectorBody,
+    toTaskSnapshot,
+    locateSourceTask,
+} from "./taskCollectorTransformer";
 import type { ExistingTaskSnapshot, ParsedCollectorTask, StoredTaskIndex, TaskBlock, TaskCollectorConfig, TaskIndexEntry, TaskSnapshot } from "./types";
 
 /**
@@ -27,19 +41,6 @@ import type { ExistingTaskSnapshot, ParsedCollectorTask, StoredTaskIndex, TaskBl
  * indefinite accumulation of unreachable ghost entries.
  */
 const MAX_AGING_SKIP_COUNT = 5;
-
-interface SourceContext {
-    uri: vscode.Uri;
-    workspaceFolder: vscode.WorkspaceFolder;
-    sourceRoot: string | null;
-    relativePath: string;
-    sourceKey: string;
-}
-
-interface IndexedTaskLocation {
-    block: TaskBlock;
-    blockIndex: number;
-}
 
 export class TaskCollectorFeature implements vscode.Disposable {
     private workspaceRoot: vscode.Uri | null = null;
@@ -730,115 +731,38 @@ export class TaskCollectorFeature implements vscode.Disposable {
     }
 
     private locateSourceTask(entry: TaskIndexEntry, content: string): IndexedTaskLocation | null {
-        if (!this.index || !entry.source) {
+        if (!this.index) {
             return null;
         }
-
-        const blocks = parseTaskBlocks(content);
-        const previous = getTasksForSource(this.index, entry.source, entry.sourceRoot ?? null);
-        // Re-align on every call because the document may have changed since the index snapshot
-        // was taken — using the live block list ensures we find the task at its current position.
-        const alignment = alignTaskSequences(
-            previous.map((item) => this.toSourceSnapshot(item)),
-            blocks.map((block) => this.toTaskSnapshot(block.body, block.checked)),
-        );
-
-        for (const [blockIndex, id] of alignment.newIndexToId.entries()) {
-            if (id === entry.id) {
-                return {
-                    block: blocks[blockIndex],
-                    blockIndex,
-                };
-            }
-        }
-
-        return null;
+        return locateSourceTask(this.index, entry, content);
     }
 
-    // Three snapshot helpers for the same concept — a task entry converted to a TaskSnapshot —
-    // with different path transforms applied. toSourceSnapshot uses the raw body (source-relative
-    // paths); toCollectorSnapshot and toCollectorBody apply forward() to rewrite paths so they
-    // are relative to the collector document's location.
     private toSourceSnapshot(entry: TaskIndexEntry): ExistingTaskSnapshot {
-        return {
-            id: entry.id,
-            fingerprint: entry.fingerprint,
-            body: entry.body,
-            checked: entry.completed,
-        };
+        return toSourceSnapshot(entry);
     }
 
     private toCollectorSnapshot(entry: TaskIndexEntry): ExistingTaskSnapshot {
-        const body = this.toCollectorBody(entry);
-        return {
-            id: entry.id,
-            fingerprint: computeTaskFingerprint(body),
-            body,
-            checked: entry.completed,
-        };
+        return toCollectorSnapshot(entry, this.collectorPath);
     }
 
     private toCollectorBody(entry: TaskIndexEntry): string {
-        return entry.source ? forward(entry.body, entry.source, this.collectorPath ?? entry.source) : entry.body;
+        return toCollectorBody(entry, this.collectorPath);
     }
 
     private toTaskSnapshot(body: string, checked: boolean): TaskSnapshot {
-        return {
-            fingerprint: computeTaskFingerprint(body),
-            body,
-            checked,
-        };
+        return toTaskSnapshot(body, checked);
     }
 
     private describeUri(uri: vscode.Uri): SourceContext | null {
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-        if (!workspaceFolder || !this.workspaceRoot || !isMarkdownPath(uri.path)) {
-            return null;
-        }
-
-        const relativePath = normalizePath(path.relative(workspaceFolder.uri.fsPath, uri.fsPath));
-        return {
-            uri,
-            workspaceFolder,
-            sourceRoot: workspaceFolder.name,
-            relativePath,
-            sourceKey: makeSourceKey(relativePath, workspaceFolder.name),
-        };
+        return describeUriHelper(uri, this.workspaceRoot);
     }
 
     private resolveSourceUri(source: string | null, sourceRoot: string | null): vscode.Uri | null {
-        if (!source) {
-            return null;
-        }
-
-        const folders = vscode.workspace.workspaceFolders ?? [];
-        const candidates = sourceRoot
-            ? folders.filter((folder) => folder.name === sourceRoot)
-            : folders;
-
-        for (const folder of candidates) {
-            return vscode.Uri.joinPath(folder.uri, ...source.split("/"));
-        }
-
-        return null;
+        return resolveSourceUriHelper(source, sourceRoot);
     }
 
     private async findTrackedSources(config: TaskCollectorConfig): Promise<vscode.Uri[]> {
-        const found = new Map<string, vscode.Uri>();
-        const folders = vscode.workspace.workspaceFolders ?? [];
-
-        for (const folder of folders) {
-            for (const includePattern of config.include) {
-                const results = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, includePattern));
-                for (const uri of results) {
-                    if (await this.isTrackedSourceUri(uri, config)) {
-                        found.set(uri.toString(), uri);
-                    }
-                }
-            }
-        }
-
-        return [...found.values()].sort((left, right) => left.toString().localeCompare(right.toString()));
+        return findTrackedSourcesHelper(config, (uri, cfg) => this.isTrackedSourceUri(uri, cfg));
     }
 
     private async isTrackedSourceUri(uri: vscode.Uri, config?: TaskCollectorConfig): Promise<boolean> {
@@ -877,10 +801,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
     }
 
     private getCollectorUri(): vscode.Uri {
-        if (!this.workspaceRoot || !this.collectorPath) {
-            throw new Error("Memoria: Task collector is not initialized.");
-        }
-        return vscode.Uri.joinPath(this.workspaceRoot, ...this.collectorPath.split("/"));
+        return getCollectorUriHelper(this.workspaceRoot, this.collectorPath);
     }
 
     private async readConfig(): Promise<TaskCollectorConfig> {
@@ -912,38 +833,4 @@ export class TaskCollectorFeature implements vscode.Disposable {
             vscode.window.showErrorMessage(`Memoria: Task sync failed — ${message}`);
         }
     }
-}
-
-function isMarkdownDocument(document: vscode.TextDocument): boolean {
-    return isMarkdownPath(document.uri.path);
-}
-
-function isMarkdownPath(value: string): boolean {
-    return value.toLowerCase().endsWith(".md");
-}
-
-async function openTextDocumentIfPresent(uri: vscode.Uri): Promise<vscode.TextDocument | null> {
-    try {
-        return await vscode.workspace.openTextDocument(uri);
-    } catch {
-        return null;
-    }
-}
-
-function stringArrayEqual(left: string[], right: string[]): boolean {
-    return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function taskEntriesEqual(left: TaskIndexEntry, right: TaskIndexEntry): boolean {
-    return left.id === right.id
-        && left.source === right.source
-        && left.sourceRoot === right.sourceRoot
-        && left.sourceOrder === right.sourceOrder
-        && left.fingerprint === right.fingerprint
-        && left.body === right.body
-        && left.firstSeenAt === right.firstSeenAt
-        && left.completed === right.completed
-        && left.doneDate === right.doneDate
-        && left.collectorOwned === right.collectorOwned
-        && (left.agingSkipCount ?? 0) === (right.agingSkipCount ?? 0);
 }

@@ -32,6 +32,7 @@ suite("Contacts feature (E2E)", () => {
     let blueprintUri: vscode.Uri;
     let featuresUri: vscode.Uri;
     let contactsRoot: vscode.Uri;
+    let peersUri: vscode.Uri;
     let colleaguesUri: vscode.Uri;
     let pronounsUri: vscode.Uri;
     const managedFolders = [
@@ -50,6 +51,7 @@ suite("Contacts feature (E2E)", () => {
         blueprintUri = vscode.Uri.joinPath(memoriaDir, "blueprint.json");
         featuresUri = vscode.Uri.joinPath(memoriaDir, "features.json");
         contactsRoot = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "Contacts");
+        peersUri = vscode.Uri.joinPath(contactsRoot, "Peers.md");
         colleaguesUri = vscode.Uri.joinPath(contactsRoot, "Colleagues.md");
         pronounsUri = vscode.Uri.joinPath(contactsRoot, "DataTypes", "Pronouns.md");
     });
@@ -68,6 +70,7 @@ suite("Contacts feature (E2E)", () => {
 
         await waitFor(async () => {
             assert.strictEqual(await uriExists(contactsRoot), true, "The contacts folder should be scaffolded.");
+            assert.strictEqual(await uriExists(peersUri), true, "The Peers.md group file should exist.");
             assert.strictEqual(await uriExists(colleaguesUri), true, "The Colleagues.md group file should exist.");
             assert.strictEqual(await uriExists(pronounsUri), true, "The Pronouns.md reference file should exist.");
 
@@ -76,8 +79,8 @@ suite("Contacts feature (E2E)", () => {
             assert.strictEqual(manifest?.contacts?.peopleFolder, "05-Autocomplete/Contacts/", "The contacts peopleFolder should match the blueprint.");
             assert.deepStrictEqual(
                 manifest?.contacts?.groups,
-                [{ file: "Colleagues.md", type: "colleague" }],
-                "The bundled individual-contributor blueprint should declare one colleague group.",
+                [{ file: "Peers.md", type: "colleague" }, { file: "Colleagues.md", type: "colleague" }],
+                "The bundled individual-contributor blueprint should declare the expected colleague groups.",
             );
 
             const features = await readJsonFile<FeaturesConfig>(featuresUri);

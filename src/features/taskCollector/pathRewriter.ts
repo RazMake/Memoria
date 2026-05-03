@@ -18,6 +18,7 @@
 // to remain valid from the collector's location.
 import path from "node:path";
 import { normalizePath } from "../../utils/path";
+import { escapeRegExp } from "../../utils/regex";
 
 // Matches any URI scheme (http://, mailto:, vscode://, etc.) so that absolute URLs
 // are skipped — only relative paths without a scheme are rewritten.
@@ -277,10 +278,6 @@ function parseFenceState(line: string): { marker: "`" | "~"; length: number } | 
 
 function isFenceBoundary(line: string, marker: "`" | "~", length: number): boolean {
     return new RegExp(`^${escapeRegExp(marker)}{${length},}`).test(line);
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function shouldRewrite(ordinal: number, rewriteOrdinals?: Set<number> | null): boolean {

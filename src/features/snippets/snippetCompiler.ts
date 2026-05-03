@@ -3,6 +3,7 @@ import { transform } from "sucrase";
 import type { SnippetDefinition } from "./types";
 import * as dateUtils from "./dateUtils";
 import * as markdownUtils from "./markdownUtils";
+import { textDecoder } from "../../utils/encoding";
 
 // Blocked Node.js built-ins that snippet files must not require.
 const BLOCKED_MODULES = new Set([
@@ -19,7 +20,7 @@ export async function compileSnippetFile(
     fs: typeof vscode.workspace.fs,
 ): Promise<SnippetDefinition[]> {
     const bytes = await fs.readFile(fileUri);
-    const source = new TextDecoder().decode(bytes);
+    const source = textDecoder.decode(bytes);
 
     const result = transform(source, {
         transforms: ["typescript", "imports"],

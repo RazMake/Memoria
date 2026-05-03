@@ -3,6 +3,7 @@
 // Validation happens at parse time (fail-fast before any filesystem operations touch the workspace).
 
 import { parse } from "yaml";
+import { isMarkdownPath } from "../utils/markdown";
 import { DEFAULT_TASK_COLLECTOR_CONFIG } from "../features/taskCollector/taskIndex";
 import { normalizePath } from "../utils/path";
 import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationRule, DefaultFileMap, DefaultScope, ContactGroup } from "./types";
@@ -297,7 +298,7 @@ function parseContactGroupFile(raw: unknown, index: number, groupIndex: number):
     if (file.includes("/")) {
         throw new Error(`Feature entry at index ${index}: group at index ${groupIndex}: "file" must be a file name, not a nested path.`);
     }
-    if (!file.toLowerCase().endsWith(".md")) {
+    if (!isMarkdownPath(file)) {
         throw new Error(`Feature entry at index ${index}: group at index ${groupIndex}: "file" must end with ".md".`);
     }
     return file;

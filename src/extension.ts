@@ -14,15 +14,13 @@ import { DecorationColorProvider } from "./features/decorations/decorationColorP
 import { DefaultFileCompletionProvider, DEFAULT_FILES_JSON_SELECTOR } from "./features/navigator/defaultFileCompletionProvider";
 import { FeatureManager } from "./features/featureManager";
 import { ContactsFeature } from "./features/contacts/contactsFeature";
-import { ContactsViewProvider } from "./features/contacts/contactsViewProvider";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 import { SnippetsFeature } from "./features/snippets/snippetsFeature";
-import { SnippetCompletionProvider } from "./features/snippets/snippetCompletionProvider";
-import { SnippetHoverProvider } from "./features/snippets/snippetHoverProvider";
 import { checkForBlueprintUpdates, updateWorkspaceInitializedContext } from "./blueprintUpdateCheck";
 import { registerFileWatchers } from "./fileWatchers";
 import { registerCommands } from "./commandRegistration";
+import { registerFeatureHandlers } from "./featureSetup";
 
 export { isNewerVersion } from "./blueprintUpdateCheck";
 
@@ -68,10 +66,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const snippetsFeature = new SnippetsFeature(manifest, contactsFeature);
     const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri, snippetsFeature, snippetsFeature);
     const featureManager = new FeatureManager(manifest);
-    let contactsViewDisposable: vscode.Disposable | undefined;
-    let snippetCompletionDisposable: vscode.Disposable | undefined;
-    let snippetHoverDisposable: vscode.Disposable | undefined;
-    let snippetHoverCommandDisposable: vscode.Disposable | undefined;
 
     context.subscriptions.push(
         contactsFeature,
@@ -79,72 +73,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         snippetsFeature.onDidUpdateExpansionMap(() => {
             todoEditorProvider.refreshContactTooltips();
         }),
-        {
-            dispose: () => {
-                contactsViewDisposable?.dispose();
-                contactsViewDisposable = undefined;
-            },
-        },
     );
 
-    featureManager.register("decorations", (root, enabled) =>
-        decorationProvider.refresh(root, enabled, getWorkspaceRoots())
-    );
-    featureManager.register("taskCollector", async (root, enabled) => {
-        await taskCollectorFeature.refresh(root, enabled, getWorkspaceRoots());
-    });
-    featureManager.register("contacts", async (root, enabled) => {
-        await contactsFeature.refresh(root, enabled);
-
-        if (enabled && !contactsViewDisposable) {
-            const provider = new ContactsViewProvider(contactsFeature, context.extensionUri);
-            const registration = ContactsViewProvider.register(context, provider);
-            contactsViewDisposable = {
-                dispose: () => {
-                    registration.dispose();
-                    provider.dispose();
-                },
-            };
-            return;
-        }
-
-        if (!enabled && contactsViewDisposable) {
-            contactsViewDisposable.dispose();
-            contactsViewDisposable = undefined;
-        }
-    });
-    featureManager.register("snippets", async (root, enabled) => {
-        await snippetsFeature.refresh(root, enabled);
-        await vscode.commands.executeCommand("setContext", "memoria.snippetsActive", enabled && root !== null);
-
-        if (enabled && !snippetCompletionDisposable) {
-            const completionProvider = new SnippetCompletionProvider(snippetsFeature);
-            snippetCompletionDisposable = vscode.languages.registerCompletionItemProvider(
-                { scheme: "file" },
-                completionProvider,
-                "{", "@",
-            );
-            const hoverProvider = new SnippetHoverProvider(snippetsFeature);
-            snippetHoverDisposable = vscode.languages.registerHoverProvider(
-                { scheme: "file" },
-                hoverProvider,
-            );
-            snippetHoverCommandDisposable = vscode.commands.registerCommand(
-                "memoria.showDetailedContactHover",
-                () => hoverProvider.showDetailedHover(),
-            );
-            return;
-        }
-
-        if (!enabled && snippetCompletionDisposable) {
-            snippetCompletionDisposable.dispose();
-            snippetCompletionDisposable = undefined;
-            snippetHoverDisposable?.dispose();
-            snippetHoverDisposable = undefined;
-            snippetHoverCommandDisposable?.dispose();
-            snippetHoverCommandDisposable = undefined;
-        }
-    });
+    registerFeatureHandlers(context, featureManager, decorationProvider, taskCollectorFeature, contactsFeature, snippetsFeature);
 
     // Register language providers and custom editors eagerly — they don't conflict with
     // other extensions' decoration providers and must be available before any file is opened.

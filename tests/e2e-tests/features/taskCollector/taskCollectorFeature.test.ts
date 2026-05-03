@@ -128,6 +128,11 @@ suite("TaskCollectorFeature (E2E)", () => {
             assert.ok(collector.includes("- [ ] Buy milk"), "Initial task should be in collector");
         });
 
+        // Revert the source document model so its mtime matches disk — syncTasks may
+        // have written back to the source (e.g. subtask completion), leaving the model stale.
+        await vscode.commands.executeCommand("vscode.open", sourceUri);
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+
         await saveDocumentWithContent(sourceUri, "- [ ] Buy oat milk\n");
 
         await waitFor(async () => {
@@ -212,6 +217,18 @@ async function waitForTaskCollectorReady(): Promise<void> {
         const index = await readJsonFile<StoredTaskIndex>(indexUri);
         assert.ok(index, "Task collector should bootstrap its index before source edits are made");
     });
+
+    // Revert the collector model so its mtime matches disk — the startup sync writes
+    // the collector via TaskWriter which can leave the document model stale.
+    const collectorUri = vscode.Uri.joinPath(workspaceRoot, "00-Workstreams", "All.todo.md");
+    try {
+        await vscode.workspace.openTextDocument(collectorUri);
+        await vscode.commands.executeCommand("vscode.open", collectorUri);
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    } catch {
+        // Collector may not exist yet in some tests — safe to ignore.
+    }
 }
 
 async function waitFor(assertion: () => Promise<void>, timeoutMs = 5_000): Promise<void> {

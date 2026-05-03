@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import type { ContactGroup as BlueprintContactGroup } from "../../blueprints/types";
 import { normalizePath } from "../../utils/path";
+import { isMarkdownPath } from "../../utils/markdown";
+import { readTextFile, readDirectorySafe } from "../../utils/filesystem";
 import {
     parseCareerLevelsDocument,
     parseCareerPathsDocument,
@@ -26,27 +28,7 @@ export interface LoadedGroupState {
     document: ContactGroupDocument;
 }
 
-const decoder = new TextDecoder();
-
-export async function readTextFile(fs: typeof vscode.workspace.fs, uri: vscode.Uri): Promise<string> {
-    try {
-        const bytes = await fs.readFile(uri);
-        return decoder.decode(bytes);
-    } catch {
-        return "";
-    }
-}
-
-export async function readDirectorySafe(
-    fs: typeof vscode.workspace.fs,
-    uri: vscode.Uri,
-): Promise<readonly [string, vscode.FileType][]> {
-    try {
-        return await fs.readDirectory(uri);
-    } catch {
-        return [];
-    }
-}
+export { readTextFile, readDirectorySafe } from "../../utils/filesystem";
 
 export async function loadGroups(
     fs: typeof vscode.workspace.fs,
@@ -56,7 +38,7 @@ export async function loadGroups(
     const blueprintFiles = new Set(blueprintGroups.map((group) => group.file.toLowerCase()));
     const entries = await readDirectorySafe(fs, peopleRoot);
     const customFiles = entries
-        .filter(([name, type]) => type === vscode.FileType.File && name.toLowerCase().endsWith(".md"))
+        .filter(([name, type]) => type === vscode.FileType.File && isMarkdownPath(name))
         .map(([name]) => normalizePath(name))
         .filter((name) => !blueprintFiles.has(name.toLowerCase()))
         .sort(compareText);

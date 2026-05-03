@@ -4,8 +4,9 @@
 import * as vscode from "vscode";
 import { parseBlueprintYaml } from "./blueprintParser";
 import type { BlueprintDefinition, BlueprintInfo } from "./types";
+import { textDecoder } from "../utils/encoding";
 
-const decoder = new TextDecoder();
+const decoder = textDecoder;
 
 export class BlueprintRegistry {
     private readonly blueprintsRoot: vscode.Uri;

@@ -10,9 +10,10 @@ import * as vscode from "vscode";
 import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 import type { TelemetryEmitter } from "../telemetry";
+import { textDecoder, textEncoder } from "../utils/encoding";
 
-const decoder = new TextDecoder();
-const encoder = new TextEncoder();
+const decoder = textDecoder;
+const encoder = textEncoder;
 
 export class ManifestManager {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.

@@ -5,6 +5,7 @@
 //      the edit attempt; retrying recovers from transient conflicts without surfacing errors.
 import * as vscode from "vscode";
 import { PendingWrites } from "./pendingWrites";
+import { openTextDocumentIfPresent } from "./taskHelpers";
 import type { TaskBlock } from "./types";
 
 interface MutationOptions {
@@ -97,14 +98,6 @@ export function renderDoneBlock(block: TaskBlock, body: string): string {
     const bodyLines = body.split("\n");
     const firstLine = `${block.indentText}- **Done**: ${bodyLines[0] ?? ""}`;
     return [firstLine, ...bodyLines.slice(1)].join("\n");
-}
-
-async function openTextDocumentIfPresent(uri: vscode.Uri): Promise<vscode.TextDocument | null> {
-    try {
-        return await vscode.workspace.openTextDocument(uri);
-    } catch {
-        return null;
-    }
 }
 
 function fullDocumentRange(document: vscode.TextDocument, textLength: number): vscode.Range {
