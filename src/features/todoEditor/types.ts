@@ -21,12 +21,22 @@ export interface ContactTooltipEntry {
     detailedHtml: string;
 }
 
+export interface LinkSuggestion {
+    /** Display label (filename or heading text). */
+    label: string;
+    /** Text to insert. */
+    insertText: string;
+    /** Optional description (e.g. folder path). */
+    description?: string;
+}
+
 export type ToWebviewMessage =
     | { type: 'update'; active: UITask[]; completed: UITask[] }
     | { type: 'syncDone' }
     | { type: 'snippetSuggestions'; items: SnippetSuggestion[] }
     | { type: 'snippetResult'; text: string }
-    | { type: 'contactTooltips'; entries: ContactTooltipEntry[] };
+    | { type: 'contactTooltips'; entries: ContactTooltipEntry[] }
+    | { type: 'linkSuggestions'; items: LinkSuggestion[]; queryId?: number };
 
 export type ToExtensionMessage =
     | { type: 'ready' }
@@ -42,4 +52,6 @@ export type ToExtensionMessage =
     | { type: 'scan' }
     | { type: 'snippetQuery'; prefix: string }
     | { type: 'snippetAccept'; trigger: string; selectedText?: string }
-    | { type: 'openLink'; href: string };
+    | { type: 'openLink'; href: string }
+    | { type: 'linkPathQuery'; prefix: string; queryId?: number }
+    | { type: 'linkHeadingQuery'; path: string; prefix: string; queryId?: number };

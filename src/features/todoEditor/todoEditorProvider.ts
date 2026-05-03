@@ -5,7 +5,7 @@ import MarkdownIt from "markdown-it";
 const taskLists = require("markdown-it-task-lists");
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { ParsedCollectorTask } from "../taskCollector/types";
-import type { UITask, ToWebviewMessage, ToExtensionMessage, ContactTooltipEntry } from "./types";
+import type { UITask, ToWebviewMessage, ToExtensionMessage, ContactTooltipEntry, LinkSuggestion } from "./types";
 import { parseTodoDocument, completeTask, uncompleteTask, addTaskRawLines, updateTaskBody, serializeDocument, stripHangingIndent, type TodoDocument } from "./documentSerializer";
 import { parseTaskBlocks } from "../taskCollector/taskParser";
 import { forward } from "../taskCollector/pathRewriter";
@@ -13,6 +13,7 @@ import { replaceLineRange } from "../taskCollector/taskWriter";
 import type { ContactExpansionMap } from "../snippets/snippetHoverProvider";
 import type { SnippetProvider } from "../snippets/snippetCompletionProvider";
 import { buildContactTooltipMarkdown } from "../contacts/contactTooltip";
+import { toHeadingSlug } from "../../utils/headingSlug";
 
 // A CustomTextEditor is used instead of a plain WebviewPanel so that VS Code's
 // built-in file save/dirty tracking, undo/redo stack, and tab management work
@@ -402,11 +403,34 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 case "openLink": {
                     // Resolve relative link against the directory of the .todo.md file
                     const docDir = vscode.Uri.joinPath(document.uri, "..");
-                    const targetUri = vscode.Uri.joinPath(docDir, msg.href);
-                    await vscode.window.showTextDocument(targetUri, {
+                    const href = msg.href;
+                    // Split href into path and anchor
+                    const hashIdx = href.indexOf("#");
+                    const filePath = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
+                    const anchor = hashIdx >= 0 ? href.slice(hashIdx + 1) : null;
+                    const targetUri = vscode.Uri.joinPath(docDir, filePath);
+                    const editor = await vscode.window.showTextDocument(targetUri, {
                         viewColumn: vscode.ViewColumn.Beside,
                         preserveFocus: false,
                     });
+                    // Navigate to anchor (heading) if specified
+                    if (anchor && editor) {
+                        const targetDoc = editor.document;
+                        const headingSlug = anchor.toLowerCase();
+                        for (let line = 0; line < targetDoc.lineCount; line++) {
+                            const lineText = targetDoc.lineAt(line).text;
+                            const headingMatch = /^#{1,6}\s+(.+)$/.exec(lineText);
+                            if (headingMatch) {
+                                const slug = toHeadingSlug(headingMatch[1]);
+                                if (slug === headingSlug) {
+                                    const pos = new vscode.Position(line, 0);
+                                    editor.selection = new vscode.Selection(pos, pos);
+                                    editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     break;
                 }
                 case "scan": {
@@ -513,6 +537,74 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
 
                     const result: ToWebviewMessage = { type: "snippetResult", text: expanded };
                     webviewPanel.webview.postMessage(result);
+                    break;
+                }
+                case "linkPathQuery": {
+                    // List files relative to the .todo.md file's directory
+                    const docDir = vscode.Uri.joinPath(document.uri, "..");
+                    const prefix = msg.prefix;
+                    try {
+                        // Determine the directory to list based on prefix
+                        const lastSlash = prefix.lastIndexOf("/");
+                        const dirPrefix = lastSlash >= 0 ? prefix.slice(0, lastSlash) : "";
+                        const filePrefix = lastSlash >= 0 ? prefix.slice(lastSlash + 1) : prefix;
+                        const searchDir = dirPrefix ? vscode.Uri.joinPath(docDir, dirPrefix) : docDir;
+
+                        const entries = await vscode.workspace.fs.readDirectory(searchDir);
+                        const suggestions: LinkSuggestion[] = [];
+                        const lowerPrefix = filePrefix.toLowerCase();
+                        for (const [name, fileType] of entries) {
+                            if (name.startsWith(".")) continue;
+                            if (lowerPrefix && !name.toLowerCase().startsWith(lowerPrefix)) continue;
+                            const isDir = fileType === vscode.FileType.Directory;
+                            const insertPath = dirPrefix ? `${dirPrefix}/${name}` : name;
+                            suggestions.push({
+                                label: name + (isDir ? "/" : ""),
+                                insertText: insertPath + (isDir ? "/" : ""),
+                                description: isDir ? "folder" : undefined,
+                            });
+                        }
+                        suggestions.sort((a, b) => {
+                            // Folders first, then alphabetical
+                            const aDir = a.label.endsWith("/") ? 0 : 1;
+                            const bDir = b.label.endsWith("/") ? 0 : 1;
+                            if (aDir !== bDir) return aDir - bDir;
+                            return a.label.localeCompare(b.label);
+                        });
+                        const reply: ToWebviewMessage = { type: "linkSuggestions", items: suggestions.slice(0, 30), queryId: msg.queryId };
+                        webviewPanel.webview.postMessage(reply);
+                    } catch {
+                        webviewPanel.webview.postMessage({ type: "linkSuggestions", items: [], queryId: msg.queryId } as ToWebviewMessage);
+                    }
+                    break;
+                }
+                case "linkHeadingQuery": {
+                    // Read headings from the specified file
+                    const docDir = vscode.Uri.joinPath(document.uri, "..");
+                    const targetUri = vscode.Uri.joinPath(docDir, msg.path);
+                    try {
+                        const targetDoc = await vscode.workspace.openTextDocument(targetUri);
+                        const text = targetDoc.getText();
+                        const headings: LinkSuggestion[] = [];
+                        const lowerPrefix = msg.prefix.toLowerCase();
+                        for (const line of text.split(/\r?\n/)) {
+                            const m = /^(#{1,6})\s+(.+)$/.exec(line);
+                            if (!m) continue;
+                            const headingText = m[2].trim();
+                            const slug = toHeadingSlug(headingText);
+                            if (lowerPrefix && !headingText.toLowerCase().includes(lowerPrefix) && !slug.includes(lowerPrefix)) continue;
+                            const level = m[1].length;
+                            headings.push({
+                                label: headingText,
+                                insertText: slug,
+                                description: `${"#".repeat(level)} heading`,
+                            });
+                        }
+                        const reply: ToWebviewMessage = { type: "linkSuggestions", items: headings.slice(0, 30), queryId: msg.queryId };
+                        webviewPanel.webview.postMessage(reply);
+                    } catch {
+                        webviewPanel.webview.postMessage({ type: "linkSuggestions", items: [], queryId: msg.queryId } as ToWebviewMessage);
+                    }
                     break;
                 }
             }

@@ -15,6 +15,18 @@ export function invalidateCompletedCache(): void {
     renderedCompletedHtml.clear();
 }
 
+export function isCompletedExpanded(): boolean {
+    return !completedCollapsed;
+}
+
+/** Toggle collapsed state. Caller is responsible for re-rendering. */
+export function toggleCompletedCollapsed(): void {
+    completedCollapsed = !completedCollapsed;
+    // Re-render will be triggered by the caller via renderAll()
+    const section = document.querySelector('.completed-section') as HTMLElement | null;
+    if (section) renderCompletedSection(section);
+}
+
 export function renderCompletedSection(completedSection: HTMLElement): void {
     const currentCompleted = getCompleted();
 

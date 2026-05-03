@@ -5,7 +5,8 @@
 
 # --------------- paths --------------------------------------------------------
 $RepoRoot        = (Resolve-Path "$PSScriptRoot\..\..").Path
-$MediaOutputDir  = Join-Path $RepoRoot "src\resources\docs\media"
+$ExtensionDir    = Join-Path $RepoRoot "src"          # --extensionDevelopmentPath
+$DocsDir         = Join-Path $RepoRoot "src\resources\docs"
 $FixtureRoot     = Join-Path $env:TEMP "memoria-recording-fixtures"
 
 # ScreenToGif portable path (download from https://www.screentogif.com/)
@@ -214,7 +215,7 @@ function Start-VSCode {
         [string]$WorkspaceFile,
         [switch]$NewWindow
     )
-    $codeArgs = @("--new-window")
+    $codeArgs = @("--new-window", "--extensionDevelopmentPath", $ExtensionDir)
     if ($WorkspaceFile) {
         $codeArgs += $WorkspaceFile
         $titleHint = [System.IO.Path]::GetFileNameWithoutExtension($WorkspaceFile)
@@ -306,13 +307,20 @@ function Stop-Recording {
         New-Item $dir -ItemType Directory -Force | Out-Null
     }
 
+    # Delete existing output file so ScreenToGif doesn't prompt to overwrite
+    if (Test-Path $OutputFile) {
+        Remove-Item $OutputFile -Force
+        Write-Host "  Deleted existing: $OutputFile"
+    }
+
     # Pre-load clipboard with just the filename (no extension) — ScreenToGif
     # appends .gif automatically.  The folder path field is left as-is.
     $fileNameNoExt = [System.IO.Path]::GetFileNameWithoutExtension($OutputFile)
     [System.Windows.Forms.Clipboard]::SetText($fileNameNoExt)
 
-    # F7 is the default ScreenToGif stop-recording hotkey (global).
-    [System.Windows.Forms.SendKeys]::SendWait("{F7}")
+    # F8 is the default ScreenToGif stop-recording hotkey (global).
+    # (F7 is pause/resume — do NOT use it here.)
+    [System.Windows.Forms.SendKeys]::SendWait("{F8}")
 
     # Wait for the ScreenToGif editor window to appear.
     Start-Sleep -Milliseconds 2000
@@ -335,9 +343,36 @@ function Stop-Recording {
         [System.Windows.Forms.SendKeys]::SendWait("^s")
         Start-Sleep -Milliseconds 2000
 
-        # Paste the filename (without extension) into the focused field.
+        # ScreenToGif save panel has two fields:
+        #   1. Folder path (text box)
+        #   2. Filename without extension (text box)
+        # The filename field is focused after Ctrl+S.
+
+        # Shift+Tab x2 to reach the folder field
+        [System.Windows.Forms.SendKeys]::SendWait("+{TAB}")
+        Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait("+{TAB}")
+        Start-Sleep -Milliseconds 300
+
+        # Field 1: Paste the output folder
+        $folderPath = [System.IO.Path]::GetDirectoryName($OutputFile)
+        [System.Windows.Forms.Clipboard]::SetText($folderPath)
+        Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait("^a")
+        Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait("^v")
+        Start-Sleep -Milliseconds 500
+
+        # Tab x2 to reach the filename field
+        [System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+        Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait("{TAB}")
+        Start-Sleep -Milliseconds 300
+
+        # Field 2: Paste the filename without extension
         $fileNameNoExt = [System.IO.Path]::GetFileNameWithoutExtension($OutputFile)
         [System.Windows.Forms.Clipboard]::SetText($fileNameNoExt)
+        Start-Sleep -Milliseconds 200
         [System.Windows.Forms.SendKeys]::SendWait("^a")
         Start-Sleep -Milliseconds 200
         [System.Windows.Forms.SendKeys]::SendWait("^v")
@@ -347,7 +382,14 @@ function Stop-Recording {
         [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
         Start-Sleep -Milliseconds 3000
 
-        Write-Host "  Save triggered for: $fileNameNoExt"
+        # Handle potential overwrite confirmation dialog
+        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+        Start-Sleep -Milliseconds 2000
+
+        Write-Host "  Save triggered for: $folderPath\$fileNameNoExt"
+
+        # Wait for the output file to actually appear on disk before proceeding
+        Wait-ForPath $OutputFile 15000
     } else {
         Write-Host "  Could not find ScreenToGif editor window."
     }
@@ -504,6 +546,63 @@ function Invoke-VSCodeCommand {
     Type-Text $CommandText $DelayShort
     Start-Sleep -Milliseconds $DelayShort
     Send-Keys "{ENTER}" $DelayAfterCommand
+}
+
+function Wait-ForPath {
+    <#
+    .SYNOPSIS  Poll until a file or directory exists on disk.
+    .PARAMETER Path       Absolute path to wait for.
+    .PARAMETER TimeoutMs  Max wait time in milliseconds (default 15 000).
+    #>
+    param(
+        [string]$Path,
+        [int]$TimeoutMs = 15000
+    )
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
+        if (Test-Path $Path) {
+            Write-Host "  Path exists: $Path"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "Timed out after ${TimeoutMs}ms waiting for: $Path"
+}
+
+function Initialize-Workspace {
+    <#
+    .SYNOPSIS  Run "Memoria: Initialize workspace" off-camera and wait for
+               scaffolding to complete. Uses the first blueprint in the picker.
+    .PARAMETER FixturePath  Workspace root path (used to poll for completion).
+    #>
+    param([string]$FixturePath)
+    Invoke-VSCodeCommand "Memoria: Initialize workspace"
+    Start-Sleep -Milliseconds $DelayQuickPick        # wait for blueprint picker
+    Send-Keys "{DOWN}" $DelayAfterKeystroke           # ensure an item is highlighted
+    Send-Keys "{ENTER}" $DelayAfterCommand            # select first blueprint
+    Wait-ForPath (Join-Path $FixturePath ".memoria/blueprint.json") 30000
+}
+
+function Write-RecordingSettings {
+    <#
+    .SYNOPSIS  Write the standard .vscode/settings.json used by all recording
+               scripts (dark theme, no minimap, no secondary sidebar, etc.).
+    .PARAMETER Root  Workspace root path.
+    #>
+    param([string]$Root)
+    New-Item (Join-Path $Root ".vscode") -ItemType Directory -Force | Out-Null
+    Set-Content (Join-Path $Root ".vscode/settings.json") -Value @"
+{
+    "workbench.colorTheme": "Default Dark Modern",
+    "editor.minimap.enabled": false,
+    "editor.fontSize": 14,
+    "workbench.secondarySideBar.visible": false,
+    "chat.commandCenter.enabled": false,
+    "workbench.startupEditor": "none",
+    "workbench.tips.enabled": false,
+    "security.workspace.trust.enabled": false
+}
+"@ -Encoding UTF8
 }
 
 function Write-MemoriaConfig {

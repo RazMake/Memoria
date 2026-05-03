@@ -472,4 +472,330 @@ describe("ContactsViewProvider", () => {
             );
         });
     });
+
+    describe("handleOpenMessage", () => {
+        it("should call requestAddContactForm on 'add' mode", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "add", preferredGroupFile: "group-a.json" });
+
+            expect(feature.requestAddContactForm).toHaveBeenCalledWith("group-a.json");
+        });
+
+        it("should call requestEditContactForm on 'edit' mode", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "edit", contactId: "alice" });
+
+            expect(feature.requestEditContactForm).toHaveBeenCalledWith("alice");
+        });
+
+        it("should report error on 'edit' mode without contactId", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "edit" });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("contact is required"),
+            );
+        });
+
+        it("should call requestMoveContactForm on 'move' mode with targetGroupFile", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Group A", type: "colleague", isCustom: false, contactCount: 1 },
+                { file: "group-b.json", name: "Group B", type: "colleague", isCustom: false, contactCount: 0 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "move", contactId: "alice", targetGroupFile: "group-b.json" });
+
+            expect(feature.requestMoveContactForm).toHaveBeenCalledWith("alice", "group-b.json");
+        });
+
+        it("should use default move target when targetGroupFile is not provided", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Group A", type: "colleague", isCustom: false, contactCount: 1 },
+                { file: "group-b.json", name: "Group B", type: "colleague", isCustom: false, contactCount: 0 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "move", contactId: "alice" });
+
+            // Default target = first group that isn't the contact's current group
+            expect(feature.requestMoveContactForm).toHaveBeenCalledWith("alice", "group-b.json");
+        });
+
+        it("should report error on 'move' mode without contactId", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "move" });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("contact is required"),
+            );
+        });
+
+        it("should report error on 'move' mode when no destination group exists", async () => {
+            const contact = makeColleagueContact();
+            // Only one group — same as the contact's, so no alternative exists
+            const snapshot = makeSnapshotWithContact(contact);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, { type: "open", mode: "move", contactId: "alice" });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("No destination group"),
+            );
+        });
+    });
+
+    describe("handleSaveMessage — move mode", () => {
+        it("should call feature.moveContact on save with move mode", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Group A", type: "colleague", isCustom: false, contactCount: 1 },
+                { file: "group-b.json", name: "Group B", type: "colleague", isCustom: false, contactCount: 0 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "move",
+                sourceContactId: "alice",
+                groupFile: "group-b.json",
+                contact: makeColleagueDraft(),
+            });
+
+            expect(feature.moveContact).toHaveBeenCalledWith(
+                "alice", "group-b.json", expect.objectContaining({ id: "alice" }),
+            );
+            expect(view.webview.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({ type: "saved", mode: "move" }),
+            );
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                expect.stringContaining("Moved"),
+            );
+        });
+
+        it("should report error when moving non-existent contact", async () => {
+            const feature = createMockFeature(); // empty snapshot
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "move",
+                sourceContactId: "nonexistent",
+                groupFile: "group-b.json",
+                contact: makeColleagueDraft({ id: "nonexistent" }),
+            });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("no longer exists"),
+            );
+        });
+
+        it("should report error when source and target group are the same", async () => {
+            const contact = makeColleagueContact();
+            const snapshot = makeSnapshotWithContact(contact);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "move",
+                sourceContactId: "alice",
+                groupFile: "group-a.json", // same as source group
+                contact: makeColleagueDraft(),
+            });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("same"),
+            );
+        });
+    });
+
+    describe("handleSaveMessage — newGroupName", () => {
+        it("should call createCustomGroup when newGroupName is provided", async () => {
+            const contact = makeColleagueContact();
+            const snapshot = makeSnapshotWithContact(contact);
+            const feature = createMockFeature(snapshot);
+            (feature.createCustomGroup as any).mockResolvedValue({ file: "custom-group.json" });
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "add",
+                newGroupName: "My Custom Group",
+                contact: makeColleagueDraft({ id: "bob" }),
+            });
+
+            expect(feature.createCustomGroup).toHaveBeenCalledWith("My Custom Group");
+            expect(feature.addContact).toHaveBeenCalledWith(
+                "custom-group.json",
+                expect.objectContaining({ id: "bob" }),
+            );
+        });
+    });
+
+    describe("handleSaveMessage — report contact", () => {
+        it("should save a report contact with levelId and levelStartDate", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Group A", type: "colleague", isCustom: false, contactCount: 1 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            const reportDraft: Contact = {
+                kind: "report",
+                id: "bob",
+                nickname: "Bob",
+                fullName: "Bob Jones",
+                title: "Engineer",
+                careerPathKey: "ic",
+                pronounsKey: "he",
+                levelId: "L5",
+                levelStartDate: "2026-01-01",
+                extraFields: {},
+                droppedFields: {},
+            };
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "add",
+                groupFile: "group-a.json",
+                contact: reportDraft,
+            });
+
+            expect(feature.addContact).toHaveBeenCalledWith(
+                "group-a.json",
+                expect.objectContaining({ kind: "report", levelId: "L5", levelStartDate: "2026-01-01" }),
+            );
+        });
+    });
+
+    describe("handleMoveMessage — colleague to report group", () => {
+        it("should open move form when moving colleague to a report group", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Peers", type: "colleague", isCustom: false, contactCount: 1 },
+                { file: "group-b.json", name: "Reports", type: "report", isCustom: false, contactCount: 0 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "move",
+                contactId: "alice",
+                targetGroupFile: "group-b.json",
+            });
+
+            // Should open form instead of doing direct move
+            expect(feature.requestMoveContactForm).toHaveBeenCalledWith("alice", "group-b.json");
+            expect(feature.moveContact).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("handleMoveMessage — default target", () => {
+        it("should use the first alternative group when targetGroupFile is not provided", async () => {
+            const contact = makeColleagueContact();
+            const groups = [
+                { file: "group-a.json", name: "Group A", type: "colleague", isCustom: false, contactCount: 1 },
+                { file: "group-b.json", name: "Group B", type: "colleague", isCustom: false, contactCount: 0 },
+            ];
+            const snapshot = makeSnapshotWithContact(contact, groups);
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "move",
+                contactId: "alice",
+            });
+
+            expect(feature.moveContact).toHaveBeenCalledWith("alice", "group-b.json");
+        });
+
+        it("should report error when no alternative group exists", async () => {
+            const contact = makeColleagueContact();
+            const snapshot = makeSnapshotWithContact(contact); // only one group
+            const feature = createMockFeature(snapshot);
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "move",
+                contactId: "alice",
+                // no targetGroupFile
+            });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("No destination group"),
+            );
+        });
+    });
+
+    describe("save message — missing groupFile", () => {
+        it("should report error when groupFile is empty on add", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            await simulateMessage(view, {
+                type: "save",
+                mode: "add",
+                groupFile: "",
+                contact: makeColleagueDraft(),
+            });
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("destination group is required"),
+            );
+        });
+    });
+
+    describe("feature event forwarding", () => {
+        it("should forward onDidRequestFormOpen to the webview", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            // Simulate the feature emitting a form open request
+            feature._formRequestListeners[0]({
+                mode: "add",
+                preferredGroupFile: "group-a.json",
+            });
+
+            await flushPromises();
+
+            expect(view.webview.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({ type: "open" }),
+            );
+        });
+
+        it("should forward onDidUpdate snapshot to the webview", async () => {
+            const feature = createMockFeature();
+            const { view } = await setupResolvedProvider(feature, extensionUri);
+
+            const updated = makeSnapshotWithContact(makeColleagueContact({ fullName: "Updated" }));
+            feature._updateListeners[0](updated);
+
+            await flushPromises();
+
+            expect(view.webview.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({ type: "update" }),
+            );
+        });
+    });
 });

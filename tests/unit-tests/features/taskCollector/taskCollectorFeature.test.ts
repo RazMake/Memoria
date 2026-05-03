@@ -959,4 +959,218 @@ describe("TaskCollectorFeature", () => {
             expect(mockShowErrorMessage).not.toHaveBeenCalled();
         });
     });
+
+    describe("reconcileCollector — aging pass", () => {
+        it("should remove collector-owned expired tasks during aging", async () => {
+            // Set up an index with a collector-owned completed task that is expired
+            const storedIndex = {
+                version: 1,
+                collectorPath: "00-Workstreams/All.todo.md",
+                tasks: {
+                    "task-1": {
+                        id: "task-1",
+                        source: null,
+                        sourceRoot: null,
+                        sourceOrder: null,
+                        fingerprint: "fp1",
+                        body: "old task",
+                        firstSeenAt: "2026-04-01T00:00:00Z",
+                        completed: true,
+                        doneDate: "2026-04-01", // 20 days ago from the test clock (2026-04-21)
+                        collectorOwned: true,
+                        agingSkipCount: 0,
+                    },
+                },
+                collectorOrder: { active: [], completed: ["task-1"] },
+                sourceOrders: {},
+            };
+            mockManifest = createMockManifest({
+                storedTaskIndex: storedIndex,
+                taskCollectorConfig: {
+                    completedRetentionDays: 7, // 7 days retention
+                    syncOnStartup: false,
+                    include: ["**/*.md"],
+                    exclude: [],
+                    debounceMs: 0,
+                },
+            });
+            feature = new TaskCollectorFeature(mockManifest as any, mockTelemetry as any, () => new Date("2026-04-21T12:00:00Z"));
+
+            const collectorDoc = createMockTextDocument(
+                createUri("/workspace/00-Workstreams/All.todo.md"),
+                "# To do\n\n# Completed\n",
+            );
+            mockOpenTextDocument.mockResolvedValue(collectorDoc as any);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            // Trigger a sync which goes through reconcileCollector → runAgingPass
+            await feature.syncNow();
+
+            // The expired task should have been removed and persisted
+            expect(mockManifest.writeTaskIndex).toHaveBeenCalled();
+            const lastWrittenIndex = mockManifest.writeTaskIndex.mock.calls.at(-1)?.[1];
+            expect(lastWrittenIndex?.tasks?.["task-1"]).toBeUndefined();
+        });
+
+        it("should not remove non-expired completed tasks", async () => {
+            const storedIndex = {
+                version: 1,
+                collectorPath: "00-Workstreams/All.todo.md",
+                tasks: {
+                    "task-recent": {
+                        id: "task-recent",
+                        source: null,
+                        sourceRoot: null,
+                        sourceOrder: null,
+                        fingerprint: "fp2",
+                        body: "recent task",
+                        firstSeenAt: "2026-04-20T00:00:00Z",
+                        completed: true,
+                        doneDate: "2026-04-20", // 1 day ago — within retention
+                        collectorOwned: true,
+                        agingSkipCount: 0,
+                    },
+                },
+                collectorOrder: { active: [], completed: ["task-recent"] },
+                sourceOrders: {},
+            };
+            mockManifest = createMockManifest({
+                storedTaskIndex: storedIndex,
+                taskCollectorConfig: {
+                    completedRetentionDays: 7,
+                    syncOnStartup: false,
+                    include: ["**/*.md"],
+                    exclude: [],
+                    debounceMs: 0,
+                },
+            });
+            feature = new TaskCollectorFeature(mockManifest as any, mockTelemetry as any, () => new Date("2026-04-21T12:00:00Z"));
+
+            const collectorDoc = createMockTextDocument(
+                createUri("/workspace/00-Workstreams/All.todo.md"),
+                "# To do\n\n# Completed\n\n- [x] recent task\n      _Completed 2026-04-20_\n",
+            );
+            mockOpenTextDocument.mockResolvedValue(collectorDoc as any);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+            await feature.syncNow();
+
+            const lastWrittenIndex = mockManifest.writeTaskIndex.mock.calls.at(-1)?.[1];
+            expect(lastWrittenIndex?.tasks?.["task-recent"]).toBeDefined();
+        });
+    });
+
+    describe("reconcileCollector — applyCollectorEdits with collector edits", () => {
+        it("should ingest new tasks added manually to the collector", async () => {
+            // Start with an empty index
+            const storedIndex = {
+                version: 1,
+                collectorPath: "00-Workstreams/All.todo.md",
+                tasks: {},
+                collectorOrder: { active: [], completed: [] },
+                sourceOrders: {},
+            };
+            mockManifest = createMockManifest({
+                storedTaskIndex: storedIndex,
+                taskCollectorConfig: {
+                    completedRetentionDays: 7,
+                    syncOnStartup: false,
+                    include: ["**/*.md"],
+                    exclude: [],
+                    debounceMs: 0,
+                },
+            });
+            feature = new TaskCollectorFeature(mockManifest as any, mockTelemetry as any, () => new Date("2026-04-21T12:00:00Z"));
+
+            // The collector now has a manually-added task
+            const collectorDoc = createMockTextDocument(
+                createUri("/workspace/00-Workstreams/All.todo.md"),
+                "# To do\n\n- [ ] Manually added task\n\n# Completed\n",
+            );
+            mockOpenTextDocument.mockResolvedValue(collectorDoc as any);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            // Simulate a save on the collector file to trigger reconcileCollector
+            saveListeners[0](collectorDoc);
+            await vi.waitFor(() => {
+                expect(mockManifest.writeTaskIndex).toHaveBeenCalled();
+            });
+
+            // The new task should have been added to the index
+            const lastWrittenIndex = mockManifest.writeTaskIndex.mock.calls.at(-1)?.[1];
+            const tasks = Object.values(lastWrittenIndex?.tasks ?? {}) as any[];
+            expect(tasks.some((t: any) => t.body === "Manually added task")).toBe(true);
+        });
+    });
+
+    describe("bumpAgingSkip — MAX_AGING_SKIP_COUNT threshold", () => {
+        it("should remove task after reaching max aging skip count", async () => {
+            // Create a source-owned expired task with agingSkipCount just below threshold
+            const storedIndex = {
+                version: 1,
+                collectorPath: "00-Workstreams/All.todo.md",
+                tasks: {
+                    "task-ghost": {
+                        id: "task-ghost",
+                        source: "notes.md",
+                        sourceRoot: null,
+                        sourceOrder: 0,
+                        fingerprint: "fpghost",
+                        body: "ghost task",
+                        firstSeenAt: "2026-03-01T00:00:00Z",
+                        completed: true,
+                        doneDate: "2026-03-01", // very old
+                        collectorOwned: false,
+                        agingSkipCount: 4, // one more skip will reach MAX (5)
+                    },
+                },
+                collectorOrder: { active: [], completed: ["task-ghost"] },
+                sourceOrders: { "notes.md": ["task-ghost"] },
+            };
+            mockManifest = createMockManifest({
+                storedTaskIndex: storedIndex,
+                taskCollectorConfig: {
+                    completedRetentionDays: 7,
+                    syncOnStartup: false,
+                    include: ["**/*.md"],
+                    exclude: [],
+                    debounceMs: 0,
+                },
+            });
+            feature = new TaskCollectorFeature(mockManifest as any, mockTelemetry as any, () => new Date("2026-04-21T12:00:00Z"));
+
+            const collectorDoc = createMockTextDocument(
+                createUri("/workspace/00-Workstreams/All.todo.md"),
+                "# To do\n\n# Completed\n",
+            );
+
+            // Source file exists but has NO matching task — locateSourceTask returns null
+            // which means the aging pass will call bumpAgingSkip
+            const sourceDoc = createMockTextDocument(
+                createUri("/workspace/notes.md"),
+                "# Notes\n\nSome text without any tasks.\n",
+            );
+
+            // Return appropriate mock documents for each URI
+            mockOpenTextDocument.mockImplementation(async (uri: any) => {
+                if (uri.path.includes("All.todo.md")) return collectorDoc as any;
+                // For everything else (source files, post-save opens), return the source doc
+                return sourceDoc as any;
+            });
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+            await feature.syncNow();
+
+            // After the 5th skip, the task should be removed
+            const lastWrittenIndex = mockManifest.writeTaskIndex.mock.calls.at(-1)?.[1];
+            expect(lastWrittenIndex?.tasks?.["task-ghost"]).toBeUndefined();
+            // Telemetry should have logged the skip
+            expect(mockTelemetry.logError).toHaveBeenCalledWith(
+                "taskCollector.agingRewriteSkipped",
+                expect.objectContaining({ reason: "missing" }),
+            );
+        });
+    });
 });

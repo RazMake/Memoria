@@ -17,13 +17,19 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "todo-editor.gif"
+$target   = Join-Path $DocsDir "features/media/todo-editor.gif"
 $fixture  = New-CleanFixture "todo-editor"
 
-# --- Setup: initialized workspace with a populated todo file ------------------
-New-StandardWorkspace -Root $fixture
+# --- Setup: clean folder with VS Code settings --------------------------------
+Write-RecordingSettings -Root $fixture
 
-# Enhance the todo file with more tasks
+# --- Launch VS Code -----------------------------------------------------------
+Start-VSCode -FolderPath $fixture
+
+# --- First init (off-camera): let the extension scaffold the workspace --------
+Initialize-Workspace -FixturePath $fixture
+
+# --- Enhance the todo file with more tasks (off-camera) -----------------------
 Set-Content (Join-Path $fixture "00-Workstreams/All.todo.md") -Value @"
 # To do
 

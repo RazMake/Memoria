@@ -16,14 +16,17 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "contacts-sidebar.gif"
+$target   = Join-Path $DocsDir "features/media/contacts-sidebar.gif"
 $fixture  = New-CleanFixture "contacts-sidebar"
 
-# --- Setup: initialized workspace with contacts ------------------------------
-New-StandardWorkspace -Root $fixture
+# --- Setup: clean folder with VS Code settings --------------------------------
+Write-RecordingSettings -Root $fixture
 
 # --- Launch VS Code -----------------------------------------------------------
 Start-VSCode -FolderPath $fixture
+
+# --- First init (off-camera): let the extension scaffold the workspace --------
+Initialize-Workspace -FixturePath $fixture
 
 # --- Start recording ----------------------------------------------------------
 Start-Recording
@@ -44,7 +47,7 @@ Start-Sleep -Milliseconds $DelayPause
 # Step 3: Search for a contact
 # Use the tree view filter (Ctrl+F in sidebar or type to filter)
 Send-Keys "^f" $DelayShort
-Type-Text "Jane" $DelayAfterKeystroke
+Type-Text "John" $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 4: Clear the search

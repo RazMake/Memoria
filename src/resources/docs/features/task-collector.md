@@ -106,9 +106,21 @@ Each active task is displayed as a card with:
 | **Un-complete a task** | Expand the Completed section, click the checkbox |
 | **Reorder tasks** | Drag and drop active task cards |
 | **Add a task** | Click `+ Add task` in the toolbar, or press `a` / `n` |
-| **Edit a task** | Double-click a task card body |
+| **Edit a task** | Double-click a task card body, or press `Enter` on highlighted task |
+| **Delete a task** | Press `Delete` on highlighted task |
 | **Open source file** | Click the source link icon on a collected task |
 | **Sync** | Click the `Sync` button in the toolbar |
+
+#### Keyboard navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `↑` / `↓` | Move highlight between tasks |
+| `Enter` | Edit highlighted task |
+| `Space` | Toggle complete / un-complete |
+| `Delete` | Delete highlighted task |
+| `Ctrl+↑` / `Ctrl+↓` | Reorder (swap) active task up / down |
+| `C` | Toggle the Completed section |
 
 ### Add task popup
 
@@ -116,6 +128,18 @@ Each active task is displayed as a card with:
 - Press **Shift+Enter** to switch to multi-line mode (textarea).
 - In multi-line mode: **Enter** adds newlines, **Shift+Enter** confirms.
 - **Escape** or clicking the backdrop cancels.
+
+#### Formatting shortcuts (inside popup)
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+B` | **Bold** — wraps selection in `**` |
+| `Ctrl+I` | **Italic** — wraps selection in `_` |
+| `Ctrl+L` | **Link** — wraps selection in `[]()` |
+
+#### Link autocomplete (inside popup)
+
+When you type inside a markdown link's parentheses — e.g. `[text](` — Memoria suggests file paths from the workspace. After selecting a file, type `#` to get heading suggestions from that file.
 
 ### Completed section
 

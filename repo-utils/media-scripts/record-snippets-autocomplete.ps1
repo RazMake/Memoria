@@ -17,14 +17,25 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "snippets-autocomplete.gif"
+$target   = Join-Path $DocsDir "features/media/snippets-autocomplete.gif"
 $fixture  = New-CleanFixture "snippets-autocomplete"
 
-# --- Setup: initialized workspace with snippets ------------------------------
-New-StandardWorkspace -Root $fixture
+# --- Setup: clean folder with VS Code settings --------------------------------
+Write-RecordingSettings -Root $fixture
 
 # --- Launch VS Code -----------------------------------------------------------
 Start-VSCode -FolderPath $fixture
+
+# --- First init (off-camera): let the extension scaffold the workspace --------
+Initialize-Workspace -FixturePath $fixture
+
+# --- Create a scratch file for the demo (off-camera) -------------------------
+Set-Content (Join-Path $fixture "03-Inbox/scratch.md") -Value @"
+# Scratch Pad
+
+Use this file to try snippets.
+
+"@ -Encoding UTF8
 
 # Open scratch file
 Send-Keys "^p" $DelayQuickPick

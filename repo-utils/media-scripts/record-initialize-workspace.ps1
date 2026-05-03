@@ -14,7 +14,8 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "initialize-workspace.gif"
+$target        = Join-Path $DocsDir "commands/media/initialize-workspace.gif"
+$targetCopy    = Join-Path $DocsDir "media/initialize-workspace.gif"
 $fixture  = New-CleanFixture "initialize-workspace"
 
 # --- Setup: empty folder with theme settings ----------------------------------
@@ -70,3 +71,11 @@ Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------
 Stop-Recording -OutputFile $target
+
+# Copy to docs/media/ (referenced by getting-started.md too)
+if (Test-Path $target) {
+    $copyDir = Split-Path $targetCopy -Parent
+    if (-not (Test-Path $copyDir)) { New-Item $copyDir -ItemType Directory -Force | Out-Null }
+    Copy-Item $target $targetCopy -Force
+    Write-Host "  Copied to: $targetCopy"
+}

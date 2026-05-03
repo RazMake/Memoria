@@ -72,6 +72,17 @@ export function injectStyles(): void {
     background: var(--vscode-list-hoverBackground);
 }
 
+/* Highlighted / selected card */
+.task-card.highlighted {
+    border: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 10%, transparent);
+    padding: 6px 10px;
+    box-shadow: 0 0 4px 0 color-mix(in srgb, var(--vscode-focusBorder) 5%, transparent);
+    background: color-mix(in srgb, var(--vscode-focusBorder) 1%, var(--vscode-editor-background));
+}
+.task-card.collected.highlighted {
+    padding-left: 8px;
+}
+
 /* Active card grab cursor */
 .active-card {
     cursor: grab;

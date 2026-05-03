@@ -26,6 +26,15 @@ After you confirm both steps:
 - Your old versions of every conflicting file are saved to `WorkspaceInitializationBackups/` (same relative path) before being overwritten
 - Diff editors open (in batches) for any files you checked in step 2 — left side is your old version, right side is the new blueprint version
 
+> **Note:** All open editors are saved and closed automatically before initialization begins.
+
+#### Diff editor keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `1` – `9` | Toggle **Keep / Ignore** on hunk 1–9 |
+| `Ctrl+Enter` | **Apply & Close** — write the merged result to disk |
+
 > **Note:** If a newer version of your blueprint is available, Memoria will prompt you to reinitialize when VS Code starts.
 
 ![Conflict resolver](media/conflict-resolver.gif)

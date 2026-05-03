@@ -20,6 +20,12 @@ export interface SnippetSuggestion {
     description?: string;
 }
 
+export interface LinkSuggestion {
+    label: string;
+    insertText: string;
+    description?: string;
+}
+
 export type VsCodeApi = ReturnType<typeof acquireVsCodeApi>;
 
 export function getVsCodeApi(): VsCodeApi {

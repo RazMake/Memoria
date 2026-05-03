@@ -304,6 +304,33 @@ function computeOutput(): string {
     return lines.join("\n");
 }
 
+// ────────── Keyboard Shortcuts ──────────
+
+document.addEventListener("keydown", (e: KeyboardEvent) => {
+    // Ignore when typing in an input/textarea
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+    // Number keys 1-9: toggle Keep/Ignore on the corresponding hunk
+    const digit = parseInt(e.key, 10);
+    if (digit >= 1 && digit <= 9) {
+        const changeSections = sections.filter((s): s is ChangeSection => s.kind === "change");
+        const target = changeSections[digit - 1];
+        if (target) {
+            target.decision = target.decision === "keep" ? "ignore" : "keep";
+            render();
+        }
+        return;
+    }
+
+    // Ctrl+Enter: Apply & Close
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        vscode.postMessage({ type: "applyMerge", content: computeOutput() });
+        return;
+    }
+});
+
 // ────────── Message Handling ──────────
 
 window.addEventListener("message", (event: MessageEvent) => {

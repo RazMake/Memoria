@@ -2,6 +2,9 @@ import type { UITask } from './types';
 import { vscode } from './state';
 import { el } from './utils';
 import { onPopupInput, onPopupKeydown, isDropdownVisible, disposeAutocomplete } from './snippetAutocomplete';
+import { onLinkInput, onLinkKeydown, isLinkDropdownVisible, disposeLinkAutocomplete } from './linkAutocomplete';
+import { highlightAfterEdit } from './keyboardNav';
+import { handleFormatKey } from './formatShortcuts';
 
 let popupMode: 'add' | 'edit' | null = null;
 let popupEditId: string | null = null;
@@ -48,7 +51,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
             ta.value = mode === 'edit' && activeInput === undefined ? markdown : (activeInput?.value ?? '');
             ta.rows = 3;
             ta.placeholder = 'Task description…';
-            ta.addEventListener('input', () => { autoGrow(ta); onPopupInput(ta); });
+            ta.addEventListener('input', () => { autoGrow(ta); onPopupInput(ta); onLinkInput(ta); });
             ta.addEventListener('keydown', handleTextareaKey);
             inputWrap.appendChild(ta);
             activeInput = ta;
@@ -64,7 +67,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
             inp.className = 'popup-input';
             inp.value = mode === 'edit' && activeInput === undefined ? markdown : (activeInput?.value ?? '');
             inp.placeholder = 'Task description…';
-            inp.addEventListener('input', () => onPopupInput(inp));
+            inp.addEventListener('input', () => { onPopupInput(inp); onLinkInput(inp); });
             inp.addEventListener('keydown', handleInputKey);
             inputWrap.appendChild(inp);
             activeInput = inp;
@@ -82,6 +85,8 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
 
     function handleInputKey(e: KeyboardEvent): void {
         if (onPopupKeydown(e)) { e.preventDefault(); return; }
+        if (onLinkKeydown(e)) { e.preventDefault(); return; }
+        if (handleFormatKey(e, activeInput)) return;
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             confirmPopup();
@@ -100,6 +105,8 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
 
     function handleTextareaKey(e: KeyboardEvent): void {
         if (onPopupKeydown(e)) { e.preventDefault(); return; }
+        if (onLinkKeydown(e)) { e.preventDefault(); return; }
+        if (handleFormatKey(e, activeInput)) return;
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             confirmPopup();
@@ -127,6 +134,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
             vscode.postMessage({ type: 'addTask', text });
         } else if (popupMode === 'edit' && popupEditId) {
             vscode.postMessage({ type: 'editTask', id: popupEditId, newBody: text });
+            highlightAfterEdit(popupEditId);
         }
         closePopup();
     }
@@ -151,6 +159,7 @@ export function openPopup(mode: 'add' | 'edit', task?: UITask): void {
 
 function closePopup(): void {
     disposeAutocomplete();
+    disposeLinkAutocomplete();
     if (popupOverlay) {
         popupOverlay.removeEventListener('keydown', trapFocus);
         popupOverlay.remove();

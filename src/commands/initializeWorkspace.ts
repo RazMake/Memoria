@@ -28,6 +28,12 @@ export function createInitializeWorkspaceCommand(
             return;
         }
 
+        // Save all dirty editors and close all tabs before proceeding.
+        // Initialization may overwrite files that are currently open, which
+        // would cause stale editor models and "File Modified Since" errors.
+        await vscode.workspace.saveAll(/* includeUntitled */ false);
+        await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+
         // Multi-root: let the user choose which root to initialize.
         // Single-root: use the only available root directly.
         let workspaceRoot: vscode.Uri;

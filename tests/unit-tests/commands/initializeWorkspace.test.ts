@@ -4,6 +4,8 @@ import { createInitializeWorkspaceCommand } from "../../../src/commands/initiali
 const mockShowErrorMessage = vi.fn();
 const mockShowInformationMessage = vi.fn();
 const mockShowQuickPick = vi.fn();
+const mockSaveAll = vi.fn().mockResolvedValue(true);
+const mockExecuteCommand = vi.fn().mockResolvedValue(undefined);
 const mockWorkspaceFolders: any[] = [];
 
 vi.mock("vscode", () => ({
@@ -11,11 +13,15 @@ vi.mock("vscode", () => ({
         get workspaceFolders() {
             return mockWorkspaceFolders;
         },
+        saveAll: (...args: any[]) => mockSaveAll(...args),
     },
     window: {
         showErrorMessage: (...args: any[]) => mockShowErrorMessage(...args),
         showInformationMessage: (...args: any[]) => mockShowInformationMessage(...args),
         showQuickPick: (...args: any[]) => mockShowQuickPick(...args),
+    },
+    commands: {
+        executeCommand: (...args: any[]) => mockExecuteCommand(...args),
     },
 }));
 
@@ -61,6 +67,24 @@ describe("createInitializeWorkspaceCommand", () => {
     });
 
     describe("single-root workspace (Phase 1 behaviour)", () => {
+        it("should save all editors and close all tabs before proceeding", async () => {
+            mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
+            mockShowQuickPick.mockResolvedValue({ label: "Blueprint individual-contributor", id: "individual-contributor" });
+            await makeHandler()();
+            expect(mockSaveAll).toHaveBeenCalledWith(false);
+            expect(mockExecuteCommand).toHaveBeenCalledWith("workbench.action.closeAllEditors");
+            // saveAll should be called before engine.initialize
+            const saveOrder = mockSaveAll.mock.invocationCallOrder[0];
+            const initOrder = mockEngine.initialize.mock.invocationCallOrder[0];
+            expect(saveOrder).toBeLessThan(initOrder);
+        });
+
+        it("should not save/close when no workspace folders are open", async () => {
+            await makeHandler()();
+            expect(mockSaveAll).not.toHaveBeenCalled();
+            expect(mockExecuteCommand).not.toHaveBeenCalledWith("workbench.action.closeAllEditors");
+        });
+
         it("should show an error message when no workspace folder is open", async () => {
             await makeHandler()();
             expect(mockShowErrorMessage).toHaveBeenCalledWith(expect.stringContaining("No workspace is open"));

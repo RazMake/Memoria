@@ -17,14 +17,30 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "task-collector-sync.gif"
+$target   = Join-Path $DocsDir "features/media/task-collector-sync.gif"
 $fixture  = New-CleanFixture "task-collector-sync"
 
-# --- Setup: initialized workspace with tasks ---------------------------------
-New-StandardWorkspace -Root $fixture
+# --- Setup: clean folder with VS Code settings --------------------------------
+Write-RecordingSettings -Root $fixture
 
 # --- Launch VS Code -----------------------------------------------------------
 Start-VSCode -FolderPath $fixture
+
+# --- First init (off-camera): let the extension scaffold the workspace --------
+Initialize-Workspace -FixturePath $fixture
+
+# --- Create source files with tasks (off-camera) -----------------------------
+Set-Content (Join-Path $fixture "02-MeetingNotes/standup.md") -Value @"
+# Daily Standup — 2026-04-28
+
+## Updates
+- Finished login page redesign
+- [ ] Fix the login bug
+- [ ] Send status update to team
+
+## Notes
+- Sprint review on Friday
+"@ -Encoding UTF8
 
 # Open source file and collector side by side
 Send-Keys "^p" $DelayQuickPick

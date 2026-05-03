@@ -5,6 +5,8 @@ import { renderActiveList, invalidateActiveCache } from './activeList';
 import { renderCompletedSection, invalidateCompletedCache } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
 import { handleSnippetSuggestions, handleSnippetResult } from './snippetAutocomplete';
+import { handleLinkSuggestions } from './linkAutocomplete';
+import { handleListKeydown, applyHighlight, validateHighlight } from './keyboardNav';
 
 const root = document.getElementById('root') ?? document.body;
 root.textContent = '';
@@ -37,6 +39,7 @@ window.addEventListener('message', (e: MessageEvent) => {
         setActive(msg.active as UITask[]);
         setCompleted(msg.completed as UITask[]);
         renderAll();
+        validateHighlight();
     } else if (msg?.type === 'syncDone') {
         syncBtn.classList.remove('syncing');
     } else if (msg?.type === 'contactTooltips') {
@@ -44,16 +47,22 @@ window.addEventListener('message', (e: MessageEvent) => {
         invalidateActiveCache();
         invalidateCompletedCache();
         renderAll();
+        validateHighlight();
     } else if (msg?.type === 'snippetSuggestions') {
         handleSnippetSuggestions(msg.items);
     } else if (msg?.type === 'snippetResult') {
         handleSnippetResult(msg.text);
+    } else if (msg?.type === 'linkSuggestions') {
+        handleLinkSuggestions(msg.items, msg.queryId);
     }
 });
 
 vscode.postMessage({ type: 'ready' });
 
 window.addEventListener('keydown', (e: KeyboardEvent) => {
+    // List keyboard navigation (arrows, space, delete, etc.)
+    if (handleListKeydown(e)) return;
+
     if (isPopupOpen()) return;
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;

@@ -16,14 +16,17 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
 
-$target   = Join-Path $MediaOutputDir "explorer-decorations.gif"
+$target   = Join-Path $DocsDir "features/media/explorer-decorations.gif"
 $fixture  = New-CleanFixture "explorer-decorations"
 
-# --- Setup: initialized workspace with decorations ----------------------------
-New-StandardWorkspace -Root $fixture
+# --- Setup: clean folder with VS Code settings --------------------------------
+Write-RecordingSettings -Root $fixture
 
 # --- Launch VS Code -----------------------------------------------------------
 Start-VSCode -FolderPath $fixture
+
+# --- First init (off-camera): let the extension scaffold the workspace --------
+Initialize-Workspace -FixturePath $fixture
 
 # --- Start recording ----------------------------------------------------------
 Start-Recording
