@@ -59,14 +59,17 @@ Send-Keys "{ENTER}" $DelayAfterCommand
 Start-Recording
 
 # Step 1-2: Show the Todo Editor (custom editor should open automatically)
+Write-Host "Step 1: Show the Todo Editor"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # Step 3-5: The visual editor is a webview — interactions are mostly mouse-driven
 # and difficult to automate via SendKeys. Show the board and pause.
 # The user may need to manually interact for drag/drop and clicking.
+Write-Host "Step 2: Pause to show board"
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 4-5: Use keyboard Tab to navigate and Enter/Space to interact
+Write-Host "Step 3: Add a new task via keyboard"
 Send-Keys "{TAB}" $DelayAfterKeystroke       # focus into webview
 Send-Keys "{TAB}" $DelayAfterKeystroke       # navigate to add button area
 Send-Keys "{ENTER}" $DelayQuickPick          # trigger add task
@@ -75,12 +78,14 @@ Send-Keys "{ENTER}" $DelayAfterCommand
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 7: Check a task (Tab to checkbox, Space to toggle)
+Write-Host "Step 4: Check a task checkbox"
 Send-Keys "{TAB}" $DelayAfterKeystroke
 Send-Keys "{TAB}" $DelayAfterKeystroke
 Send-Keys " " $DelayAfterKeystroke           # toggle checkbox
 Start-Sleep -Milliseconds $DelayPause
 
 # Pause for viewer
+Write-Host "Step 5: Pause for viewer"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------

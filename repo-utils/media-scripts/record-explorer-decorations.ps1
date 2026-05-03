@@ -32,9 +32,11 @@ Initialize-Workspace -FixturePath $fixture
 Start-Recording
 
 # Step 1: Show Explorer with decorations
+Write-Host "Step 1: Show Explorer with decorations"
 Send-Keys "^+e" $DelayPause
 
 # Step 2: Scroll through folders slowly
+Write-Host "Step 2: Scroll through folders"
 Send-Keys "{DOWN}" $DelayAfterKeystroke
 Send-Keys "{DOWN}" $DelayAfterKeystroke
 Send-Keys "{DOWN}" $DelayAfterKeystroke
@@ -43,12 +45,14 @@ Send-Keys "{DOWN}" $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayShort
 
 # Step 3-4: Expand a folder to show propagation
+Write-Host "Step 3: Expand folder to show propagation"
 Send-Keys "{RIGHT}" $DelayAfterKeystroke     # expand current folder
 Send-Keys "{DOWN}" $DelayAfterKeystroke
 Send-Keys "{DOWN}" $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 5-6: Disable decorations via Manage features
+Write-Host "Step 4: Disable decorations via Manage features"
 Invoke-VSCodeCommand "Memoria: Manage features"
 Start-Sleep -Milliseconds $DelayQuickPick
 
@@ -57,16 +61,19 @@ Send-Keys " " $DelayAfterKeystroke           # toggle off
 Send-Keys "{ENTER}" $DelayAfterCommand
 
 # Step 7: Show Explorer without decorations
+Write-Host "Step 5: Show Explorer without decorations"
 Send-Keys "^+e" $DelayShort
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # Step 8: Re-enable decorations
+Write-Host "Step 6: Re-enable decorations"
 Invoke-VSCodeCommand "Memoria: Manage features"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys " " $DelayAfterKeystroke           # toggle back on
 Send-Keys "{ENTER}" $DelayAfterCommand
 
 # Step 9: Show decorations reappeared
+Write-Host "Step 7: Show decorations reappeared"
 Send-Keys "^+e" $DelayShort
 Start-Sleep -Milliseconds ($DelayPause * 2)
 

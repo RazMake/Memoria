@@ -57,10 +57,10 @@ Set-Content (Join-Path $fixture "00-Workstreams/All.todo.md") -Value @"
 "@ -Encoding UTF8
 
 # --- Start recording ----------------------------------------------------------
-Start-Recording -Limit "00:00:50"
+Start-Recording
 
 # Step 1: Show the current All.todo.md before reinit
-# Open it so the viewer sees the user's tasks that are at risk
+Write-Host "Step 1: Show All.todo.md with user tasks"
 Send-Keys "^p" $DelayQuickPick
 Type-Text "All.todo" $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand
@@ -70,50 +70,50 @@ Send-Keys "^{END}" $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayPause        # pause on completed tasks
 
 # Step 2: Run Initialize workspace (reinit path)
+Write-Host "Step 2: Run Initialize workspace (reinit)"
 Invoke-VSCodeCommand "Memoria: Initialize workspace"
 
 # Step 3: Reinit confirmation prompt — confirm
+Write-Host "Step 3: Confirm reinit prompt"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand       # confirm reinit
 
 # Step 4: Blueprint picker
+Write-Host "Step 4: Select blueprint"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand       # select same blueprint
 
 # Step 5: Extra folders checklist
+Write-Host "Step 5: Handle extra folders checklist"
 Start-Sleep -Milliseconds $DelayQuickPick
-# Browse the list
 Send-Keys "{DOWN}" $DelayAfterKeystroke
-# Uncheck one folder (Space)
 Send-Keys " " $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand       # confirm
 
 # Step 6: Modified files checklist
-# All.todo.md appears (it was modified after the first init).
-# Check it to open the diff editor after reinit.
+Write-Host "Step 6: Handle modified files checklist"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys " " $DelayAfterKeystroke           # check All.todo.md for diff
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand       # confirm
 
 # Step 7: Diff editor webview opens
-# Pause so the viewer can see the diff hunks (two change sections)
+Write-Host "Step 7: Show diff editor with two hunks"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
-# Step 8: Toggle Hunk 1 to "Keep" (active tasks preserved)
-# The webview supports keyboard shortcuts:
-#   Number keys 1-9 toggle Keep/Ignore on the corresponding hunk
-#   Ctrl+Enter triggers Apply & Close
+# Step 8: Toggle Hunk 1 to "Keep"
+Write-Host "Step 8: Toggle Hunk 1 to Keep"
 Send-Keys "{TAB}" $DelayAfterKeystroke       # focus into webview
 Send-Keys "1" $DelayAfterKeystroke           # toggle Hunk 1 to "Keep"
 Start-Sleep -Milliseconds $DelayPause        # pause so viewer sees the change
 
 # Step 9: Apply the partial merge (Ctrl+Enter)
+Write-Host "Step 9: Apply & Close"
 Send-Keys "^{ENTER}" $DelayAfterCommand      # Apply & Close — panel closes
 
 # Step 10: Open the result file to show partial merge
-# Active tasks preserved, completed section reset, no blueprint sample todo
+Write-Host "Step 10: Show result — active tasks preserved"
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "^p" $DelayQuickPick
 Type-Text "All.todo" $DelayShort

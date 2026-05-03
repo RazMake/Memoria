@@ -1,17 +1,14 @@
 # Recording script: Contacts sidebar overview
 # ==============================================
-# Shows: Browsing, searching, and managing contacts from the sidebar
+# Shows: Browsing, searching, and adding contacts via the sidebar
 #
 # Steps:
 #   1. Open the Contacts sidebar panel
-#   2. Show the grouped list of contacts (Team.md, Colleagues.md)
+#   2. Expand a contact group to show its members
 #   3. Use the search box — type a name fragment, show filtered results
 #   4. Clear the search
-#   5. Click the "+" button to add a new person
-#   6. Select a group, fill in a few fields (nickname, full name)
-#   7. Save the contact — it appears in the sidebar list
-#   8. Click an existing contact row to open the edit form
-#   9. Show the inline action icons (edit, move, delete) on hover
+#   5. Add a new colleague by editing Colleagues.md directly
+#   6. Save — sidebar auto-refreshes with the new entry
 
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
@@ -32,55 +29,57 @@ Initialize-Workspace -FixturePath $fixture
 Start-Recording
 
 # Step 1: Open Contacts sidebar
-# Use Command Palette to focus the Contacts view
+Write-Host "Step 1: Open Contacts sidebar"
 Invoke-VSCodeCommand "Memoria: Focus Contacts"
 Start-Sleep -Milliseconds $DelayPause
 
-# Step 2: Browse the contact groups
-Send-Keys "{DOWN}" $DelayAfterKeystroke
-Send-Keys "{DOWN}" $DelayAfterKeystroke
-Send-Keys "{RIGHT}" $DelayAfterKeystroke     # expand a group
-Send-Keys "{DOWN}" $DelayAfterKeystroke
-Send-Keys "{DOWN}" $DelayAfterKeystroke
+# Step 2: Browse the contact groups (Tab into webview, expand a group)
+Write-Host "Step 2: Browse the contact groups"
+Send-Keys "{TAB}" $DelayAfterKeystroke       # enter webview → search input
+Send-Keys "{TAB}" $DelayAfterKeystroke       # → add button
+Send-Keys "{TAB}" $DelayAfterKeystroke       # → first group summary
+Send-Keys " " $DelayAfterKeystroke           # expand group
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 3: Search for a contact
-# Use the tree view filter (Ctrl+F in sidebar or type to filter)
-Send-Keys "^f" $DelayShort
-Type-Text "John" $DelayAfterKeystroke
+Write-Host "Step 3: Search for a contact"
+Send-Keys "+{TAB}" $DelayAfterKeystroke      # → add button
+Send-Keys "+{TAB}" $DelayAfterKeystroke      # → search input
+Type-Text "Jane" $DelayAfterKeystroke
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 4: Clear the search
-Send-Keys "{ESCAPE}" $DelayShort
+Write-Host "Step 4: Clear the search"
+Send-Keys "^a" $DelayAfterKeystroke          # select all in search field
+Send-Keys "{BACKSPACE}" $DelayAfterKeystroke # clear the search text
 Start-Sleep -Milliseconds $DelayShort
 
-# Step 5-7: Add a new contact via Command Palette
-Invoke-VSCodeCommand "Memoria: Add Person"
-Start-Sleep -Milliseconds $DelayQuickPick
-
-# Select group
-Send-Keys "{ENTER}" $DelayQuickPick
-
-# Fill in fields — nickname
-Type-Text "alex" $DelayAfterKeystroke
-Send-Keys "{ENTER}" $DelayQuickPick
-
-# Full name
-Type-Text "Alex Rivera" $DelayAfterKeystroke
-Send-Keys "{ENTER}" $DelayQuickPick
-
-# Title
-Type-Text "Software Engineer" $DelayAfterKeystroke
+# Step 5: Add a new colleague by editing the file directly
+Write-Host "Step 5: Open Colleagues.md"
+Send-Keys "^p" $DelayQuickPick               # Quick Open
+Type-Text "Colleagues" $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand
 
-Start-Sleep -Milliseconds $DelayPause
+Write-Host "Step 5: Type new contact at end of file"
+Send-Keys "^{END}" $DelayShort               # go to end of file
+$newContact = @"
 
-# Step 8-9: Show contacts list again
+# alex
+- Nickname: Alex
+- FullName: Alex Rivera
+- Title: Software Engineer
+- CareerPathKey: sde
+- PronounsKey: he/him
+"@
+Type-Text $newContact $DelayShort
+
+Write-Host "Step 5: Save the file"
+Send-Keys "^s" $DelayAfterSave
+
+# Step 6: Show sidebar auto-refresh with the new contact
+Write-Host "Step 6: Show the new contact in the sidebar"
+Start-Sleep -Milliseconds $DelayPause        # wait for file watcher debounce
 Invoke-VSCodeCommand "Memoria: Focus Contacts"
-Start-Sleep -Milliseconds $DelayPause
-
-Send-Keys "{DOWN}" $DelayAfterKeystroke
-Send-Keys "{DOWN}" $DelayAfterKeystroke
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------

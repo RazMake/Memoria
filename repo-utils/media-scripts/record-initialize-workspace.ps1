@@ -41,17 +41,21 @@ Start-VSCode -FolderPath $fixture
 Start-Recording
 
 # Focus Explorer
+Write-Host "Step 1: Focus Explorer"
 Send-Keys "^+e" $DelayShort
 
 # Step 1: Open Command Palette
+Write-Host "Step 2: Open Command Palette"
 Open-CommandPalette
 
 # Step 2-3: Type and select the command
+Write-Host "Step 3: Type and select Initialize workspace"
 Type-Text "Memoria: Initialize workspace" $DelayShort
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "{ENTER}" $DelayQuickPick
 
 # Step 4: Blueprint picker — browse, then select
+Write-Host "Step 4: Browse blueprint picker and select"
 Start-Sleep -Milliseconds $DelayPause
 Send-Keys "{DOWN}" $DelayAfterKeystroke
 Send-Keys "{DOWN}" $DelayAfterKeystroke
@@ -61,12 +65,15 @@ Start-Sleep -Milliseconds $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand
 
 # Step 5: Wait for scaffolding
+Write-Host "Step 5: Wait for scaffolding to complete"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # Step 6: Focus Explorer to show folder structure
+Write-Host "Step 6: Focus Explorer to show folder structure"
 Send-Keys "^+e" $DelayPause
 
 # Step 7: Pause for viewer
+Write-Host "Step 7: Pause for viewer"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------

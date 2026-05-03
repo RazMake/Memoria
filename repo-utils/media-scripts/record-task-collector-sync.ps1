@@ -58,9 +58,11 @@ Start-Sleep -Milliseconds $DelayShort
 Start-Recording
 
 # Step 1: Show split view
+Write-Host "Step 1: Show split view"
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 2: Switch to source file (left pane)
+Write-Host "Step 2: Switch to source file and add a task"
 Send-Keys "^1" $DelayShort                   # focus first editor group
 
 # Navigate to end of file and add a new task
@@ -69,12 +71,15 @@ Send-Keys "{ENTER}" $DelayAfterKeystroke
 Type-Text "- [ ] Review the proposal" $DelayShort
 
 # Step 3: Save
+Write-Host "Step 3: Save source file"
 Send-Keys "^s" $DelayAfterSave
 
 # Step 4: Wait for collector to update
+Write-Host "Step 4: Wait for collector to update"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # Step 5: Switch to collector (right pane)
+Write-Host "Step 5: Switch to collector and check off a task"
 Send-Keys "^2" $DelayShort                   # focus second editor group
 Start-Sleep -Milliseconds $DelayShort
 
@@ -87,16 +92,20 @@ Send-Keys "{ENTER}" $DelayShort              # replace
 Send-Keys "{ESCAPE}" $DelayShort             # close find
 
 # Step 6: Save collector
+Write-Host "Step 6: Save collector file"
 Send-Keys "^s" $DelayAfterSave
 
 # Step 7-8: Wait for sync
+Write-Host "Step 7: Wait for two-way sync"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # Switch back to source to show synced state
+Write-Host "Step 8: Switch to source to show synced state"
 Send-Keys "^1" $DelayShort
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 9: Pause for viewer
+Write-Host "Step 9: Pause for viewer"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------

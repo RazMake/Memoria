@@ -50,40 +50,49 @@ Send-Keys "{ENTER}" $DelayAfterKeystroke
 Start-Recording
 
 # Step 2: Type {date} trigger
+Write-Host "Step 1: Type {date} trigger"
 Type-Text "{date}" $DelayShort
 Start-Sleep -Milliseconds $DelayQuickPick
 
 # Step 3: Select from autocomplete
+Write-Host "Step 2: Select Date snippet from autocomplete"
 Send-Keys "{ENTER}" $DelayQuickPick
 
 # Step 4-5: Select format
+Write-Host "Step 3: Select date format"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand       # select first format (YYYY-MM-dd)
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 6: New line
+Write-Host "Step 4: New line"
 Send-Keys "{ENTER}" $DelayAfterKeystroke
 
 # Step 7: Type {time} trigger
+Write-Host "Step 5: Type {time} trigger"
 Type-Text "{time}" $DelayShort
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayQuickPick
 
 # Step 8: Select time format
+Write-Host "Step 6: Select time format"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand
 Start-Sleep -Milliseconds $DelayPause
 
 # Step 9: New line, type {now}
+Write-Host "Step 7: Type {now} trigger"
 Send-Keys "{ENTER}" $DelayAfterKeystroke
 Type-Text "{now}" $DelayShort
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayQuickPick
 
+Write-Host "Step 8: Select date+time format"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand
 
 # Step 10: Pause to show result
+Write-Host "Step 9: Pause to show result"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------

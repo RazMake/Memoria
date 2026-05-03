@@ -19,7 +19,7 @@ $CodeExe         = if ($env:VSCODE_EXE) { $env:VSCODE_EXE } else { "code" }
 $CaptureWidth    = 800
 $CaptureHeight   = 500
 $CaptureFps      = 15     # frames per second
-$RecordingLimit  = "00:00:20"   # default max duration per clip (HH:MM:SS)
+$RecordingLimit  = "00:05:00"   # safety cap — scripts call Stop-Recording when done
 
 # --------------- timing (milliseconds) ----------------------------------------
 $DelayAfterCommand       = 1500   # wait after executing a command palette action
@@ -160,12 +160,12 @@ function Wait-ForVSCodeWindow {
 function Move-VSCodeWindow {
     <#
     .SYNOPSIS  Position and resize the VS Code window to the capture dimensions.
-               Centers the window on the primary monitor when possible.
+               Places the window in the upper-right area of the primary monitor.
     #>
     $screenW = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
     $screenH = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-    $left    = [math]::Max(0, [math]::Floor(($screenW - $CaptureWidth)  / 2))
-    $top     = [math]::Max(0, [math]::Floor(($screenH - $CaptureHeight) / 2))
+    $left    = [math]::Max(0, [math]::Floor(($screenW - $CaptureWidth)  * 3 / 4))
+    $top     = [math]::Max(0, [math]::Floor(($screenH - $CaptureHeight) * 1 / 4))
     [Win32Window]::MoveWindow($script:VSCodeHwnd,
                               $left, $top,
                               $CaptureWidth, $CaptureHeight, $true) | Out-Null
