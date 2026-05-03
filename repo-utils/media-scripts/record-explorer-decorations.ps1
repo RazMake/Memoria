@@ -56,7 +56,9 @@ Write-Host "Step 4: Disable decorations via Manage features"
 Invoke-VSCodeCommand "Memoria: Manage features"
 Start-Sleep -Milliseconds $DelayQuickPick
 
-# Navigate to Explorer Decorations and uncheck
+# Filter to Explorer Decorations and uncheck
+Type-Text "Decorations" $DelayShort
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # move focus from input to list item
 Send-Keys " " $DelayAfterKeystroke           # toggle off
 Send-Keys "{ENTER}" $DelayAfterCommand
 
@@ -69,6 +71,8 @@ Start-Sleep -Milliseconds ($DelayPause * 2)
 Write-Host "Step 6: Re-enable decorations"
 Invoke-VSCodeCommand "Memoria: Manage features"
 Start-Sleep -Milliseconds $DelayQuickPick
+Type-Text "Decorations" $DelayShort
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # move focus from input to list item
 Send-Keys " " $DelayAfterKeystroke           # toggle back on
 Send-Keys "{ENTER}" $DelayAfterCommand
 

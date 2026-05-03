@@ -409,37 +409,19 @@ function Stop-Recording {
 
 function Close-ScreenToGif {
     <#
-    .SYNOPSIS  Close all ScreenToGif windows gracefully after the recording
-               has been saved.
+    .SYNOPSIS  Close all ScreenToGif processes after the recording has been saved.
+               Uses process kill because ScreenToGif's WPF exit-confirmation dialog
+               is a modal overlay inside the main window's message loop — SendMessage
+               WM_CLOSE blocks until the user dismisses it, and the dialog has no
+               separate HWND to target with SendKeys. Since the recording was already
+               saved by Stop-Recording, killing the process is safe.
     #>
     $stgProcs = Get-Process -Name "ScreenToGif" -ErrorAction SilentlyContinue
     if (-not $stgProcs) { return }
 
     Write-Host "Closing ScreenToGif…"
     foreach ($p in $stgProcs) {
-        if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
-            # WM_CLOSE triggers ScreenToGif's in-window exit confirmation
-            # dialog (a WPF modal overlay, NOT a separate Win32 window).
-            [Win32Window]::SendMessage($p.MainWindowHandle, [Win32Window]::WM_CLOSE,
-                                       [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
-            Start-Sleep -Milliseconds 1500
-
-            # Focus the ScreenToGif window and press Enter to confirm exit.
-            # The dialog lives inside the main window, so we target the same
-            # HWND — FindWindow won't find it as a separate window.
-            [Win32Window]::ForceForeground($p.MainWindowHandle)
-            Start-Sleep -Milliseconds 300
-            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-            Start-Sleep -Milliseconds 2000
-        }
-    }
-
-    # If any ScreenToGif process is still alive, force-kill it.
-    # The recording was already saved, so no data loss.
-    $stgProcs = Get-Process -Name "ScreenToGif" -ErrorAction SilentlyContinue
-    foreach ($p in $stgProcs) {
         if (-not $p.HasExited) {
-            Write-Host "  ScreenToGif still running — killing process."
             $p.Kill()
         }
     }
