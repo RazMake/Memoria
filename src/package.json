@@ -80,6 +80,11 @@
                 "command": "memoria.showDetailedContactHover",
                 "title": "Show detailed contact hover",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.todoEditor.noop",
+                "title": "No-op (todo editor keybinding shadow)",
+                "category": "Memoria"
             }
         ],
         "keybindings": [
@@ -88,6 +93,24 @@
                 "key": "ctrl+shift+h",
                 "mac": "cmd+shift+h",
                 "when": "editorTextFocus && memoria.snippetsActive"
+            },
+            {
+                "command": "memoria.todoEditor.noop",
+                "key": "ctrl+b",
+                "mac": "cmd+b",
+                "when": "activeCustomEditorId == 'memoria.todoEditor'"
+            },
+            {
+                "command": "memoria.todoEditor.noop",
+                "key": "ctrl+i",
+                "mac": "cmd+i",
+                "when": "activeCustomEditorId == 'memoria.todoEditor'"
+            },
+            {
+                "command": "memoria.todoEditor.noop",
+                "key": "ctrl+l",
+                "mac": "cmd+l",
+                "when": "activeCustomEditorId == 'memoria.todoEditor'"
             }
         ],
         "viewsContainers": {
@@ -151,6 +174,10 @@
                 },
                 {
                     "command": "memoria.showDetailedContactHover",
+                    "when": "false"
+                },
+                {
+                    "command": "memoria.todoEditor.noop",
                     "when": "false"
                 },
                 {

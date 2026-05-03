@@ -156,5 +156,9 @@ export function registerCommands(
                 }
             },
         ),
+        // Noop command used to shadow built-in keybindings (e.g. Ctrl+B toggling
+        // the sidebar) when the todo editor webview has focus.  The actual
+        // formatting is handled inside the webview's own keydown handler.
+        vscode.commands.registerCommand("memoria.todoEditor.noop", () => {}),
     );
 }
