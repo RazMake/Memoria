@@ -3,16 +3,14 @@
 # Shows: The visual editor for .todo.md files with card interactions
 #
 # Steps:
-#   1. Open a .todo.md file — the visual Todo Editor appears
-#   2. Show the task cards with checkboxes and text
-#   3. Hover over a card to reveal the drag handle and source link
-#   4. Click "+ Add task" in the toolbar — popup appears
-#   5. Type a task name, press Enter — new card appears
-#   6. Drag a task card to reorder (keyboard-based reorder)
-#   7. Click a checkbox on an active task — moves to Completed
-#   8. Expand the Completed section
-#   9. Click a completed task's checkbox — moves back to active
-#  10. Double-click a task body to edit inline
+#   1-2. Open a .todo.md file — the visual Todo Editor appears, pause to show board
+#   3.   Navigate cards with arrow keys to show highlight
+#   4-5. Press 'a' to open add-task popup, type a name, Enter — new card appears
+#   6.   Reorder with Ctrl+Down
+#   7.   Complete a task with Space — moves to Completed
+#   8.   Expand the Completed section with 'c'
+#   9.   Uncomplete a completed task with Space — moves back to active
+#  10.   Edit a task inline with Enter — popup opens, append text, confirm
 
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
@@ -47,45 +45,82 @@ Set-Content (Join-Path $fixture "00-Workstreams/All.todo.md") -Value @"
       _Completed 2026-04-18_
 "@ -Encoding UTF8
 
-# --- Launch VS Code -----------------------------------------------------------
-Start-VSCode -FolderPath $fixture
-
-# Open the todo file
+# Open the todo file (same VS Code window — do NOT re-launch)
 Send-Keys "^p" $DelayQuickPick
 Type-Text "All.todo" $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand
+Start-Sleep -Milliseconds $DelayPause       # let custom editor load
 
 # --- Start recording ----------------------------------------------------------
 Start-Recording
 
 # Step 1-2: Show the Todo Editor (custom editor should open automatically)
-Write-Host "Step 1: Show the Todo Editor"
+Write-Host "Step 1-2: Show the Todo Editor board"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
-# Step 3-5: The visual editor is a webview — interactions are mostly mouse-driven
-# and difficult to automate via SendKeys. Show the board and pause.
-# The user may need to manually interact for drag/drop and clicking.
-Write-Host "Step 2: Pause to show board"
+# The webview has built-in keyboard shortcuts (see keyboardNav.ts / main.ts):
+#   a/n        → open add-task popup
+#   ArrowDown  → highlight next card
+#   ArrowUp    → highlight previous card
+#   Space      → toggle complete/uncomplete on highlighted card
+#   c          → toggle completed section expanded/collapsed
+#   Enter      → edit highlighted card inline
+#   Ctrl+Down  → swap highlighted card down (reorder)
+#   Ctrl+Up    → swap highlighted card up (reorder)
+#   Delete     → delete highlighted card
+# These fire inside the webview once it has focus — no Tab navigation needed.
+
+# Step 3: Navigate cards with arrow keys to show highlight
+Write-Host "Step 3: Navigate cards with arrow keys"
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # highlight first card
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # highlight second card
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # highlight third card
 Start-Sleep -Milliseconds $DelayPause
 
-# Step 4-5: Use keyboard Tab to navigate and Enter/Space to interact
-Write-Host "Step 3: Add a new task via keyboard"
-Send-Keys "{TAB}" $DelayAfterKeystroke       # focus into webview
-Send-Keys "{TAB}" $DelayAfterKeystroke       # navigate to add button area
-Send-Keys "{ENTER}" $DelayQuickPick          # trigger add task
+# Step 4-5: Add a new task via the 'a' shortcut → popup appears
+Write-Host "Step 4-5: Add a new task"
+Send-Keys "a" $DelayQuickPick                # open add-task popup
 Type-Text "Prepare sprint retrospective" $DelayAfterKeystroke
-Send-Keys "{ENTER}" $DelayAfterCommand
+Send-Keys "{ENTER}" $DelayAfterCommand       # confirm — new card appears
 Start-Sleep -Milliseconds $DelayPause
 
-# Step 7: Check a task (Tab to checkbox, Space to toggle)
-Write-Host "Step 4: Check a task checkbox"
-Send-Keys "{TAB}" $DelayAfterKeystroke
-Send-Keys "{TAB}" $DelayAfterKeystroke
-Send-Keys " " $DelayAfterKeystroke           # toggle checkbox
+# Step 6: Reorder — move the highlighted task down with Ctrl+Down
+Write-Host "Step 6: Reorder task with Ctrl+Down"
+Send-Keys "^{DOWN}" $DelayAfterKeystroke     # swap down
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys "^{DOWN}" $DelayAfterKeystroke     # swap down again
 Start-Sleep -Milliseconds $DelayPause
 
-# Pause for viewer
-Write-Host "Step 5: Pause for viewer"
+# Step 7: Complete a task — Space toggles the highlighted card
+Write-Host "Step 7: Complete a task (Space)"
+Send-Keys "{UP}" $DelayAfterKeystroke        # highlight first task
+Send-Keys "{UP}" $DelayAfterKeystroke
+Send-Keys "{UP}" $DelayAfterKeystroke
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys " " $DelayAfterKeystroke           # toggle → moves to Completed
+Start-Sleep -Milliseconds $DelayPause
+
+# Step 8: Expand the Completed section
+Write-Host "Step 8: Expand Completed section (c)"
+Send-Keys "c" $DelayAfterKeystroke           # toggle completed section
+Start-Sleep -Milliseconds $DelayPause
+
+# Step 9: Uncomplete a task — navigate to a completed card and Space
+Write-Host "Step 9: Uncomplete a completed task"
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # move into completed list
+Send-Keys "{DOWN}" $DelayAfterKeystroke
+Start-Sleep -Milliseconds $DelayShort
+Send-Keys " " $DelayAfterKeystroke           # uncomplete → moves back to active
+Start-Sleep -Milliseconds $DelayPause
+
+# Step 10: Edit a task inline — Enter on highlighted card
+Write-Host "Step 10: Edit task inline (Enter)"
+Send-Keys "{UP}" $DelayAfterKeystroke        # highlight an active task
+Send-Keys "{ENTER}" $DelayQuickPick          # open edit popup
+Type-Text " — updated" $DelayAfterKeystroke  # append text
+Send-Keys "{ENTER}" $DelayAfterCommand       # confirm edit
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
 # --- Stop recording -----------------------------------------------------------
