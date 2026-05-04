@@ -1,9 +1,10 @@
 {
     "name": "memoria",
-    "displayName": "Memoria",
+    "displayName": "Memoria - Templated Notebook",
     "description": "Scaffold a personal knowledge base in a workspace - organize notes, meetings, contacts, and TODOs with optional Copilot integration.",
     "version": "0.0.1",
     "publisher": "RazMake",
+    "icon": "resources/media/icon.png",
     "repository": {
         "type": "git",
         "url": "https://github.com/RazMake/Memoria"
