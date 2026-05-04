@@ -560,7 +560,6 @@ function Initialize-Workspace {
     param([string]$FixturePath)
     Invoke-VSCodeCommand "Memoria: Initialize workspace"
     Start-Sleep -Milliseconds $DelayQuickPick        # wait for blueprint picker
-    Send-Keys "{DOWN}" $DelayAfterKeystroke           # ensure an item is highlighted
     Send-Keys "{ENTER}" $DelayAfterCommand            # select first blueprint
     Wait-ForPath (Join-Path $FixturePath ".memoria/blueprint.json") 30000
 }

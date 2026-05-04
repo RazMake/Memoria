@@ -6,14 +6,13 @@
 # Steps:
 #   1. Show All.todo.md with user's tasks (active + completed)
 #   2. Open the Command Palette → "Memoria: Initialize workspace"
-#   3. The reinit prompt appears — confirm to proceed
-#   4. Select a blueprint (same one)
-#   5. Extra folders checklist — uncheck one, confirm
-#   6. Modified files checklist — check All.todo.md for diff, confirm
-#   7. Diff editor opens — viewer sees two hunks
-#   8. Press "1" to toggle Hunk 1 to "Keep" (active tasks)
-#   9. Ctrl+Enter to Apply & Close
-#  10. Open the result file — active tasks preserved, completed section reset
+#   3. Select a blueprint (same one)
+#   4. Extra folders checklist — keep all, confirm
+#   5. Modified files checklist — check All.todo.md for diff, confirm
+#   6. Diff editor opens — viewer sees two hunks
+#   7. Press "1" to toggle Hunk 1 to "Keep" (active tasks)
+#   8. Ctrl+Enter to Apply & Close
+#   9. Open the result file — active tasks preserved, completed section reset
 
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_recording-settings.ps1"
@@ -73,47 +72,41 @@ Start-Sleep -Milliseconds $DelayPause        # pause on completed tasks
 Write-Host "Step 2: Run Initialize workspace (reinit)"
 Invoke-VSCodeCommand "Memoria: Initialize workspace"
 
-# Step 3: Reinit confirmation prompt — confirm
-Write-Host "Step 3: Confirm reinit prompt"
-Start-Sleep -Milliseconds $DelayQuickPick
-Send-Keys "{ENTER}" $DelayAfterCommand       # confirm reinit
-
-# Step 4: Blueprint picker
-Write-Host "Step 4: Select blueprint"
+# Step 3: Blueprint picker (there is no reinit confirmation prompt —
+# the command goes straight to the blueprint picker)
+Write-Host "Step 3: Select blueprint"
 Start-Sleep -Milliseconds $DelayQuickPick
 Send-Keys "{ENTER}" $DelayAfterCommand       # select same blueprint
 
-# Step 5: Extra folders checklist
-Write-Host "Step 5: Handle extra folders checklist"
+# Step 4: Extra folders checklist — all pre-checked (keep), just confirm
+Write-Host "Step 4: Handle extra folders checklist"
 Start-Sleep -Milliseconds $DelayQuickPick
-Send-Keys "{DOWN}" $DelayAfterKeystroke
-Send-Keys " " $DelayAfterKeystroke
-Start-Sleep -Milliseconds $DelayShort
-Send-Keys "{ENTER}" $DelayAfterCommand       # confirm
+Send-Keys "{ENTER}" $DelayAfterCommand       # keep all folders as-is
 
-# Step 6: Modified files checklist
-Write-Host "Step 6: Handle modified files checklist"
+# Step 5: Modified files checklist — none pre-checked, check All.todo.md
+Write-Host "Step 5: Handle modified files checklist"
 Start-Sleep -Milliseconds $DelayQuickPick
+Send-Keys "{DOWN}" $DelayAfterKeystroke      # move focus from input box to first item
 Send-Keys " " $DelayAfterKeystroke           # check All.todo.md for diff
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "{ENTER}" $DelayAfterCommand       # confirm
 
-# Step 7: Diff editor webview opens
-Write-Host "Step 7: Show diff editor with two hunks"
+# Step 6: Diff editor webview opens
+Write-Host "Step 6: Show diff editor with two hunks"
 Start-Sleep -Milliseconds ($DelayPause * 2)
 
-# Step 8: Toggle Hunk 1 to "Keep"
-Write-Host "Step 8: Toggle Hunk 1 to Keep"
+# Step 7: Toggle Hunk 1 to "Keep"
+Write-Host "Step 7: Toggle Hunk 1 to Keep"
 Send-Keys "{TAB}" $DelayAfterKeystroke       # focus into webview
 Send-Keys "1" $DelayAfterKeystroke           # toggle Hunk 1 to "Keep"
 Start-Sleep -Milliseconds $DelayPause        # pause so viewer sees the change
 
-# Step 9: Apply the partial merge (Ctrl+Enter)
-Write-Host "Step 9: Apply & Close"
+# Step 8: Apply the partial merge (Ctrl+Enter)
+Write-Host "Step 8: Apply & Close"
 Send-Keys "^{ENTER}" $DelayAfterCommand      # Apply & Close — panel closes
 
-# Step 10: Open the result file to show partial merge
-Write-Host "Step 10: Show result — active tasks preserved"
+# Step 9: Open the result file to show partial merge
+Write-Host "Step 9: Show result — active tasks preserved"
 Start-Sleep -Milliseconds $DelayShort
 Send-Keys "^p" $DelayQuickPick
 Type-Text "All.todo" $DelayShort
