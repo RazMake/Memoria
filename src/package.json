@@ -1,5 +1,5 @@
 {
-    "name": "memoria",
+    "name": "memoria-notebook",
     "displayName": "Memoria - Templated Notebook",
     "description": "Scaffold a personal knowledge base in a workspace - organize notes, meetings, contacts, and TODOs with optional Copilot integration.",
     "version": "0.0.1",
