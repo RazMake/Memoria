@@ -1,6 +1,54 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "./blueprints/manifestManager";
+import type { DefaultFilesEntry } from "./blueprints/types";
 import { getRootFolderName, classifyFolderKey, classifyFilePath } from "./blueprints/workspaceUtils";
+import { stripTrailingSlash } from "./utils/path";
+
+interface FolderCheckResult {
+    folderUri: string;
+    compactDescendants: Record<string, true>;
+}
+
+/**
+ * Checks whether at least one default file in `entry` exists on disk for `root` + `relFolder`.
+ * Returns the folder URI and compact-chain descendants if a file exists, or `null` otherwise.
+ */
+async function checkFolderHasDefaultFile(
+    root: vscode.Uri,
+    relFolder: string,
+    entry: DefaultFilesEntry,
+    rootNameSet: ReadonlySet<string>,
+    allRoots: readonly vscode.Uri[],
+): Promise<FolderCheckResult | null> {
+    const folderSegments = stripTrailingSlash(relFolder);
+
+    for (const fileName of entry.filesToOpen) {
+        const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(fileName, rootNameSet);
+        const fileUri = isWorkspaceAbsolute
+            ? vscode.Uri.joinPath(
+                  allRoots.find((r) => getRootFolderName(r) === fileRootName) ?? root,
+                  ...relPath.split("/").filter(Boolean),
+              )
+            : vscode.Uri.joinPath(root, ...folderSegments.split("/"), ...fileName.split("/"));
+
+        try {
+            await vscode.workspace.fs.stat(fileUri);
+        } catch {
+            continue;
+        }
+
+        const folderUri = folderSegments
+            ? vscode.Uri.joinPath(root, ...folderSegments.split("/"))
+            : root;
+
+        const compactDescendants: Record<string, true> = {};
+        await addCompactChainDescendants(folderUri, compactDescendants);
+
+        return { folderUri: folderUri.toString(), compactDescendants };
+    }
+
+    return null;
+}
 
 /**
  * Walks down single-child subfolder chains and adds each step to `lookup`.
@@ -46,83 +94,62 @@ export async function updateDefaultFileContext(
     allRoots: vscode.Uri[],
     manifest: ManifestManager
 ): Promise<void> {
-    let available = false;
-    const folderLookup: Record<string, true> = {};
+    const { available, folderLookup } = initializedRoot
+        ? await scanDefaultFiles(initializedRoot, allRoots, manifest)
+        : { available: false, folderLookup: {} as Record<string, true> };
 
-    if (initializedRoot) {
-        const defaultFiles = await manifest.readDefaultFiles(initializedRoot);
-        if (defaultFiles) {
-            const rootNameSet = new Set(allRoots.map(getRootFolderName));
+    await vscode.commands.executeCommand("setContext", "memoria.defaultFileAvailable", available);
+    await vscode.commands.executeCommand("setContext", "memoria.defaultFileFolders", folderLookup);
+}
 
-            // Each root×key combination requires a file-system stat. These checks are
-            // independent so they are collected into an array and awaited in parallel,
-            // reducing total latency from O(n) sequential to O(1) (one round trip).
-            const checks: Promise<void>[] = [];
+function resolveRootsForKey(
+    key: string,
+    rootNameSet: ReadonlySet<string>,
+    allRoots: readonly vscode.Uri[],
+): { isRootSpecific: boolean; relFolder: string; rootName: string | undefined; matchedRoots: vscode.Uri[] } {
+    const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
+    const matchedRoots = isRootSpecific
+        ? allRoots.filter((r) => getRootFolderName(r) === rootName)
+        : [...allRoots];
+    return { isRootSpecific, relFolder, rootName, matchedRoots };
+}
 
-            for (const [key, entry] of Object.entries(defaultFiles)) {
-                const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
-
-                // Root-specific entries apply only to matching roots.
-                // Relative entries apply to all roots that don't have a root-specific override.
-                const targetRoots = isRootSpecific
-                    ? allRoots.filter((r) => getRootFolderName(r) === rootName)
-                    : allRoots.filter((r) => !defaultFiles[getRootFolderName(r) + "/" + key]);
-
-                for (const root of targetRoots) {
-                    checks.push(
-                        (async () => {
-                            const folderSegments = relFolder.endsWith("/") ? relFolder.slice(0, -1) : relFolder;
-                            let folderHasFile = false;
-                            for (const fileName of entry.filesToOpen) {
-                                const { isWorkspaceAbsolute, rootName: fileRootName, relPath } = classifyFilePath(fileName, rootNameSet);
-                                let fileUri: vscode.Uri;
-                                if (isWorkspaceAbsolute) {
-                                    const fileRoot = allRoots.find((r) => getRootFolderName(r) === fileRootName) ?? root;
-                                    fileUri = vscode.Uri.joinPath(fileRoot, ...relPath.split("/").filter(Boolean));
-                                } else {
-                                    fileUri = vscode.Uri.joinPath(
-                                        root,
-                                        ...folderSegments.split("/"),
-                                        ...fileName.split("/")
-                                    );
-                                }
-                                try {
-                                    await vscode.workspace.fs.stat(fileUri);
-                                    folderHasFile = true;
-                                    break;
-                                } catch {
-                                    // File does not exist — try next.
-                                }
-                            }
-                            if (folderHasFile) {
-                                available = true;
-                                const folderUri = folderSegments
-                                    ? vscode.Uri.joinPath(root, ...folderSegments.split("/"))
-                                    : root;
-                                folderLookup[folderUri.toString()] = true;
-                                // Also register single-child subfolder chains so the context
-                                // menu appears on compact "parent/child" items in the explorer.
-                                await addCompactChainDescendants(folderUri, folderLookup);
-                            }
-                        })()
-                    );
-                }
-            }
-
-            await Promise.all(checks);
-        }
+async function scanDefaultFiles(
+    initializedRoot: vscode.Uri,
+    allRoots: vscode.Uri[],
+    manifest: ManifestManager
+): Promise<{ available: boolean; folderLookup: Record<string, true> }> {
+    const defaultFiles = await manifest.readDefaultFiles(initializedRoot);
+    if (!defaultFiles) {
+        return { available: false, folderLookup: {} };
     }
 
-    await vscode.commands.executeCommand(
-        "setContext",
-        "memoria.defaultFileAvailable",
-        available
-    );
-    await vscode.commands.executeCommand(
-        "setContext",
-        "memoria.defaultFileFolders",
-        folderLookup
-    );
+    let available = false;
+    const folderLookup: Record<string, true> = {};
+    const rootNameSet = new Set(allRoots.map(getRootFolderName));
+
+    const checks = Object.entries(defaultFiles).flatMap(([key, entry]) => {
+        const { isRootSpecific, relFolder, matchedRoots } = resolveRootsForKey(key, rootNameSet, allRoots);
+
+        const targetRoots = isRootSpecific
+            ? matchedRoots
+            : matchedRoots.filter((r) => !defaultFiles[getRootFolderName(r) + "/" + key]);
+
+        return targetRoots.map((root) =>
+            checkFolderHasDefaultFile(root, relFolder, entry, rootNameSet, allRoots).then(
+                (result) => {
+                    if (result) {
+                        available = true;
+                        folderLookup[result.folderUri] = true;
+                        Object.assign(folderLookup, result.compactDescendants);
+                    }
+                },
+            ),
+        );
+    });
+
+    await Promise.all(checks);
+    return { available, folderLookup };
 }
 
 /**
@@ -134,13 +161,13 @@ export async function updateDefaultFileContext(
  * the previous value itself.
  */
 export interface DefaultFileWatcherHolder { current: vscode.Disposable | undefined; }
-export function registerDefaultFileWatcher(
+export async function registerDefaultFileWatcher(
     context: vscode.ExtensionContext,
     initializedRoot: vscode.Uri | null,
     allRoots: vscode.Uri[],
     manifest: ManifestManager,
     holder: DefaultFileWatcherHolder
-): void {
+): Promise<void> {
     // Dispose previous watchers if any (e.g. on re-init with different default files).
     if (holder.current) {
         holder.current.dispose();
@@ -160,7 +187,7 @@ export function registerDefaultFileWatcher(
     const onConfigChanged = async (): Promise<void> => {
         await updateDefaultFileContext(initializedRoot, allRoots, manifest);
         // Re-register watchers for the (possibly changed) individual files.
-        registerDefaultFileWatcher(context, initializedRoot, allRoots, manifest, holder);
+        await registerDefaultFileWatcher(context, initializedRoot, allRoots, manifest, holder);
     };
     configWatcher.onDidCreate(() => void onConfigChanged());
     configWatcher.onDidChange(() => void onConfigChanged());
@@ -170,24 +197,12 @@ export function registerDefaultFileWatcher(
 
     // Also watch each individual default file for create/delete so context keys
     // update when the user adds or removes the actual files on disk.
-    // Watch in ALL roots, not just the initialized one.
-    // Root-specific entries are watched only in the matching root.
-    void manifest.readDefaultFiles(initializedRoot).then((defaultFiles) => {
-        if (!defaultFiles || Object.keys(defaultFiles).length === 0) {
-            return;
-        }
-
+    const defaultFiles = await manifest.readDefaultFiles(initializedRoot);
+    if (defaultFiles && Object.keys(defaultFiles).length > 0) {
         const rootNameSet = new Set(allRoots.map(getRootFolderName));
 
-        const fileDisposables: vscode.Disposable[] = [];
         for (const [key, entry] of Object.entries(defaultFiles)) {
-            const { isRootSpecific, relFolder, rootName } = classifyFolderKey(key, rootNameSet);
-
-            // For watchers, root-specific entries watch only matching roots.
-            // Relative entries watch all roots (redundant watchers are harmless).
-            const watchRoots = isRootSpecific
-                ? allRoots.filter((r) => getRootFolderName(r) === rootName)
-                : allRoots;
+            const { relFolder, matchedRoots: watchRoots } = resolveRootsForKey(key, rootNameSet, allRoots);
 
             for (const root of watchRoots) {
                 for (const fileName of entry.filesToOpen) {
@@ -196,13 +211,12 @@ export function registerDefaultFileWatcher(
                     );
                     watcher.onDidCreate(() => void updateDefaultFileContext(initializedRoot, allRoots, manifest));
                     watcher.onDidDelete(() => void updateDefaultFileContext(initializedRoot, allRoots, manifest));
-                    fileDisposables.push(watcher);
+                    disposables.push(watcher);
                     context.subscriptions.push(watcher);
                 }
             }
         }
-        disposables.push(...fileDisposables);
-    });
+    }
 
     holder.current = vscode.Disposable.from(...disposables);
 }

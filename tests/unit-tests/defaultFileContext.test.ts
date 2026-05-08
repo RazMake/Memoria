@@ -247,50 +247,50 @@ describe("registerDefaultFileWatcher", () => {
         };
     });
 
-    it("should do nothing when initializedRoot is null", () => {
+    it("should do nothing when initializedRoot is null", async () => {
         const holder: DefaultFileWatcherHolder = { current: undefined };
 
-        registerDefaultFileWatcher(mockContext, null, [], makeManifest(), holder);
+        await registerDefaultFileWatcher(mockContext, null, [], makeManifest(), holder);
 
         expect(mockCreateFileSystemWatcher).not.toHaveBeenCalled();
         expect(holder.current).toBeUndefined();
     });
 
-    it("should dispose previous watcher when re-registering", () => {
+    it("should dispose previous watcher when re-registering", async () => {
         const previousDispose = vi.fn();
         const holder: DefaultFileWatcherHolder = { current: { dispose: previousDispose } };
 
-        registerDefaultFileWatcher(mockContext, null, [], makeManifest(), holder);
+        await registerDefaultFileWatcher(mockContext, null, [], makeManifest(), holder);
 
         expect(previousDispose).toHaveBeenCalledOnce();
         expect(holder.current).toBeUndefined();
     });
 
-    it("should create a file system watcher for the config file", () => {
+    it("should create a file system watcher for the config file", async () => {
         const root = makeUri("/workspace");
         const holder: DefaultFileWatcherHolder = { current: undefined };
 
-        registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
+        await registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
 
         expect(mockCreateFileSystemWatcher).toHaveBeenCalledWith(
             expect.objectContaining({ pattern: ".memoria/default-files.json" }),
         );
     });
 
-    it("should push the config watcher into context subscriptions", () => {
+    it("should push the config watcher into context subscriptions", async () => {
         const root = makeUri("/workspace");
         const holder: DefaultFileWatcherHolder = { current: undefined };
 
-        registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
+        await registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
 
         expect(mockContext.subscriptions.length).toBeGreaterThan(0);
     });
 
-    it("should set holder.current to a disposable", () => {
+    it("should set holder.current to a disposable", async () => {
         const root = makeUri("/workspace");
         const holder: DefaultFileWatcherHolder = { current: undefined };
 
-        registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
+        await registerDefaultFileWatcher(mockContext, root, [root], makeManifest(), holder);
 
         expect(holder.current).toBeDefined();
         expect(holder.current!.dispose).toBeDefined();

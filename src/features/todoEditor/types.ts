@@ -1,15 +1,13 @@
+import type { SnippetSuggestion } from "../snippets/types";
+
+export type { SnippetSuggestion };
+
 export interface UITask {
     id: string;
     bodyHtml: string;
     bodyMarkdown: string;
     completedDate: string | null;
     sourceRelativePath: string | null;
-}
-
-export interface SnippetSuggestion {
-    trigger: string;
-    label: string;
-    description?: string;
 }
 
 export interface ContactTooltipEntry {

@@ -3,7 +3,7 @@
 //   • Collector document — same task list format plus optional suffix lines that carry
 //     metadata (source path and completion date) appended by the formatter.
 import { TASK_LINE_RE, isChecked } from "../../utils/markdownCheckbox";
-import { escapeRegExp } from "../../utils/regex";
+import { type FenceState, parseFenceState, isFenceBoundary } from "../../utils/fenceParser";
 import type {
     CollectorSection,
     ParsedCollectorDocument,
@@ -14,12 +14,6 @@ import type {
 const ACTIVE_HEADING_RE = /^#{1,6}\s+To\s+do\s*$/i;
 const COMPLETED_HEADING_RE = /^#{1,6}\s+Completed\s*$/i;
 const BLANK_LINE_RE = /^\s*$/;
-const FENCE_RE = /^(`{3,}|~{3,})/;
-
-interface FenceState {
-    marker: "`" | "~";
-    length: number;
-}
 
 export function parseTaskBlocks(content: string): TaskBlock[] {
     const lines = splitLines(content);
@@ -236,21 +230,6 @@ function removeIndentPrefix(line: string, indentText: string): string {
         remaining -= 1;
     }
     return line.slice(index);
-}
-
-function parseFenceState(line: string): FenceState | null {
-    const match = FENCE_RE.exec(line.trimStart());
-    if (!match) {
-        return null;
-    }
-    return {
-        marker: match[1][0] as "`" | "~",
-        length: match[1].length,
-    };
-}
-
-function isFenceBoundary(line: string, fence: FenceState): boolean {
-    return new RegExp(`^${escapeRegExp(fence.marker)}{${fence.length},}`).test(line.trimStart());
 }
 
 /**

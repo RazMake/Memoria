@@ -1,56 +1,38 @@
 // Orchestrates task synchronization between source markdown files and the collector document.
-// This class is responsible for the full feature lifecycle: starting and stopping the watcher,
-// reacting to file save and rename events, dispatching sync jobs through the queue, reconciling
-// source and collector documents, and running the aging pass. It is the single entry point for
-// all task collector logic within a given workspace activation.
 import * as vscode from "vscode";
-import { minimatch } from "minimatch";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../../telemetry";
 import { normalizePath } from "../../utils/path";
 import { isMarkdownPath } from "../../utils/markdown";
-import { formatDate, isTaskExpired } from "./aging";
-import { alignTaskSequences, computeTaskFingerprint } from "./taskAlignment";
-import { renderCollector } from "./collectorFormatter";
+import { formatError } from "../../utils/error";
 import { PendingWrites } from "./pendingWrites";
-import { forward, reverse } from "./pathRewriter";
 import { applySourceRenames, type SourceRename } from "./renameHandler";
 import { SyncQueue } from "./syncQueue";
-import { DEFAULT_TASK_COLLECTOR_CONFIG, generateTaskId, getCollectorOrder, getSourceDisplayPath, getTasksForSource, hydrateTaskIndex, pruneOrderReferences, removeTask, upsertTask } from "./taskIndex";
-import { parseCollectorDocument, parseTaskBlocks, markSubtasksCompleted } from "./taskParser";
-import { renderDoneBlock, renderTaskBlock, replaceLineRange, TaskWriter } from "./taskWriter";
-import { isMarkdownDocument, openTextDocumentIfPresent, stringArrayEqual, taskEntriesEqual, type SourceContext, type IndexedTaskLocation } from "./taskHelpers";
+import { hydrateTaskIndex, pruneOrderReferences, removeTask } from "./taskIndex";
+import { TaskWriter } from "./taskWriter";
+import { isMarkdownDocument } from "./taskHelpers";
 import {
-    describeUri as describeUriHelper,
-    resolveSourceUri as resolveSourceUriHelper,
-    findTrackedSources as findTrackedSourcesHelper,
-    getCollectorUri as getCollectorUriHelper,
+    describeUri,
+    resolveSourceUri,
+    findTrackedSources,
+    getCollectorUri,
+    isTrackedSourceUri as isTrackedSourceUriStandalone,
 } from "./taskCollectorPathResolver";
-import {
-    toSourceSnapshot,
-    toCollectorSnapshot,
-    toCollectorBody,
-    toTaskSnapshot,
-    locateSourceTask,
-} from "./taskCollectorTransformer";
-import type { ExistingTaskSnapshot, ParsedCollectorTask, StoredTaskIndex, TaskBlock, TaskCollectorConfig, TaskIndexEntry, TaskSnapshot } from "./types";
-
-/**
- * Maximum number of consecutive aging passes that can fail to locate a task
- * in its source file before the task is removed from the index. Prevents
- * indefinite accumulation of unreachable ghost entries.
- */
-const MAX_AGING_SKIP_COUNT = 5;
+import { TaskReconciler, type TaskCollectorState } from "./taskReconciler";
+import type { TaskCollectorConfig } from "./types";
 
 export class TaskCollectorFeature implements vscode.Disposable {
-    private workspaceRoot: vscode.Uri | null = null;
-    private collectorPath: string | null = null;
+    private state: TaskCollectorState = {
+        index: null,
+        workspaceRoot: null,
+        collectorPath: null,
+        writer: null,
+        bootstrapPending: false,
+    };
+    private reconciler: TaskReconciler | null = null;
     private queue: SyncQueue | null = null;
     private pendingWrites: PendingWrites | null = null;
-    private writer: TaskWriter | null = null;
     private subscriptions: vscode.Disposable[] = [];
-    private index: StoredTaskIndex | null = null;
-    private bootstrapPending = false;
 
     constructor(
         private readonly manifest: ManifestManager,
@@ -95,18 +77,19 @@ export class TaskCollectorFeature implements vscode.Disposable {
     }
 
     private async start(workspaceRoot: vscode.Uri, collectorPath: string): Promise<void> {
-        this.workspaceRoot = workspaceRoot;
-        this.collectorPath = normalizePath(collectorPath);
+        this.state.workspaceRoot = workspaceRoot;
+        this.state.collectorPath = normalizePath(collectorPath);
 
         // Hydrate the index from disk so task IDs are stable across restarts.
         const storedIndex = await this.manifest.readTaskIndex(workspaceRoot);
-        this.index = hydrateTaskIndex(storedIndex, this.collectorPath);
+        this.state.index = hydrateTaskIndex(storedIndex, this.state.collectorPath);
         // Signal that the first run (no persisted index) needs a full sync to populate the index.
-        this.bootstrapPending = storedIndex === null;
+        this.state.bootstrapPending = storedIndex === null;
         this.pendingWrites = new PendingWrites();
-        this.writer = new TaskWriter(this.pendingWrites);
+        this.state.writer = new TaskWriter(this.pendingWrites);
 
-        const config = await this.readConfig();
+        this.reconciler = new TaskReconciler(this.state, this.manifest, this.telemetry, this.now);
+        const config = await this.reconciler.readConfig();
         this.queue = new SyncQueue((job) => this.handleJob(job), config.debounceMs);
         this.subscriptions = [
             vscode.workspace.onDidSaveTextDocument((document) => {
@@ -138,9 +121,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
         if (config.syncOnStartup) {
             queueMicrotask(() => {
-                void this.queue?.enqueue({ kind: "full" }).catch((error) => {
-                    this.reportError("taskCollector.startupSync", error, false);
-                });
+                this.safeEnqueue({ kind: "full" }, false);
             });
         }
     }
@@ -148,6 +129,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
     private async stop(): Promise<void> {
         const currentQueue = this.queue;
         this.queue = null;
+        this.reconciler = null;
 
         for (const subscription of this.subscriptions) {
             subscription.dispose();
@@ -163,16 +145,20 @@ export class TaskCollectorFeature implements vscode.Disposable {
             currentQueue.dispose();
         }
 
-        this.workspaceRoot = null;
-        this.collectorPath = null;
+        this.state.workspaceRoot = null;
+        this.state.collectorPath = null;
         this.pendingWrites = null;
-        this.writer = null;
-        this.index = null;
-        this.bootstrapPending = false;
+        this.state.writer = null;
+        this.state.index = null;
+        this.state.bootstrapPending = false;
+    }
+
+    private isReady(): boolean {
+        return !!(this.queue && this.state.workspaceRoot && this.state.collectorPath);
     }
 
     private async handleSave(document: vscode.TextDocument): Promise<void> {
-        if (!this.queue || !this.pendingWrites || !this.workspaceRoot || !this.collectorPath) {
+        if (!this.isReady() || !this.pendingWrites) {
             return;
         }
 
@@ -184,34 +170,13 @@ export class TaskCollectorFeature implements vscode.Disposable {
             return;
         }
 
-        const config = await this.readConfig();
-        if (!this.queue) {
-            return;
-        }
-
-        if (this.isCollectorUri(document.uri)) {
-            // Errors are caught and reported via telemetry rather than re-thrown — save-event
-            // handlers must not reject; doing so would propagate into VS Code's document save pipeline.
-            void this.queue.enqueue({ kind: "collector", uri: document.uri.toString() }).catch((error) => {
-                this.reportError("taskCollector.reconcileFailed", error, true);
-            });
-            return;
-        }
-
-        if (!(await this.isTrackedSourceUri(document.uri, config))) {
-            return;
-        }
-
-        // Same fire-and-forget pattern: errors are reported via telemetry and not re-thrown.
-        this.queue?.enqueue({ kind: "source", uri: document.uri.toString() }).catch((error) => {
-            this.reportError("taskCollector.reconcileFailed", error, true);
-        });
+        await this.classifyAndEnqueue(document.uri);
     }
 
     // Handles FileSystemWatcher events (onDidChange / onDidCreate) so that external edits
     // (other editors, git, scripts) trigger task collection without requiring a VS Code save.
     private async handleExternalChange(uri: vscode.Uri): Promise<void> {
-        if (!this.queue || !this.workspaceRoot || !this.collectorPath) {
+        if (!this.isReady()) {
             return;
         }
 
@@ -219,14 +184,18 @@ export class TaskCollectorFeature implements vscode.Disposable {
             return;
         }
 
+        await this.classifyAndEnqueue(uri);
+    }
+
+    // Shared classification: determines whether a URI is the collector, a tracked source, or
+    // neither, and enqueues the appropriate sync job.
+    private async classifyAndEnqueue(uri: vscode.Uri): Promise<void> {
         if (this.isCollectorUri(uri)) {
-            void this.queue.enqueue({ kind: "collector", uri: uri.toString() }).catch((error) => {
-                this.reportError("taskCollector.reconcileFailed", error, true);
-            });
+            this.safeEnqueue({ kind: "collector", uri: uri.toString() });
             return;
         }
 
-        const config = await this.readConfig();
+        const config = await this.reconciler!.readConfig();
         if (!this.queue) {
             return;
         }
@@ -235,20 +204,18 @@ export class TaskCollectorFeature implements vscode.Disposable {
             return;
         }
 
-        this.queue?.enqueue({ kind: "source", uri: uri.toString() }).catch((error) => {
-            this.reportError("taskCollector.reconcileFailed", error, true);
-        });
+        this.safeEnqueue({ kind: "source", uri: uri.toString() });
     }
 
     private async handleRename(event: vscode.FileRenameEvent): Promise<void> {
-        if (!this.index || !this.queue || !this.workspaceRoot) {
+        if (!this.isReady() || !this.state.index) {
             return;
         }
 
         const renames: SourceRename[] = [];
         for (const file of event.files) {
-            const oldContext = this.describeUri(file.oldUri);
-            const newContext = this.describeUri(file.newUri);
+            const oldContext = describeUri(file.oldUri, this.state.workspaceRoot);
+            const newContext = describeUri(file.newUri, this.state.workspaceRoot);
             if (!oldContext || !newContext || !isMarkdownPath(newContext.relativePath)) {
                 continue;
             }
@@ -261,23 +228,21 @@ export class TaskCollectorFeature implements vscode.Disposable {
             });
         }
 
-        if (!applySourceRenames(this.index, renames)) {
+        if (!applySourceRenames(this.state.index, renames)) {
             return;
         }
 
-        pruneOrderReferences(this.index);
-        await this.persistIndex();
+        pruneOrderReferences(this.state.index);
+        await this.reconciler!.persistIndex();
 
         for (const rename of renames) {
-            const sourceUri = this.resolveSourceUri(rename.newSource, rename.newSourceRoot);
+            const sourceUri = resolveSourceUri(rename.newSource, rename.newSourceRoot);
             if (sourceUri) {
-                this.queue?.enqueue({ kind: "source", uri: sourceUri.toString() }).catch((error) => {
-                    this.reportError("taskCollector.reconcileFailed", error, true);
-                });
+                this.safeEnqueue({ kind: "source", uri: sourceUri.toString() });
             }
         }
 
-        void this.enqueueCollectorRender();
+        this.enqueueCollectorRender();
     }
 
     private async handleDelete(event: vscode.FileDeleteEvent): Promise<void> {
@@ -285,42 +250,36 @@ export class TaskCollectorFeature implements vscode.Disposable {
             return;
         }
 
-        const config = await this.readConfig();
+        const config = await this.reconciler!.readConfig();
         const affectsTasks = await Promise.all(event.files.map((uri) => this.isTrackedSourceUri(uri, config)));
         if (!affectsTasks.some(Boolean) && !event.files.some((uri) => this.isCollectorUri(uri))) {
             return;
         }
 
-        this.queue?.enqueue({ kind: "full" }).catch((error) => {
-            this.reportError("taskCollector.reconcileFailed", error, true);
-        });
+        this.safeEnqueue({ kind: "full" });
     }
 
     private async handleWorkspaceFoldersChanged(): Promise<void> {
-        if (!this.index) {
+        if (!this.state.index) {
             return;
         }
 
         const rootNames = new Set((vscode.workspace.workspaceFolders ?? []).map((folder) => folder.name));
         let changed = false;
 
-        for (const entry of Object.values(this.index.tasks)) {
+        for (const entry of Object.values(this.state.index.tasks)) {
             if (entry.sourceRoot && !rootNames.has(entry.sourceRoot)) {
-                removeTask(this.index, entry.id);
+                removeTask(this.state.index, entry.id);
                 changed = true;
             }
         }
 
         if (changed) {
-            pruneOrderReferences(this.index);
-            await this.persistIndex();
+            pruneOrderReferences(this.state.index);
+            await this.reconciler!.persistIndex();
         }
 
-        if (this.queue) {
-            void this.queue.enqueue({ kind: "full" }).catch((error) => {
-                this.reportError("taskCollector.reconcileFailed", error, true);
-            });
-        }
+        this.safeEnqueue({ kind: "full" });
     }
 
     private async handleJob(job: { kind: "source" | "collector" | "full"; uri?: string; renderOnly?: boolean }): Promise<void> {
@@ -330,24 +289,24 @@ export class TaskCollectorFeature implements vscode.Disposable {
                 return;
             case "source":
                 if (job.uri) {
-                    await this.reconcileSource(vscode.Uri.parse(job.uri), true);
+                    await this.reconciler!.reconcileSource(vscode.Uri.parse(job.uri), true, () => this.enqueueCollectorRender());
                 }
                 return;
             case "collector":
-                await this.reconcileCollector(job.renderOnly ?? false);
+                await this.reconciler!.reconcileCollector(job.renderOnly ?? false);
                 return;
         }
     }
 
     private async fullSync(): Promise<void> {
-        if (!this.index) {
+        if (!this.state.index) {
             return;
         }
 
-        const config = await this.readConfig();
-        const sources = await this.findTrackedSources(config);
+        const config = await this.reconciler!.readConfig();
+        const sources = await findTrackedSources(config, (uri, cfg) => this.isTrackedSourceUri(uri, cfg));
         for (const source of sources) {
-            await this.reconcileSource(source, false);
+            await this.reconciler!.reconcileSource(source, false, () => this.enqueueCollectorRender());
         }
 
         // Full sync always writes the collector even if it is dirty — it is the authoritative
@@ -355,479 +314,34 @@ export class TaskCollectorFeature implements vscode.Disposable {
         // On bootstrap (first run with no persisted index), read the existing collector document
         // so seed content (e.g. sample tasks from the blueprint) is imported into the index
         // before re-rendering — otherwise the seed content would be silently discarded.
-        await this.reconcileCollector(!this.bootstrapPending, true);
-        this.bootstrapPending = false;
+        await this.reconciler!.reconcileCollector(!this.state.bootstrapPending, true);
+        this.state.bootstrapPending = false;
         this.telemetry.logUsage("taskCollector.syncCompleted", {
             kind: "full",
             sources: String(sources.length),
         });
     }
 
-    private async reconcileSource(uri: vscode.Uri, scheduleCollectorRender: boolean): Promise<void> {
-        if (!this.index) {
-            return;
-        }
-
-        const context = this.describeUri(uri);
-        if (!context) {
-            return;
-        }
-
-        let document: vscode.TextDocument;
-        try {
-            document = await vscode.workspace.openTextDocument(uri);
-        } catch {
-            await this.dropSourceEntries(context.sourceKey, scheduleCollectorRender);
-            return;
-        }
-
-        const parsed = parseTaskBlocks(document.getText());
-        const previousEntries = getTasksForSource(this.index, context.relativePath, context.sourceRoot);
-        const previousSnapshots = previousEntries.map((entry) => this.toSourceSnapshot(entry));
-        const nextSnapshots = parsed.map((block) => this.toTaskSnapshot(block.body, block.checked));
-        // Alignment assigns each new task a stable ID from the previous snapshot, preventing
-        // phantom duplicate tasks from appearing in the collector when source files are edited.
-        const alignment = alignTaskSequences(previousSnapshots, nextSnapshots);
-        const today = formatDate(this.now());
-        const nowIso = this.now().toISOString();
-        const nextOrder: string[] = [];
-        let changed = false;
-        const subtaskUpdates: Array<{ block: TaskBlock; nextBody: string }> = [];
-
-        for (const [blockIndex, block] of parsed.entries()) {
-            const matchedId = alignment.newIndexToId.get(blockIndex);
-            const previous = matchedId ? this.index.tasks[matchedId] : null;
-            const id = matchedId ?? generateTaskId(this.index);
-            const nextBody = block.checked ? markSubtasksCompleted(block.body, today) : block.body;
-            const nextEntry: TaskIndexEntry = {
-                id,
-                source: context.relativePath,
-                sourceRoot: context.sourceRoot,
-                sourceOrder: blockIndex,
-                fingerprint: computeTaskFingerprint(nextBody),
-                body: nextBody,
-                firstSeenAt: previous?.firstSeenAt ?? nowIso,
-                completed: block.checked,
-                doneDate: block.checked ? (previous?.doneDate ?? today) : null,
-                collectorOwned: false,
-                agingSkipCount: previous?.agingSkipCount ?? 0,
-            };
-
-            if (!previous || !taskEntriesEqual(previous, nextEntry)) {
-                changed = true;
-            }
-
-            if (nextBody !== block.body) {
-                subtaskUpdates.push({ block, nextBody });
-            }
-
-            upsertTask(this.index, nextEntry);
-            nextOrder.push(id);
-        }
-
-        for (const deletedId of alignment.deletedIds) {
-            removeTask(this.index, deletedId);
-            changed = true;
-        }
-
-        if (!stringArrayEqual(this.index.sourceOrders[context.sourceKey] ?? [], nextOrder)) {
-            this.index.sourceOrders[context.sourceKey] = nextOrder;
-            changed = true;
-        }
-
-        pruneOrderReferences(this.index);
-        if (!changed) {
-            return;
-        }
-
-        await this.persistIndex();
-
-        // Write back to source to mark subtasks as completed when their parent was just completed.
-        if (subtaskUpdates.length > 0) {
-            await this.writer!.mutateDocument(uri, (_document, currentText, eol) => {
-                let text = currentText;
-                // Apply in reverse order so earlier line numbers remain valid.
-                for (const update of [...subtaskUpdates].reverse()) {
-                    const replacement = renderTaskBlock(update.block, update.nextBody, true);
-                    text = replaceLineRange(
-                        text,
-                        update.block.bodyRange.startLine,
-                        update.block.bodyRange.endLine,
-                        replacement,
-                        eol,
-                    );
-                }
-                return text;
-            });
-        }
-
-        if (scheduleCollectorRender) {
-            await this.enqueueCollectorRender();
-        }
-    }
-
-    private async reconcileCollector(renderOnly: boolean, skipDirtyGuard = false): Promise<void> {
-        // renderOnly=true skips the "read collector edits" pass and only re-renders the collector
-        // from the current index. This separates the write phase from the read phase to avoid
-        // re-entrancy when a source reconciliation needs to update the collector without first
-        // applying (potentially stale) collector edits.
-        if (!this.index || !this.writer || !this.collectorPath) {
-            return;
-        }
-
-        const collectorUri = this.getCollectorUri();
-        const collectorDocument = await openTextDocumentIfPresent(collectorUri);
-        if (!renderOnly && collectorDocument) {
-            await this.applyCollectorEdits(collectorDocument);
-        }
-
-        await this.runAgingPass();
-        await this.persistIndex();
-
-        if (renderOnly && !skipDirtyGuard) {
-            const latestCollectorDocument = await openTextDocumentIfPresent(collectorUri);
-            if (latestCollectorDocument?.isDirty) {
-                return;
-            }
-        }
-
-        const rendered = renderCollector(this.index);
-        this.index.collectorOrder.active = rendered.activeOrder;
-        this.index.collectorOrder.completed = rendered.completedOrder;
-        await this.persistIndex();
-        await this.writer.mutateDocument(
-            collectorUri,
-            () => rendered.content,
-            { allowCreate: true },
-        );
-    }
-
-    private async applyCollectorEdits(document: vscode.TextDocument): Promise<void> {
-        if (!this.index || !this.collectorPath) {
-            return;
-        }
-
-        const parsed = parseCollectorDocument(document.getText());
-        const previousOrder = [
-            ...getCollectorOrder(this.index, false),
-            ...getCollectorOrder(this.index, true),
-        ];
-        const previousSnapshots = previousOrder
-            .map((id) => this.index?.tasks[id])
-            .filter((entry): entry is TaskIndexEntry => Boolean(entry))
-            .map((entry) => this.toCollectorSnapshot(entry));
-        const nextSnapshots = parsed.tasks.map((task) => this.toTaskSnapshot(task.body, task.checked));
-        const alignment = alignTaskSequences(previousSnapshots, nextSnapshots);
-        const activeOrder: string[] = [];
-        const completedOrder: string[] = [];
-        const nowIso = this.now().toISOString();
-        const today = formatDate(this.now());
-
-        for (const [taskIndex, task] of parsed.tasks.entries()) {
-            const matchedId = alignment.newIndexToId.get(taskIndex);
-            const previous = matchedId ? this.index.tasks[matchedId] : null;
-            const nextCompleted = task.checked;
-            const id = matchedId ?? generateTaskId(this.index);
-            // reverse() converts collector-relative link paths back to source-relative paths
-            // before storing the body in the index, so the index always holds source-relative content.
-            const bodyForIndex = previous?.source && !previous.collectorOwned
-                ? reverse(task.body, this.collectorPath, previous.source, previous.body)
-                : task.body;
-            const normalizedBodyForIndex = nextCompleted ? markSubtasksCompleted(bodyForIndex, today) : bodyForIndex;
-
-            if (previous?.source && !previous.collectorOwned) {
-                const collectorBody = this.toCollectorBody(previous);
-                if (collectorBody !== task.body || previous.completed !== nextCompleted) {
-                    await this.updateSourceTask(previous, normalizedBodyForIndex, nextCompleted);
-                }
-            }
-
-            const updated: TaskIndexEntry = {
-                id,
-                source: previous?.source ?? null,
-                sourceRoot: previous?.sourceRoot ?? null,
-                sourceOrder: previous?.sourceOrder ?? null,
-                fingerprint: computeTaskFingerprint(normalizedBodyForIndex),
-                body: normalizedBodyForIndex,
-                firstSeenAt: previous?.firstSeenAt ?? nowIso,
-                completed: nextCompleted,
-                doneDate: nextCompleted ? (task.suffix?.completedDate ?? previous?.doneDate ?? today) : null,
-                collectorOwned: previous?.collectorOwned ?? true,
-                agingSkipCount: previous?.agingSkipCount ?? 0,
-            };
-
-            upsertTask(this.index, updated);
-            if (nextCompleted) {
-                completedOrder.push(id);
-            } else {
-                activeOrder.push(id);
-            }
-        }
-
-        for (const deletedId of alignment.deletedIds) {
-            const entry = this.index.tasks[deletedId];
-            if (entry?.source && !entry.collectorOwned) {
-                await this.deleteSourceTask(entry);
-            }
-            removeTask(this.index, deletedId);
-        }
-
-        this.index.collectorOrder.active = activeOrder;
-        this.index.collectorOrder.completed = completedOrder;
-        pruneOrderReferences(this.index);
-    }
-
-    private async updateSourceTask(entry: TaskIndexEntry, body: string, checked: boolean): Promise<void> {
-        if (!this.writer) {
-            return;
-        }
-
-        const sourceUri = this.resolveSourceUri(entry.source, entry.sourceRoot ?? null);
-        if (!sourceUri) {
-            return;
-        }
-
-        await this.writer.mutateDocument(sourceUri, (_document, currentText, eol) => {
-            const location = this.locateSourceTask(entry, currentText);
-            if (!location) {
-                return currentText;
-            }
-
-            const replacement = renderTaskBlock(location.block, body, checked);
-            return replaceLineRange(
-                currentText,
-                location.block.bodyRange.startLine,
-                location.block.bodyRange.endLine,
-                replacement,
-                eol,
-            );
+    private safeEnqueue(job: { kind: "source" | "collector" | "full"; uri?: string; renderOnly?: boolean }, toast = true): void {
+        this.queue?.enqueue(job).catch((error) => {
+            this.reportError("taskCollector.reconcileFailed", error, toast);
         });
-    }
-
-    private async deleteSourceTask(entry: TaskIndexEntry): Promise<void> {
-        if (!this.writer) {
-            return;
-        }
-
-        const sourceUri = this.resolveSourceUri(entry.source, entry.sourceRoot ?? null);
-        if (!sourceUri) {
-            return;
-        }
-
-        await this.writer.mutateDocument(sourceUri, (_document, currentText, eol) => {
-            const location = this.locateSourceTask(entry, currentText);
-            if (!location) {
-                return currentText;
-            }
-
-            return replaceLineRange(
-                currentText,
-                location.block.bodyRange.startLine,
-                location.block.bodyRange.endLine,
-                "",
-                eol,
-            );
-        });
-    }
-
-    private async runAgingPass(): Promise<void> {
-        if (!this.index || !this.writer) {
-            return;
-        }
-
-        const config = await this.readConfig();
-        const now = this.now();
-        const expired = Object.values(this.index.tasks).filter((entry) => isTaskExpired(entry, config.completedRetentionDays, now));
-
-        for (const entry of expired) {
-            if (entry.collectorOwned || !entry.source) {
-                removeTask(this.index, entry.id);
-                continue;
-            }
-
-            const sourceUri = this.resolveSourceUri(entry.source, entry.sourceRoot ?? null);
-            if (!sourceUri) {
-                this.bumpAgingSkip(entry);
-                continue;
-            }
-
-            let rewriteStatus: "unchanged" | "rewritten" | "missing" | "mismatch" = "unchanged";
-            const changed = await this.writer.mutateDocument(sourceUri, (_document, currentText, eol) => {
-                const location = this.locateSourceTask(entry, currentText);
-                if (!location) {
-                    rewriteStatus = "missing";
-                    return currentText;
-                }
-
-                if (computeTaskFingerprint(location.block.body) !== entry.fingerprint || !location.block.checked) {
-                    rewriteStatus = "mismatch";
-                    return currentText;
-                }
-
-                rewriteStatus = "rewritten";
-                return replaceLineRange(
-                    currentText,
-                    location.block.bodyRange.startLine,
-                    location.block.bodyRange.endLine,
-                    renderDoneBlock(location.block, location.block.body),
-                    eol,
-                );
-            });
-
-            if (changed && rewriteStatus === "rewritten") {
-                removeTask(this.index, entry.id);
-                continue;
-            }
-
-            this.telemetry.logError("taskCollector.agingRewriteSkipped", {
-                reason: rewriteStatus,
-                source: getSourceDisplayPath(entry) ?? "unknown",
-            });
-            this.bumpAgingSkip(entry);
-        }
-
-        pruneOrderReferences(this.index);
-    }
-
-    // agingSkipCount tracks how many times the aging pass could not locate a task in its source
-    // file. Tasks that cannot be located are retried rather than removed immediately. After 5
-    // consecutive skips (task is permanently unreachable) the task is removed to prevent
-    // indefinite accumulation of ghost entries in the index.
-    private bumpAgingSkip(entry: TaskIndexEntry): void {
-        entry.agingSkipCount = (entry.agingSkipCount ?? 0) + 1;
-        if ((entry.agingSkipCount ?? 0) >= MAX_AGING_SKIP_COUNT && this.index) {
-            removeTask(this.index, entry.id);
-        }
     }
 
     private enqueueCollectorRender(): void {
-        if (!this.queue) {
-            return;
-        }
-
-        void this.queue.enqueue({ kind: "collector", renderOnly: true }).catch((error) => {
-            this.reportError("taskCollector.reconcileFailed", error, false);
-        });
-    }
-
-    private async dropSourceEntries(sourceKey: string, scheduleCollectorRender: boolean): Promise<void> {
-        if (!this.index) {
-            return;
-        }
-
-        const ids = [...(this.index.sourceOrders[sourceKey] ?? [])];
-        if (ids.length === 0) {
-            return;
-        }
-
-        for (const id of ids) {
-            removeTask(this.index, id);
-        }
-        delete this.index.sourceOrders[sourceKey];
-        await this.persistIndex();
-        if (scheduleCollectorRender) {
-            await this.enqueueCollectorRender();
-        }
-    }
-
-    private locateSourceTask(entry: TaskIndexEntry, content: string): IndexedTaskLocation | null {
-        if (!this.index) {
-            return null;
-        }
-        return locateSourceTask(this.index, entry, content);
-    }
-
-    private toSourceSnapshot(entry: TaskIndexEntry): ExistingTaskSnapshot {
-        return toSourceSnapshot(entry);
-    }
-
-    private toCollectorSnapshot(entry: TaskIndexEntry): ExistingTaskSnapshot {
-        return toCollectorSnapshot(entry, this.collectorPath);
-    }
-
-    private toCollectorBody(entry: TaskIndexEntry): string {
-        return toCollectorBody(entry, this.collectorPath);
-    }
-
-    private toTaskSnapshot(body: string, checked: boolean): TaskSnapshot {
-        return toTaskSnapshot(body, checked);
-    }
-
-    private describeUri(uri: vscode.Uri): SourceContext | null {
-        return describeUriHelper(uri, this.workspaceRoot);
-    }
-
-    private resolveSourceUri(source: string | null, sourceRoot: string | null): vscode.Uri | null {
-        return resolveSourceUriHelper(source, sourceRoot);
-    }
-
-    private async findTrackedSources(config: TaskCollectorConfig): Promise<vscode.Uri[]> {
-        return findTrackedSourcesHelper(config, (uri, cfg) => this.isTrackedSourceUri(uri, cfg));
+        this.safeEnqueue({ kind: "collector", renderOnly: true }, false);
     }
 
     private async isTrackedSourceUri(uri: vscode.Uri, config?: TaskCollectorConfig): Promise<boolean> {
-        if (!isMarkdownPath(uri.path)) {
-            return false;
-        }
-        if (this.isCollectorUri(uri)) {
-            return false;
-        }
-
-        const context = this.describeUri(uri);
-        if (!context) {
-            return false;
-        }
-
-        const effectiveConfig = config ?? await this.readConfig();
-        if (context.relativePath.startsWith(".memoria/") || context.relativePath.startsWith("WorkspaceInitializationBackups/")) {
-            return false;
-        }
-
-        const includeMatch = effectiveConfig.include.some((pattern) => minimatch(context.relativePath, pattern, { dot: true }));
-        if (!includeMatch) {
-            return false;
-        }
-
-        const excludePatterns = [
-            ...effectiveConfig.exclude,
-            "**/.memoria/**",
-            "**/WorkspaceInitializationBackups/**",
-        ];
-        return !excludePatterns.some((pattern) => minimatch(context.relativePath, pattern, { dot: true }));
+        return isTrackedSourceUriStandalone(uri, this.state.workspaceRoot, this.state.collectorPath, config ?? await this.reconciler!.readConfig());
     }
 
     private isCollectorUri(uri: vscode.Uri): boolean {
-        return this.collectorPath !== null && this.workspaceRoot !== null && uri.toString() === this.getCollectorUri().toString();
-    }
-
-    private getCollectorUri(): vscode.Uri {
-        return getCollectorUriHelper(this.workspaceRoot, this.collectorPath);
-    }
-
-    private async readConfig(): Promise<TaskCollectorConfig> {
-        if (!this.workspaceRoot) {
-            return { ...DEFAULT_TASK_COLLECTOR_CONFIG };
-        }
-
-        const stored = await this.manifest.readTaskCollectorConfig(this.workspaceRoot);
-        return {
-            completedRetentionDays: stored?.completedRetentionDays ?? DEFAULT_TASK_COLLECTOR_CONFIG.completedRetentionDays,
-            syncOnStartup: stored?.syncOnStartup ?? DEFAULT_TASK_COLLECTOR_CONFIG.syncOnStartup,
-            include: stored?.include ?? [...DEFAULT_TASK_COLLECTOR_CONFIG.include],
-            exclude: stored?.exclude ?? [...DEFAULT_TASK_COLLECTOR_CONFIG.exclude],
-            debounceMs: stored?.debounceMs ?? DEFAULT_TASK_COLLECTOR_CONFIG.debounceMs,
-        };
-    }
-
-    private async persistIndex(): Promise<void> {
-        if (!this.workspaceRoot || !this.index) {
-            return;
-        }
-        await this.manifest.writeTaskIndex(this.workspaceRoot, this.index);
+        return this.state.collectorPath !== null && this.state.workspaceRoot !== null && uri.toString() === getCollectorUri(this.state.workspaceRoot, this.state.collectorPath).toString();
     }
 
     private reportError(eventName: string, error: unknown, toast: boolean): void {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = formatError(error);
         this.telemetry.logError(eventName, { message });
         if (toast) {
             vscode.window.showErrorMessage(`Memoria: Task sync failed — ${message}`);

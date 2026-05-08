@@ -450,7 +450,7 @@ describe("TaskCollectorFeature", () => {
             // Allow the queueMicrotask startup sync to run
             await vi.waitFor(() => {
                 expect(mockTelemetry.logError).toHaveBeenCalledWith(
-                    "taskCollector.startupSync",
+                    "taskCollector.reconcileFailed",
                     expect.objectContaining({ message: expect.stringContaining("startup failure") }),
                 );
             });
@@ -747,7 +747,7 @@ describe("TaskCollectorFeature", () => {
 
             await vi.waitFor(() => {
                 expect(mockTelemetry.logError).toHaveBeenCalledWith(
-                    "taskCollector.startupSync",
+                    "taskCollector.reconcileFailed",
                     expect.objectContaining({ message: expect.stringContaining("startup boom") }),
                 );
             });

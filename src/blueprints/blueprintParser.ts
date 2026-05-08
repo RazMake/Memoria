@@ -11,6 +11,30 @@ import type { BlueprintDefinition, BlueprintFeature, WorkspaceEntry, DecorationR
 const VALID_DEFAULT_SCOPES: ReadonlySet<string> = new Set<DefaultScope>(["relative", "includingRoot"]);
 const VALID_CONTACT_GROUP_TYPES: ReadonlySet<ContactGroup["type"]> = new Set(["report", "colleague"]);
 
+/** Validates and returns a required string field, throwing a descriptive error if missing or empty. */
+function requireStringField(obj: Record<string, unknown>, field: string, context: string): string {
+    if (typeof obj[field] !== "string" || !obj[field]) {
+        throw new Error(`${context} is missing required string field "${field}".`);
+    }
+    return obj[field] as string;
+}
+
+/** Validates and returns a required boolean field, throwing a descriptive error if missing. */
+function requireBooleanField(obj: Record<string, unknown>, field: string, context: string): boolean {
+    if (typeof obj[field] !== "boolean") {
+        throw new Error(`${context} is missing required boolean field "${field}".`);
+    }
+    return obj[field] as boolean;
+}
+
+/** Validates and returns a required array field, throwing a descriptive error if missing. */
+function requireArrayField(obj: Record<string, unknown>, field: string, context: string): unknown[] {
+    if (!Array.isArray(obj[field])) {
+        throw new Error(`${context} is missing required array field "${field}".`);
+    }
+    return obj[field] as unknown[];
+}
+
 /**
  * Parses a blueprint.yaml string into a validated BlueprintDefinition.
  * Throws a descriptive Error if required fields are missing or the structure is invalid.
@@ -29,36 +53,23 @@ export function parseBlueprintYaml(content: string): BlueprintDefinition {
 
     const obj = raw as Record<string, unknown>;
 
-    if (typeof obj["id"] !== "string" || !obj["id"]) {
-        throw new Error('Blueprint is missing required string field "id".');
-    }
-    if (typeof obj["name"] !== "string" || !obj["name"]) {
-        throw new Error('Blueprint is missing required string field "name".');
-    }
-    if (typeof obj["description"] !== "string" || !obj["description"]) {
-        throw new Error('Blueprint is missing required string field "description".');
-    }
-    if (typeof obj["version"] !== "string" || !obj["version"]) {
-        throw new Error('Blueprint is missing required string field "version".');
-    }
-    if (!Array.isArray(obj["workspace"])) {
-        throw new Error('Blueprint is missing required array field "workspace".');
-    }
+    const id = requireStringField(obj, "id", "Blueprint");
+    const name = requireStringField(obj, "name", "Blueprint");
+    const description = requireStringField(obj, "description", "Blueprint");
+    const version = requireStringField(obj, "version", "Blueprint");
+    const workspaceRaw = requireArrayField(obj, "workspace", "Blueprint");
+    const featuresRaw = requireArrayField(obj, "features", "Blueprint");
 
-    if (!Array.isArray(obj["features"])) {
-        throw new Error('Blueprint is missing required array field "features".');
-    }
-
-    const workspace = parseWorkspaceTree(obj["workspace"]);
+    const workspace = parseWorkspaceTree(workspaceRaw);
     const defaultFiles = resolveDefaultFiles(workspace);
 
     const definition: BlueprintDefinition = {
-        id: obj["id"] as string,
-        name: obj["name"] as string,
-        description: obj["description"] as string,
-        version: obj["version"] as string,
+        id,
+        name,
+        description,
+        version,
         workspace,
-        features: parseFeatures(obj["features"]),
+        features: parseFeatures(featuresRaw),
     };
 
     const hasDefaults =
@@ -90,12 +101,9 @@ export function parseWorkspaceTree(raw: unknown): WorkspaceEntry[] {
         }
 
         const entry = item as Record<string, unknown>;
+        const entryContext = `Workspace entry at index ${index}`;
 
-        if (typeof entry["name"] !== "string" || !entry["name"]) {
-            throw new Error(`Workspace entry at index ${index} is missing required string field "name".`);
-        }
-
-        const name = entry["name"] as string;
+        const name = requireStringField(entry, "name", entryContext);
         const isFolder = name.endsWith("/");
 
         if (!isFolder && entry["children"] !== undefined) {
@@ -151,105 +159,104 @@ export function parseFeatures(raw: unknown[]): BlueprintFeature[] {
         }
 
         const entry = item as Record<string, unknown>;
+        const featureContext = `Feature entry at index ${index}`;
 
-        if (typeof entry["id"] !== "string" || !entry["id"]) {
-            throw new Error(`Feature entry at index ${index} is missing required string field "id".`);
-        }
-        if (typeof entry["name"] !== "string" || !entry["name"]) {
-            throw new Error(`Feature entry at index ${index} is missing required string field "name".`);
-        }
-        if (typeof entry["description"] !== "string" || !entry["description"]) {
-            throw new Error(`Feature entry at index ${index} is missing required string field "description".`);
-        }
-        if (typeof entry["enabledByDefault"] !== "boolean") {
-            throw new Error(`Feature entry at index ${index} is missing required boolean field "enabledByDefault".`);
+        const id = requireStringField(entry, "id", featureContext);
+        const base = {
+            name: requireStringField(entry, "name", featureContext),
+            description: requireStringField(entry, "description", featureContext),
+            enabledByDefault: requireBooleanField(entry, "enabledByDefault", featureContext),
+        };
+
+        const parser = featureParsers[id];
+        if (!parser) {
+            throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
         }
 
-        const id = entry["id"] as string;
-
-        // Switch is preferred over a Map-based dispatch here because there are only three
-        // feature types. Adding a registry pattern would be over-engineering for this scale.
-        // If feature count grows beyond ~5, consider extracting per-feature parser functions.
-        switch (id) {
-            case "decorations":
-                return {
-                    id,
-                    name: entry["name"] as string,
-                    description: entry["description"] as string,
-                    enabledByDefault: entry["enabledByDefault"] as boolean,
-                    rules: parseDecorationRules(entry["rules"]),
-                };
-            case "taskCollector":
-                return {
-                    id,
-                    name: entry["name"] as string,
-                    description: entry["description"] as string,
-                    enabledByDefault: entry["enabledByDefault"] as boolean,
-                    collectorPath: parseCollectorPath(entry["collectorPath"], index),
-                    config: {
-                        completedRetentionDays: parseOptionalField(
-                            entry["completedRetentionDays"],
-                            DEFAULT_TASK_COLLECTOR_CONFIG.completedRetentionDays,
-                            index,
-                            "completedRetentionDays",
-                            (v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0,
-                            "a non-negative number",
-                        ),
-                        syncOnStartup: parseOptionalField(
-                            entry["syncOnStartup"],
-                            DEFAULT_TASK_COLLECTOR_CONFIG.syncOnStartup,
-                            index,
-                            "syncOnStartup",
-                            (v): v is boolean => typeof v === "boolean",
-                            "a boolean",
-                        ),
-                        include: parseOptionalField(
-                            entry["include"],
-                            [...DEFAULT_TASK_COLLECTOR_CONFIG.include],
-                            index,
-                            "include",
-                            (v): v is string[] => Array.isArray(v) && v.every((item) => typeof item === "string" && Boolean(item)),
-                            "an array of non-empty strings",
-                        ),
-                        exclude: parseOptionalField(
-                            entry["exclude"],
-                            [...DEFAULT_TASK_COLLECTOR_CONFIG.exclude],
-                            index,
-                            "exclude",
-                            (v): v is string[] => Array.isArray(v) && v.every((item) => typeof item === "string" && Boolean(item)),
-                            "an array of non-empty strings",
-                        ),
-                        debounceMs: parseOptionalField(
-                            entry["debounceMs"],
-                            DEFAULT_TASK_COLLECTOR_CONFIG.debounceMs,
-                            index,
-                            "debounceMs",
-                            (v): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0,
-                            "a non-negative number",
-                        ),
-                    },
-                };
-            case "contacts":
-                return {
-                    id,
-                    name: entry["name"] as string,
-                    description: entry["description"] as string,
-                    enabledByDefault: entry["enabledByDefault"] as boolean,
-                    peopleFolder: parsePeopleFolder(entry["peopleFolder"], index),
-                    groups: parseContactGroups(entry["groups"], index),
-                };
-            case "snippets":
-                return {
-                    id,
-                    name: entry["name"] as string,
-                    description: entry["description"] as string,
-                    enabledByDefault: entry["enabledByDefault"] as boolean,
-                    snippetsFolder: parseSnippetsFolder(entry["snippetsFolder"], index),
-                };
-            default:
-                throw new Error(`Feature entry at index ${index}: unknown feature id "${id}".`);
-        }
+        return parser(id, base, entry, index);
     });
+}
+
+/** Per-feature parser lookup — each parser validates and returns the feature-specific fields. */
+const featureParsers: Record<string, (
+    id: string,
+    base: { name: string; description: string; enabledByDefault: boolean },
+    entry: Record<string, unknown>,
+    index: number,
+) => BlueprintFeature> = {
+    decorations: (id, base, entry) => ({
+        id,
+        ...base,
+        rules: parseDecorationRules(entry["rules"]),
+    }),
+    taskCollector: (id, base, entry, index) => ({
+        id,
+        ...base,
+        collectorPath: parseCollectorPath(entry["collectorPath"], index),
+        config: parseTaskCollectorConfig(entry, index),
+    }),
+    contacts: (id, base, entry, index) => ({
+        id,
+        ...base,
+        peopleFolder: parsePeopleFolder(entry["peopleFolder"], index),
+        groups: parseContactGroups(entry["groups"], index),
+    }),
+    snippets: (id, base, entry, index) => ({
+        id,
+        ...base,
+        snippetsFolder: parseSnippetsFolder(entry["snippetsFolder"], index),
+    }),
+};
+
+const isNonNegativeNumber = (v: unknown): v is number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+const isNonEmptyStringArray = (v: unknown): v is string[] =>
+    Array.isArray(v) && v.every((item) => typeof item === "string" && Boolean(item));
+
+function parseTaskCollectorConfig(entry: Record<string, unknown>, index: number) {
+    return {
+        completedRetentionDays: parseOptionalField(
+            entry["completedRetentionDays"],
+            DEFAULT_TASK_COLLECTOR_CONFIG.completedRetentionDays,
+            index,
+            "completedRetentionDays",
+            isNonNegativeNumber,
+            "a non-negative number",
+        ),
+        syncOnStartup: parseOptionalField(
+            entry["syncOnStartup"],
+            DEFAULT_TASK_COLLECTOR_CONFIG.syncOnStartup,
+            index,
+            "syncOnStartup",
+            (v): v is boolean => typeof v === "boolean",
+            "a boolean",
+        ),
+        include: parseOptionalField(
+            entry["include"],
+            [...DEFAULT_TASK_COLLECTOR_CONFIG.include],
+            index,
+            "include",
+            isNonEmptyStringArray,
+            "an array of non-empty strings",
+        ),
+        exclude: parseOptionalField(
+            entry["exclude"],
+            [...DEFAULT_TASK_COLLECTOR_CONFIG.exclude],
+            index,
+            "exclude",
+            isNonEmptyStringArray,
+            "an array of non-empty strings",
+        ),
+        debounceMs: parseOptionalField(
+            entry["debounceMs"],
+            DEFAULT_TASK_COLLECTOR_CONFIG.debounceMs,
+            index,
+            "debounceMs",
+            isNonNegativeNumber,
+            "a non-negative number",
+        ),
+    };
 }
 
 /**
@@ -380,12 +387,10 @@ export function parseDecorationRules(raw: unknown): DecorationRule[] {
         }
 
         const rule = item as Record<string, unknown>;
+        const ruleContext = `Decoration rule at index ${index}`;
 
-        if (typeof rule["filter"] !== "string" || !rule["filter"]) {
-            throw new Error(`Decoration rule at index ${index} is missing required string field "filter".`);
-        }
-
-        const result: DecorationRule = { filter: rule["filter"] as string };
+        const filter = requireStringField(rule, "filter", ruleContext);
+        const result: DecorationRule = { filter };
 
         if (rule["color"] !== undefined) {
             if (typeof rule["color"] !== "string" || !rule["color"]) {

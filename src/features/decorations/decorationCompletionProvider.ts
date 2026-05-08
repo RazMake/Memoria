@@ -9,9 +9,10 @@
 // field names, color values, booleans, and filter pattern snippets as appropriate.
 
 import * as vscode from "vscode";
-import { getLocation, type Location } from "jsonc-parser";
+import { getLocation } from "jsonc-parser";
 import { DECORATION_RULE_FIELDS } from "./decorationSchema";
-import { THEME_COLORS } from "./themeColors";
+import { CATEGORY_ORDER, THEME_COLORS } from "./themeColors";
+import { isTopLevelKey } from "../../utils/jsonCompletionHelpers";
 
 /** Document selector that matches only .memoria/decorations.json files. */
 export const DECORATIONS_JSON_SELECTOR: vscode.DocumentSelector = {
@@ -31,7 +32,7 @@ export class DecorationCompletionProvider implements vscode.CompletionItemProvid
         const offset = document.offsetAt(position);
         const location = getLocation(text, offset);
 
-        if (isTopLevelKey(location)) {
+        if (isTopLevelKey(location, "rules")) {
             return this.topLevelKeyCompletions();
         }
 
@@ -79,20 +80,6 @@ export class DecorationCompletionProvider implements vscode.CompletionItemProvid
     }
 
     private colorValueCompletions(): vscode.CompletionItem[] {
-        // Build a stable category order so that categories with a natural priority
-        // (Charts first — most relevant for file decorations) appear above others.
-        const categoryOrder: Record<string, string> = {
-            Charts: "0",
-            Git: "1",
-            List: "2",
-            Problems: "3",
-            Testing: "4",
-            Terminal: "5",
-            Base: "6",
-            Editor: "7",
-            Markdown: "8",
-        };
-
         return THEME_COLORS.map((entry) => {
             const item = new vscode.CompletionItem(entry.id, vscode.CompletionItemKind.Color);
             item.detail = entry.hex;
@@ -100,8 +87,7 @@ export class DecorationCompletionProvider implements vscode.CompletionItemProvid
                 `**${entry.category}** — ${entry.description}`,
             );
             item.insertText = entry.id;
-            item.sortText = `${categoryOrder[entry.category] ?? "9"}_${entry.id}`;
-            // Filtering: searching for "red" should match "charts.red" and "terminal.ansiRed".
+            item.sortText = `${CATEGORY_ORDER.get(entry.category) ?? 9}_${entry.id}`;
             item.filterText = entry.id;
             return item;
         });
@@ -133,16 +119,6 @@ export class DecorationCompletionProvider implements vscode.CompletionItemProvid
 }
 
 // ── Location helpers ────────────────────────────────────────────────────
-
-/**
- * Cursor is at a top-level property key position (e.g. completing "rules").
- * jsonc-parser reports path [""] with isAtPropertyKey when inside an object
- * before any key is typed.
- */
-function isTopLevelKey(loc: Location): boolean {
-    return loc.isAtPropertyKey && loc.path.length === 1 && typeof loc.path[0] === "string"
-        && !loc.path[0].startsWith("rules");
-}
 
 /**
  * Cursor is anywhere inside the "rules" array (path starts with "rules", <index>).

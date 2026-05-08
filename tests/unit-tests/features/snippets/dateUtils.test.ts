@@ -8,7 +8,7 @@ import {
     ageInDays,
     formatDueIn,
     formatDueBy,
-} from "../../../../src/features/snippets/dateUtils";
+} from "../../../../src/utils/dateUtils";
 
 describe("elapsedSince", () => {
     it("should return zero for same month", () => {
@@ -87,8 +87,8 @@ describe("formatDate", () => {
         expect(formatDate(date, "dddd, MMM dd, YYYY")).toBe("Wednesday, April 22, 2026");
     });
 
-    it("should default to YYYY-MM-dd for unknown format", () => {
-        expect(formatDate(date, "unknown")).toBe("2026-04-22");
+    it("should pass through unknown format unchanged", () => {
+        expect(formatDate(date, "unknown")).toBe("unknown");
     });
 
     it("should pad single-digit months and days", () => {
@@ -128,9 +128,9 @@ describe("formatTime", () => {
         expect(formatTime(date, "hh:mm:ss AM/PM")).toBe("02:05:09 PM");
     });
 
-    it("should default to HH:mm for unknown format", () => {
+    it("should pass through unknown format unchanged", () => {
         const date = new Date(2026, 0, 1, 14, 5, 9);
-        expect(formatTime(date, "unknown")).toBe("14:05");
+        expect(formatTime(date, "unknown")).toBe("unknown");
     });
 });
 

@@ -126,30 +126,6 @@ function isMissingReference(referenceKey: string, validKeys: ReadonlySet<string>
 }
 
 function applyCorrectionsToContact(contact: Contact, corrections: readonly ContactIntegrityCorrection[]): Contact {
-    if (contact.kind === "report") {
-        const updatedContact = {
-            ...contact,
-            extraFields: { ...contact.extraFields },
-            droppedFields: { ...contact.droppedFields },
-        };
-
-        for (const correction of corrections) {
-            switch (correction.field) {
-                case "pronounsKey":
-                    updatedContact.pronounsKey = correction.newValue;
-                    break;
-                case "careerPathKey":
-                    updatedContact.careerPathKey = correction.newValue;
-                    break;
-                case "levelId":
-                    updatedContact.levelId = correction.newValue;
-                    break;
-            }
-        }
-
-        return updatedContact;
-    }
-
     const updatedContact = {
         ...contact,
         extraFields: { ...contact.extraFields },
@@ -157,13 +133,18 @@ function applyCorrectionsToContact(contact: Contact, corrections: readonly Conta
     };
 
     for (const correction of corrections) {
-        if (correction.field === "pronounsKey") {
-            updatedContact.pronounsKey = correction.newValue;
-            continue;
-        }
-
-        if (correction.field === "careerPathKey") {
-            updatedContact.careerPathKey = correction.newValue;
+        switch (correction.field) {
+            case "pronounsKey":
+                updatedContact.pronounsKey = correction.newValue;
+                break;
+            case "careerPathKey":
+                updatedContact.careerPathKey = correction.newValue;
+                break;
+            case "levelId":
+                if (updatedContact.kind === "report") {
+                    updatedContact.levelId = correction.newValue;
+                }
+                break;
         }
     }
 

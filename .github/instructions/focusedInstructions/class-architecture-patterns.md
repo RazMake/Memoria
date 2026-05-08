@@ -33,3 +33,13 @@
 - Keep control flow linear and simple.
 - Use small-to-medium functions; avoid deeply nested logic.
 - Pass state explicitly; avoid globals.
+
+## Module Size and Extraction
+- When a module grows beyond ~300 lines or has multiple responsibilities, extract along clear axes:
+  - **Message handling** → `*MessageHandler.ts` with a context interface
+  - **Path/URI resolution** → `*PathResolver.ts` with pure functions
+  - **Data transformations** → `*Transformer.ts` with pure functions
+  - **HTML generation** → `*Html.ts` (no vscode dependency)
+  - **Webview decomposition** → one module per UI concern (list, form, popup, autocomplete)
+  - **Shared utilities** → `src/utils/` when used by ≥2 features
+- The orchestrator (Feature/Provider) should remain a thin wiring layer that delegates to extracted modules.

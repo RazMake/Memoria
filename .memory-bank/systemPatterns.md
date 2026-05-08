@@ -24,19 +24,43 @@ extension.ts (activation, DI wiring, versioning check)
   │   │   ├── decorationSchema.ts            — field metadata for decoration rules
   │   │   └── themeColors.ts                 — theme color ID constants
   │   ├── navigator/
-  │   │   └── defaultFileCompletionProvider.ts — IntelliSense completions for default-files.json paths
+  │   │   ├── defaultFileCompletionProvider.ts — IntelliSense completions for default-files.json paths
+  │   │   ├── defaultFileJsonHelpers.ts        — JSON node parsing helpers (extracted for SRP)
+  │   │   ├── defaultFileSchema.ts             — field metadata for default-files.json
+  │   │   └── folderTraversal.ts               — workspace folder tree walking
   │   ├── contacts/
   │   │   ├── contactsFeature.ts      — feature lifecycle, contacts service/query API, file watching, mutations
   │   │   ├── contactsViewProvider.ts — WebviewViewProvider for the Contacts Activity Bar panel
+  │   │   ├── contactsViewMapping.ts  — data mapping for webview messages
+  │   │   ├── contactsViewHtml.ts     — HTML shell for contacts webview
+  │   │   ├── contactFileLoader.ts    — markdown file loading and parsing
+  │   │   ├── contactMutations.ts     — add/edit/delete/move mutation logic
   │   │   ├── contactParser.ts        — pure markdown dictionary parsing/serialization for contacts + reference data
   │   │   ├── contactUtils.ts         — pure builder/clone helpers for resolved contacts + reference data
+  │   │   ├── contactTooltip.ts       — tooltip markdown generation for @-mentions
   │   │   ├── integrityCheck.ts       — pure dangling-reference detection/correction helpers
   │   │   ├── titleGenerator.ts       — canonical normal/short title generation from career paths + levels
   │   │   ├── referenceDefaults.ts    — code-only fallbacks for unknown pronoun/career/interview references
   │   │   ├── types.ts                — Contact, ResolvedContact, ContactsReferenceData, form messages
-  │   │   └── webview/main.ts         — browser-side contacts sidebar UI (bundled to dist/contacts-webview.js)
+  │   │   └── webview/                — browser-side contacts sidebar UI (bundled to dist/contacts-webview.js)
+  │   │       ├── main.ts             — entry point, message routing
+  │   │       ├── contactListComponents.ts — list rendering components
+  │   │       ├── formPane.ts          — contact form UI
+  │   │       ├── formFields.ts        — form field rendering
+  │   │       ├── formModel.ts         — form state management
+  │   │       ├── titleField.ts        — title field with autocomplete
+  │   │       ├── datePickerField.ts   — date picker component
+  │   │       ├── dateInput.ts         — date input parsing
+  │   │       ├── domUtils.ts          — DOM helpers
+  │   │       ├── uiHelpers.ts         — UI utility functions
+  │   │       ├── modifierKeys.ts      — modifier key tracking
+  │   │       ├── state.ts             — shared mutable state
+  │   │       ├── styles.ts            — dynamic style injection
+  │   │       └── types.ts             — webview-side type aliases
   │   ├── taskCollector/
-  │   │   ├── taskCollectorFeature.ts — feature lifecycle, sync orchestration, file watching, reconciliation
+  │   │   ├── taskCollectorFeature.ts      — feature lifecycle, sync orchestration, file watching, reconciliation
+  │   │   ├── taskCollectorPathResolver.ts — URI classification and path resolution (extracted from feature)
+  │   │   ├── taskCollectorTransformer.ts  — pure index↔snapshot data-shape conversions (extracted from feature)
   │   │   ├── taskParser.ts           — parse markdown task lists from source and collector formats
   │   │   ├── taskIndex.ts            — stable task identity management (.memoria/tasks-index.json)
   │   │   ├── taskAlignment.ts        — Myers-diff-style alignment for rename-safe task matching
@@ -49,10 +73,31 @@ extension.ts (activation, DI wiring, versioning check)
   │   │   ├── collectorFormatter.ts   — render collector document from task index
   │   │   └── types.ts                — SyncJob, ParsedTask, StoredTaskIndex, etc.
   │   └── todoEditor/
-  │       ├── types.ts                — UITask, ToWebviewMessage, ToExtensionMessage
-  │       ├── documentSerializer.ts   — pure parse/mutate functions for .todo.md
-  │       ├── todoEditorProvider.ts   — CustomTextEditorProvider, webview lifecycle
-  │       └── webview/main.ts         — browser-side UI (IIFE bundle → dist/webview.js)
+  │       ├── types.ts                    — UITask, ToWebviewMessage, ToExtensionMessage, LinkSuggestion
+  │       ├── documentSerializer.ts       — pure parse/mutate functions for .todo.md
+  │       ├── todoEditorProvider.ts       — CustomTextEditorProvider, webview lifecycle, caching
+  │       ├── todoEditorMessageHandler.ts — message dispatch (extracted from provider for SRP)
+  │       ├── todoEditorHtml.ts           — HTML shell with skeleton placeholder + CSP
+  │       ├── todoSourceSync.ts           — write-back edits to source files
+  │       ├── todoTaskHelpers.ts          — subtask checkbox toggling helpers
+  │       └── webview/                    — browser-side UI (IIFE bundle → dist/webview.js)
+  │           ├── main.ts                 — entry point, message routing, renderAll()
+  │           ├── activeList.ts           — incremental DOM update for active tasks
+  │           ├── completedList.ts        — incremental DOM update + collapse for completed tasks
+  │           ├── state.ts                — shared mutable state (tasks, tooltips)
+  │           ├── popup.ts                — add/edit task popup
+  │           ├── contactTooltip.ts       — hover tooltips for @-mentions
+  │           ├── snippetAutocomplete.ts  — inline snippet completion
+  │           ├── linkHandler.ts          — local link interception
+  │           ├── linkAutocomplete.ts     — link path/heading autocompletion
+  │           ├── contextMenu.ts          — right-click context menu
+  │           ├── keyboardNav.ts          — keyboard navigation + highlight
+  │           ├── checkbox.ts             — SVG checkbox rendering
+  │           ├── subtaskHandlers.ts      — sub-task checkbox event wiring
+  │           ├── styles.ts              — dynamic style injection
+  │           ├── utils.ts                — DOM helpers, sanitizer, date formatting
+  │           ├── types.ts                — webview-side type aliases
+  │           └── todoEditor.css          — external CSS (bundled separately by esbuild)
   └── blueprints/
       ├── types.ts                — shared data contracts (interfaces only)
       ├── blueprintParser.ts      — YAML → BlueprintDefinition (pure, no vscode)
@@ -97,6 +142,42 @@ Contacts extends this pattern: blueprint YAML declares only the initial contacts
 
 ### SKIP_FILE Symbol
 `FileScaffold` exports a `SKIP_FILE` symbol that seed callbacks return to signal "do not overwrite this file". This avoids boolean/null ambiguity and enables clean scaffold result tracking (`skippedPaths`).
+
+### TodoEditor Performance Patterns (CRITICAL — preserve these)
+
+The todo editor must load fast and feel smooth. These optimizations are intentional and must not be regressed:
+
+1. **Lazy MarkdownIt initialization**: `_md` is `null` until the first `.todo.md` is opened. Construction cost is paid once, not at activation.
+2. **Markdown render cache** (`mdCache`): Maps `cleanBody → bodyHtml`. Avoids re-rendering unchanged task bodies across updates. Persistent across editor open/close.
+3. **Fingerprint-based skip** (`lastPushedText`): `pushUpdate()` compares the full document text against the last pushed text. If identical, the entire update is skipped — no parsing, no rendering, no `postMessage`.
+4. **Debounced text-change propagation**: `onDidChangeTextDocument` uses a 80ms `setTimeout` debounce to coalesce rapid edits before pushing updates to the webview.
+5. **External CSS bundle**: `todoEditor.css` is bundled separately by esbuild (not inlined in JS). This eliminates FOUC and allows the browser to cache styles independently. The HTML shell includes a skeleton placeholder that shows immediately while JS loads.
+6. **Incremental DOM updates** (webview-side): Both `activeList.ts` and `completedList.ts` use a reconciliation strategy instead of `innerHTML` replacement:
+   - Remove cards no longer present
+   - Skip cards whose `bodyHtml` hasn't changed (via `renderedActiveHtml`/`renderedCompletedHtml` maps)
+   - Only rebuild cards with changed content; reorder existing DOM nodes otherwise
+7. **Completed section collapse**: When collapsed, completed task cards are removed from DOM entirely (not hidden via CSS). The `renderedCompletedHtml` cache is cleared to avoid stale references.
+8. **Cached workspace root**: `setInitializedRoot()` pre-resolves the root during activation so `resolveCustomTextEditor()` skips the async `findInitializedRoot()` call on every editor open.
+9. **Cached source-by-body map**: `cachedSourceByBody` persists across tab switches so the task index is only read from disk once. Refreshed explicitly when needed.
+10. **Optimistic UI**: Checkbox clicks immediately swap the SVG and add a CSS transition class (`completing`/`uncompleting`) before the `postMessage` round-trip completes.
+11. **Pre-rendered tooltip HTML**: Contact tooltips are rendered to HTML on the extension side and cached. The webview receives ready-to-inject HTML, not markdown.
+12. **`retainContextWhenHidden: true`**: The webview panel retains its JS state when the tab loses focus, avoiding full re-render on tab switch.
+
+### Module Extraction Pattern (Refactoring Principle)
+
+When a module grows beyond ~300 lines or has multiple responsibilities, extract along these axes:
+- **Message handling** → separate `*MessageHandler.ts` with a context interface (see `todoEditorMessageHandler.ts`)
+- **Path/URI resolution** → separate `*PathResolver.ts` (see `taskCollectorPathResolver.ts`)
+- **Data transformations** → separate `*Transformer.ts` with pure functions (see `taskCollectorTransformer.ts`)
+- **HTML generation** → separate `*Html.ts` (see `todoEditorHtml.ts`, `contactsViewHtml.ts`)
+- **Webview decomposition** → split monolithic `main.ts` into focused modules per UI concern (list rendering, form, date picker, etc.)
+- **Shared date/encoding/regex** → extract to `src/utils/` when used by ≥2 features
+
+The orchestrator (Feature/Provider) should remain a thin wiring layer that delegates to extracted modules.
+
+### Feature Setup Helpers (`featureSetup.ts`)
+
+The `createToggle()` utility in `featureSetup.ts` eliminates duplicated enable/disable toggle logic across feature handlers. It manages a single `Disposable` that is created on enable and disposed on disable.
 
 ### Single-Root `.memoria` Enforcement
 In multi-root workspaces, only one root may have `.memoria/` at a time. `ManifestManager.findInitializedRoot()` discovers which root (if any) is initialized, and `deleteMemoriaDir()` removes `.memoria/` from the old root before initializing/re-initializing a different one.

@@ -88,27 +88,7 @@ export function buildResolvedContact(
     const resolvedCareerPath = structuredClone(resolveCareerPath(contact.careerPathKey, referenceData.careerPaths));
     const resolvedPronouns = structuredClone(resolvePronouns(contact.pronounsKey, referenceData.pronouns));
 
-    if (contact.kind === "report") {
-        const resolvedCareerLevel = structuredClone(resolveCareerLevel(contact.levelId, referenceData.careerLevels));
-        const resolvedInterviewType = structuredClone(
-            resolveInterviewType(resolvedCareerLevel.interviewType, referenceData.interviewTypes),
-        );
-
-        return {
-            ...structuredClone(contact),
-            groupFile: group.file,
-            groupName: group.name,
-            groupType: group.type,
-            isCustomGroup: group.isCustom,
-            shortTitle: shortTitleLookup.get(contact.title) ?? contact.title,
-            resolvedPronouns,
-            resolvedCareerPath,
-            resolvedCareerLevel,
-            resolvedInterviewType,
-        };
-    }
-
-    return {
+    const base = {
         ...structuredClone(contact),
         groupFile: group.file,
         groupName: group.name,
@@ -117,6 +97,23 @@ export function buildResolvedContact(
         shortTitle: shortTitleLookup.get(contact.title) ?? contact.title,
         resolvedPronouns,
         resolvedCareerPath,
+    };
+
+    if (contact.kind === "report") {
+        const resolvedCareerLevel = structuredClone(resolveCareerLevel(contact.levelId, referenceData.careerLevels));
+        const resolvedInterviewType = structuredClone(
+            resolveInterviewType(resolvedCareerLevel.interviewType, referenceData.interviewTypes),
+        );
+
+        return {
+            ...base,
+            resolvedCareerLevel,
+            resolvedInterviewType,
+        };
+    }
+
+    return {
+        ...base,
         resolvedCareerLevel: null,
         resolvedInterviewType: null,
     };

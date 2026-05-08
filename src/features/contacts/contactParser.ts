@@ -131,85 +131,73 @@ export function findDuplicateContactIds(documents: readonly ContactGroupDocument
 }
 
 export function parsePronounsDocument(text: string): PronounsReference[] {
-    return parseMarkdownRecords(text).map((record) => {
-        const knownKeys = new Set(PRONOUN_FIELD_ORDER);
-        return {
-            key: record.key,
-            subject: record.scalarFields.Subject ?? "",
-            object: record.scalarFields.Object ?? "",
-            possessiveAdjective: record.scalarFields.PossessiveAdjective ?? "",
-            possessive: record.scalarFields.Possessive ?? "",
-            reflexive: record.scalarFields.Reflexive ?? "",
-            extraFields: extractExtraFields(record.scalarFields, knownKeys),
-        };
-    });
+    return parseReferenceDocument(text, PRONOUN_FIELD_ORDER, (record, extra) => ({
+        key: record.key,
+        subject: record.scalarFields.Subject ?? "",
+        object: record.scalarFields.Object ?? "",
+        possessiveAdjective: record.scalarFields.PossessiveAdjective ?? "",
+        possessive: record.scalarFields.Possessive ?? "",
+        reflexive: record.scalarFields.Reflexive ?? "",
+        extraFields: extra,
+    }));
 }
 
 export function serializePronounsDocument(entries: readonly PronounsReference[]): string {
-    return entries.map((entry) => serializeReferenceEntry(entry.key, [
+    return serializeReferenceDocument(entries, (entry) => ([
         ["Subject", entry.subject],
         ["Object", entry.object],
         ["PossessiveAdjective", entry.possessiveAdjective],
         ["Possessive", entry.possessive],
         ["Reflexive", entry.reflexive],
-    ], entry.extraFields)).join("\n\n");
+    ]));
 }
 
 export function parseCareerLevelsDocument(text: string): CareerLevelReference[] {
-    return parseMarkdownRecords(text).map((record) => {
-        const knownKeys = new Set(CAREER_LEVEL_FIELD_ORDER);
-        return {
-            key: record.key,
-            id: parseNumberField(record.scalarFields.Id),
-            interviewType: record.scalarFields.InterviewType ?? "",
-            titlePattern: record.scalarFields.TitlePattern ?? "",
-            extraFields: extractExtraFields(record.scalarFields, knownKeys),
-        };
-    });
+    return parseReferenceDocument(text, CAREER_LEVEL_FIELD_ORDER, (record, extra) => ({
+        key: record.key,
+        id: parseNumberField(record.scalarFields.Id),
+        interviewType: record.scalarFields.InterviewType ?? "",
+        titlePattern: record.scalarFields.TitlePattern ?? "",
+        extraFields: extra,
+    }));
 }
 
 export function serializeCareerLevelsDocument(entries: readonly CareerLevelReference[]): string {
-    return entries.map((entry) => serializeReferenceEntry(entry.key, [
+    return serializeReferenceDocument(entries, (entry) => ([
         ["Id", String(entry.id)],
         ["InterviewType", entry.interviewType],
         ["TitlePattern", entry.titlePattern],
-    ], entry.extraFields)).join("\n\n");
+    ]));
 }
 
 export function parseCareerPathsDocument(text: string): CareerPathReference[] {
-    return parseMarkdownRecords(text).map((record) => {
-        const knownKeys = new Set(CAREER_PATH_FIELD_ORDER);
-        return {
-            key: record.key,
-            name: record.scalarFields.Name ?? "",
-            short: record.scalarFields.Short ?? "",
-            minimumCareerLevel: parseNumberField(record.scalarFields.MinimumCareerLevel),
-            extraFields: extractExtraFields(record.scalarFields, knownKeys),
-        };
-    });
+    return parseReferenceDocument(text, CAREER_PATH_FIELD_ORDER, (record, extra) => ({
+        key: record.key,
+        name: record.scalarFields.Name ?? "",
+        short: record.scalarFields.Short ?? "",
+        minimumCareerLevel: parseNumberField(record.scalarFields.MinimumCareerLevel),
+        extraFields: extra,
+    }));
 }
 
 export function serializeCareerPathsDocument(entries: readonly CareerPathReference[]): string {
-    return entries.map((entry) => serializeReferenceEntry(entry.key, [
+    return serializeReferenceDocument(entries, (entry) => ([
         ["Name", entry.name],
         ["Short", entry.short],
         ["MinimumCareerLevel", String(entry.minimumCareerLevel)],
-    ], entry.extraFields)).join("\n\n");
+    ]));
 }
 
 export function parseInterviewTypesDocument(text: string): InterviewTypeReference[] {
-    return parseMarkdownRecords(text).map((record) => {
-        const knownKeys = new Set(INTERVIEW_TYPE_FIELD_ORDER);
-        return {
-            key: record.key,
-            name: record.scalarFields.Name ?? "",
-            extraFields: extractExtraFields(record.scalarFields, knownKeys),
-        };
-    });
+    return parseReferenceDocument(text, INTERVIEW_TYPE_FIELD_ORDER, (record, extra) => ({
+        key: record.key,
+        name: record.scalarFields.Name ?? "",
+        extraFields: extra,
+    }));
 }
 
 export function serializeInterviewTypesDocument(entries: readonly InterviewTypeReference[]): string {
-    return entries.map((entry) => serializeReferenceEntry(entry.key, [["Name", entry.name]], entry.extraFields)).join("\n\n");
+    return serializeReferenceDocument(entries, (entry) => ([["Name", entry.name]]));
 }
 
 function parseMarkdownRecords(text: string): ParsedMarkdownRecord[] {
@@ -280,35 +268,33 @@ function parseMarkdownRecords(text: string): ParsedMarkdownRecord[] {
     return records;
 }
 
-function toReportContact(record: ParsedMarkdownRecord): ReportContact {
-    const knownKeys = new Set(REPORT_FIELD_ORDER);
+function toBaseContactFields(record: ParsedMarkdownRecord, knownFieldOrder: readonly string[]) {
+    const knownKeys = new Set(knownFieldOrder);
     return {
-        kind: "report",
         id: record.key,
         nickname: record.scalarFields.Nickname ?? "",
         fullName: record.scalarFields.FullName ?? "",
         title: record.scalarFields.Title ?? "",
         careerPathKey: record.scalarFields.CareerPathKey ?? "",
-        levelId: record.scalarFields.LevelId ?? "",
-        levelStartDate: record.scalarFields.LevelStartDate ?? "",
         pronounsKey: record.scalarFields.PronounsKey ?? "",
         extraFields: extractExtraFields(record.scalarFields, knownKeys),
         droppedFields: cloneFieldMap(record.nestedFields[DROPPED_FIELDS_KEY] ?? {}),
     };
 }
 
+function toReportContact(record: ParsedMarkdownRecord): ReportContact {
+    return {
+        kind: "report",
+        ...toBaseContactFields(record, REPORT_FIELD_ORDER),
+        levelId: record.scalarFields.LevelId ?? "",
+        levelStartDate: record.scalarFields.LevelStartDate ?? "",
+    };
+}
+
 function toColleagueContact(record: ParsedMarkdownRecord): ColleagueContact {
-    const knownKeys = new Set(COLLEAGUE_FIELD_ORDER);
     return {
         kind: "colleague",
-        id: record.key,
-        nickname: record.scalarFields.Nickname ?? "",
-        fullName: record.scalarFields.FullName ?? "",
-        title: record.scalarFields.Title ?? "",
-        careerPathKey: record.scalarFields.CareerPathKey ?? "",
-        pronounsKey: record.scalarFields.PronounsKey ?? "",
-        extraFields: extractExtraFields(record.scalarFields, knownKeys),
-        droppedFields: cloneFieldMap(record.nestedFields[DROPPED_FIELDS_KEY] ?? {}),
+        ...toBaseContactFields(record, COLLEAGUE_FIELD_ORDER),
     };
 }
 
@@ -341,6 +327,26 @@ function serializeContact(contact: Contact): string {
     appendNestedFieldMap(lines, DROPPED_FIELDS_KEY, contact.droppedFields);
 
     return lines.join("\n");
+}
+
+function parseReferenceDocument<T extends { extraFields: ContactFieldMap }>(
+    text: string,
+    knownFieldOrder: readonly string[],
+    mapper: (record: ParsedMarkdownRecord, extraFields: ContactFieldMap) => T,
+): T[] {
+    const knownKeys = new Set(knownFieldOrder);
+    return parseMarkdownRecords(text).map((record) =>
+        mapper(record, extractExtraFields(record.scalarFields, knownKeys)),
+    );
+}
+
+function serializeReferenceDocument<T extends { key: string; extraFields: ContactFieldMap }>(
+    entries: readonly T[],
+    toFields: (entry: T) => ReadonlyArray<readonly [string, string]>,
+): string {
+    return entries
+        .map((entry) => serializeReferenceEntry(entry.key, toFields(entry), entry.extraFields))
+        .join("\n\n");
 }
 
 function serializeReferenceEntry(

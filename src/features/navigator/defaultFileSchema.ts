@@ -1,7 +1,8 @@
-// Helpers for inspecting the JSON structure of .memoria/default-files.json.
+// Pure JSON structure parsing helpers for .memoria/default-files.json.
 //
 // These functions use jsonc-parser to extract existing keys and values from
-// the document text, so completion providers can avoid suggesting duplicates.
+// the document text. They have NO dependency on the VS Code API so they can
+// be unit-tested in isolation without mocking vscode.
 
 import { parseTree, findNodeAtLocation } from "jsonc-parser";
 
@@ -54,7 +55,7 @@ export function getExistingArrayValues(text: string, folderKey: string): Set<str
 
     // Try new object format first: defaultFiles[folderKey].filesToOpen
     const entryNode = findNodeAtLocation(root, ["defaultFiles", folderKey]);
-    let arrayNode = entryNode?.type === "object"
+    const arrayNode = entryNode?.type === "object"
         ? findNodeAtLocation(root, ["defaultFiles", folderKey, "filesToOpen"])
         : entryNode; // legacy: the node itself is the array
 

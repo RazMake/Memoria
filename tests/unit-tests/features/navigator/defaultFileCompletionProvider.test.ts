@@ -131,7 +131,7 @@ describe("DefaultFileCompletionProvider", () => {
             const { getLocation } = require("jsonc-parser");
             const text = "{ }";
             const loc = getLocation(text, 2);
-            expect(isTopLevelKey(loc)).toBe(true);
+            expect(isTopLevelKey(loc, "defaultFiles")).toBe(true);
         });
 
         it("should return false when defaultFiles key already exists", () => {
@@ -140,7 +140,7 @@ describe("DefaultFileCompletionProvider", () => {
             const loc = getLocation(text, 3);
             // Cursor is at the "d" of "defaultFiles" — isAtPropertyKey is true but
             // the path starts with "defaultFiles".
-            expect(isTopLevelKey(loc)).toBe(false);
+            expect(isTopLevelKey(loc, "defaultFiles")).toBe(false);
         });
     });
 

@@ -1,14 +1,22 @@
 // Thin orchestrator that composes the blueprint subsystem components to perform workspace initialization.
-// All logic lives in the collaborators (registry, scaffold, manifest); the engine just sequences them.
+// All logic lives in the collaborators (registry, scaffold, manifest, builders); the engine just sequences them.
 
 import * as vscode from "vscode";
 import type { BlueprintRegistry } from "./blueprintRegistry";
 import type { ManifestManager } from "./manifestManager";
 import type { FileScaffold } from "./fileScaffold";
-import { getRootFolderName } from "./workspaceUtils";
-import type { BlueprintManifest, BlueprintFeature, FeaturesConfig, DecorationRule, ReinitPlan, DefaultFileMap, DefaultFilesEntry, TaskCollectorFeatureEntry, ContactsFeatureEntry, SnippetsFeatureEntry, WorkspaceEntry } from "./types";
+import { BACKUP_FOLDER_NAME, type BlueprintDefinition, type DecorationsFeatureEntry, type FeaturesConfig, type TaskCollectorFeatureEntry, type WorkspaceEntry } from "./types";
 import type { WorkspaceInitConflictResolver } from "./workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
+import {
+    mergeDefaultFileMap,
+    buildFeaturesConfig,
+    extractFeature,
+    extractKnownFeatures,
+    buildManifest,
+    mergeFeaturesConfig,
+    buildSeedSourceMap,
+} from "./blueprintBuilders";
 
 export class BlueprintEngine {
     constructor(
@@ -29,46 +37,22 @@ export class BlueprintEngine {
      */
     async initialize(workspaceRoot: vscode.Uri, blueprintId: string): Promise<void> {
         const definition = await this.registry.getBlueprintDefinition(blueprintId);
-        const taskCollector = extractTaskCollectorFeature(definition.features);
-        const contacts = extractContactsFeature(definition.features);
-        const snippets = extractSnippetsFeature(definition.features);
+        const features = extractKnownFeatures(definition.features);
+        const getSeedContent = this.buildSeedContentCallback(blueprintId, definition.workspace);
 
-        const seedSourceMap = buildSeedSourceMap(definition.workspace);
         const { fileManifest } = await this.scaffold.scaffoldTree(
             workspaceRoot,
             definition.workspace,
-            (relativePath) => {
-                const seedSource = seedSourceMap.get(relativePath);
-                if (seedSource) {
-                    return this.registry.getSharedSeedContent(seedSource);
-                }
-                return this.registry.getSeedFileContent(blueprintId, relativePath);
-            }
+            getSeedContent,
         );
 
-        const manifest: BlueprintManifest = {
-            blueprintId: definition.id,
-            blueprintVersion: definition.version,
+        const manifest = buildManifest(definition, fileManifest, features, {
             initializedAt: new Date().toISOString(),
             lastReinitAt: null,
-            fileManifest,
-            taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
-            contacts: contacts ? buildContactsManifestConfig(contacts) : undefined,
-            snippets: snippets ? { snippetsFolder: snippets.snippetsFolder } : undefined,
-        };
+        });
 
         await this.manifest.writeManifest(workspaceRoot, manifest);
-        if (definition.defaultFiles) {
-            await this.manifest.writeDefaultFiles(
-                workspaceRoot,
-                mergeDefaultFileMap(definition.defaultFiles, workspaceRoot)
-            );
-        }
-        await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(definition.features) });
-        await this.manifest.writeFeatures(workspaceRoot, buildFeaturesConfig(definition.features));
-        if (taskCollector) {
-            await this.manifest.writeTaskCollectorConfig(workspaceRoot, taskCollector.config);
-        }
+        await this.persistMetadata(workspaceRoot, definition, features.taskCollector, null);
     }
 
     /**
@@ -93,18 +77,8 @@ export class BlueprintEngine {
         }
 
         const newDefinition = await this.registry.getBlueprintDefinition(blueprintId);
-        const taskCollector = extractTaskCollectorFeature(newDefinition.features);
-        const contacts = extractContactsFeature(newDefinition.features);
-        const snippets = extractSnippetsFeature(newDefinition.features);
-
-        const seedSourceMap = buildSeedSourceMap(newDefinition.workspace);
-        const getSeedContent = (relativePath: string) => {
-            const seedSource = seedSourceMap.get(relativePath);
-            if (seedSource) {
-                return this.registry.getSharedSeedContent(seedSource);
-            }
-            return this.registry.getSeedFileContent(blueprintId, relativePath);
-        };
+        const features = extractKnownFeatures(newDefinition.features);
+        const getSeedContent = this.buildSeedContentCallback(blueprintId, newDefinition.workspace);
 
         const plan = await resolver.resolveConflicts(
             workspaceRoot,
@@ -129,7 +103,7 @@ export class BlueprintEngine {
         // Phase D — Execute.
         // Move folders the user chose to clean up into WorkspaceInitializationBackups/.
         if (plan.foldersToCleanup.length > 0) {
-            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups");
+            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, BACKUP_FOLDER_NAME);
             await this.fs.createDirectory(cleanupRoot);
             await Promise.all(
                 plan.foldersToCleanup.map(async (folder) => {
@@ -147,151 +121,69 @@ export class BlueprintEngine {
             getSeedContent
         );
 
-        const updatedManifest: BlueprintManifest = {
-            blueprintId: newDefinition.id,
-            blueprintVersion: newDefinition.version,
+        const updatedManifest = buildManifest(newDefinition, fileManifest, features, {
             rootUri: currentManifest.rootUri,
             initializedAt: currentManifest.initializedAt,
             lastReinitAt: new Date().toISOString(),
-            fileManifest,
-            taskCollector: taskCollector ? { collectorPath: taskCollector.collectorPath } : undefined,
-            contacts: contacts ? buildContactsManifestConfig(contacts) : undefined,
-            snippets: snippets ? { snippetsFolder: snippets.snippetsFolder } : undefined,
-        };
+        });
 
         await this.manifest.writeManifest(workspaceRoot, updatedManifest);
-        if (newDefinition.defaultFiles) {
-            await this.manifest.writeDefaultFiles(
-                workspaceRoot,
-                mergeDefaultFileMap(newDefinition.defaultFiles, workspaceRoot)
-            );
-        }
-        await this.manifest.writeDecorations(workspaceRoot, { rules: extractDecorationRules(newDefinition.features) });
 
         const existingFeaturesConfig = await this.manifest.readFeatures(workspaceRoot);
-        await this.manifest.writeFeatures(workspaceRoot, mergeFeaturesConfig(newDefinition.features, existingFeaturesConfig));
-        if (taskCollector) {
-            await this.manifest.writeTaskCollectorConfig(workspaceRoot, taskCollector.config);
-        }
+        await this.persistMetadata(workspaceRoot, newDefinition, features.taskCollector, existingFeaturesConfig);
         await this.manifest.deleteTaskIndex(workspaceRoot);
 
         // Phase E — Open diff editors for files the user wants to merge manually.
         if (plan.filesToDiff.length > 0) {
-            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups");
+            const cleanupRoot = vscode.Uri.joinPath(workspaceRoot, BACKUP_FOLDER_NAME);
             await resolver.openDiffEditors(workspaceRoot, cleanupRoot, plan.filesToDiff);
         }
     }
-}
 
-/**
- * Merges the two-map DefaultFileMap into a flat Record for writing to default-files.json.
- * Root-scoped keys are prefixed with the workspace root folder name.
- */
-export function mergeDefaultFileMap(
-    map: DefaultFileMap,
-    workspaceRoot: vscode.Uri
-): Record<string, DefaultFilesEntry> {
-    const result: Record<string, DefaultFilesEntry> = {};
+    /**
+     * Writes default-files, decorations, features, and task-collector config.
+     * Shared between initialize() and reinitialize() to avoid duplicating the write sequence.
+     * When `existingFeaturesConfig` is provided, feature toggles are merged with existing state;
+     * otherwise a fresh config is built from the blueprint definition.
+     */
+    private async persistMetadata(
+        workspaceRoot: vscode.Uri,
+        definition: BlueprintDefinition,
+        taskCollector: TaskCollectorFeatureEntry | null,
+        existingFeaturesConfig: FeaturesConfig | null,
+    ): Promise<void> {
+        if (definition.defaultFiles) {
+            await this.manifest.writeDefaultFiles(
+                workspaceRoot,
+                mergeDefaultFileMap(definition.defaultFiles, workspaceRoot),
+            );
+        }
+        await this.manifest.writeDecorations(workspaceRoot, { rules: extractFeature<DecorationsFeatureEntry>(definition.features, "decorations")?.rules ?? [] });
 
-    for (const [folder, files] of Object.entries(map.relative)) {
-        result[folder] = { filesToOpen: files };
-    }
+        const featuresConfig = existingFeaturesConfig
+            ? mergeFeaturesConfig(definition.features, existingFeaturesConfig)
+            : buildFeaturesConfig(definition.features);
+        await this.manifest.writeFeatures(workspaceRoot, featuresConfig);
 
-    if (Object.keys(map.rootScoped).length > 0) {
-        const rootName = getRootFolderName(workspaceRoot);
-
-        for (const [folder, files] of Object.entries(map.rootScoped)) {
-            result[rootName + "/" + folder] = { filesToOpen: files };
+        if (taskCollector) {
+            await this.manifest.writeTaskCollectorConfig(workspaceRoot, taskCollector.config);
         }
     }
 
-    return result;
-}
-
-/** Builds the initial FeaturesConfig from a blueprint's features, using each feature's enabledByDefault. */
-export function buildFeaturesConfig(features: BlueprintFeature[]): FeaturesConfig {
-    return {
-        features: features.map((f) => ({
-            id: f.id,
-            name: f.name,
-            description: f.description,
-            enabled: f.enabledByDefault,
-        })),
-    };
-}
-
-/** Extracts decoration rules from the features array. Returns empty array if no decorations feature exists. */
-export function extractDecorationRules(features: BlueprintFeature[]): DecorationRule[] {
-    const decorations = features.find((f) => f.id === "decorations");
-    return decorations ? decorations.rules : [];
-}
-
-export function extractTaskCollectorFeature(features: BlueprintFeature[]): TaskCollectorFeatureEntry | null {
-    const feature = features.find((entry): entry is TaskCollectorFeatureEntry => entry.id === "taskCollector");
-    return feature ?? null;
-}
-
-export function extractContactsFeature(features: BlueprintFeature[]): ContactsFeatureEntry | null {
-    const feature = features.find((entry): entry is ContactsFeatureEntry => entry.id === "contacts");
-    return feature ?? null;
-}
-
-export function extractSnippetsFeature(features: BlueprintFeature[]): SnippetsFeatureEntry | null {
-    const feature = features.find((entry): entry is SnippetsFeatureEntry => entry.id === "snippets");
-    return feature ?? null;
-}
-
-function buildContactsManifestConfig(feature: ContactsFeatureEntry): NonNullable<BlueprintManifest["contacts"]> {
-    return {
-        peopleFolder: feature.peopleFolder,
-        groups: feature.groups.map((group) => ({ ...group })),
-    };
-}
-
-/**
- * Merges a new blueprint's features with the user's existing toggle state.
- * - Features that still exist: preserve user's `enabled` state, update name/description from blueprint.
- * - New features: use `enabledByDefault`.
- * - Removed features: dropped.
- */
-export function mergeFeaturesConfig(
-    newFeatures: BlueprintFeature[],
-    existingConfig: FeaturesConfig | null
-): FeaturesConfig {
-    const existingMap = new Map(
-        (existingConfig?.features ?? []).map((f) => [f.id, f])
-    );
-
-    return {
-        features: newFeatures.map((f) => {
-            const existing = existingMap.get(f.id);
-            return {
-                id: f.id,
-                name: f.name,
-                description: f.description,
-                enabled: existing !== undefined ? existing.enabled : f.enabledByDefault,
-            };
-        }),
-    };
-}
-
-/**
- * Walks the workspace entry tree and builds a map of relative paths to their shared seed source paths.
- * Only file entries with a `seedSource` field are included.
- */
-export function buildSeedSourceMap(entries: WorkspaceEntry[], prefix = ""): Map<string, string> {
-    const map = new Map<string, string>();
-    for (const entry of entries) {
-        if (entry.isFolder) {
-            if (entry.children) {
-                const childMap = buildSeedSourceMap(entry.children, prefix + entry.name);
-                for (const [key, value] of childMap) {
-                    map.set(key, value);
-                }
+    /** Returns a seed content callback that dispatches to shared vs blueprint-specific seed files. */
+    private buildSeedContentCallback(
+        blueprintId: string,
+        workspace: WorkspaceEntry[],
+    ): (relativePath: string) => Promise<Uint8Array | null> {
+        const seedSourceMap = buildSeedSourceMap(workspace);
+        return (relativePath: string) => {
+            const seedSource = seedSourceMap.get(relativePath);
+            if (seedSource) {
+                return this.registry.getSharedSeedContent(seedSource);
             }
-        } else if (entry.seedSource) {
-            map.set(prefix + entry.name, entry.seedSource);
-        }
+            return this.registry.getSeedFileContent(blueprintId, relativePath);
+        };
     }
-    return map;
 }
+
+

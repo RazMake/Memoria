@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { TelemetryEmitter } from "../telemetry";
 import type { TaskCollectorFeature } from "../features/taskCollector/taskCollectorFeature";
+import { formatError } from "../utils/error";
 
 export function createSyncTasksCommand(
     feature: TaskCollectorFeature,
@@ -17,12 +18,13 @@ export function createSyncTasksCommand(
                 telemetry.logUsage("taskCollector.syncRequested", { trigger: "command" });
             }
         } catch (error) {
+            const message = formatError(error);
             telemetry.logError("taskCollector.reconcileFailed", {
                 trigger: "command",
-                message: error instanceof Error ? error.message : String(error),
+                message,
             });
             vscode.window.showErrorMessage(
-                `Memoria: Task sync failed — ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Task sync failed — ${message}`
             );
         }
     };

@@ -54,11 +54,7 @@ export class BlueprintRegistry {
      */
     async getSeedFileContent(blueprintId: string, relativePath: string): Promise<Uint8Array | null> {
         const seedUri = vscode.Uri.joinPath(this.blueprintsRoot, blueprintId, "files", ...relativePath.split("/"));
-        try {
-            return await vscode.workspace.fs.readFile(seedUri);
-        } catch {
-            return null;
-        }
+        return this.readFileSafe(seedUri);
     }
 
     /**
@@ -68,8 +64,13 @@ export class BlueprintRegistry {
      */
     async getSharedSeedContent(seedSource: string): Promise<Uint8Array | null> {
         const seedUri = vscode.Uri.joinPath(this.blueprintsRoot, "_shared", ...seedSource.split("/"));
+        return this.readFileSafe(seedUri);
+    }
+
+    /** Reads a file, returning null instead of throwing when the file does not exist. */
+    private async readFileSafe(uri: vscode.Uri): Promise<Uint8Array | null> {
         try {
-            return await vscode.workspace.fs.readFile(seedUri);
+            return await vscode.workspace.fs.readFile(uri);
         } catch {
             return null;
         }

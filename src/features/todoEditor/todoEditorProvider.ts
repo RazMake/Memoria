@@ -35,6 +35,11 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
     // Cached body→source reverse map from the task index; survives tab switches.
     private cachedSourceByBody: Map<string, string> | null = null;
 
+    // Pre-resolved workspace root, set by the extension during activation
+    // so that resolveCustomTextEditor() skips the redundant findInitializedRoot() call.
+    private cachedInitializedRoot: vscode.Uri | null = null;
+    private hasReceivedRoot = false;
+
     // Active panels: each open .todo.md editor registers its pushContactTooltips
     // closure so we can push updated tooltip data when the expansion map changes
     // (e.g. contacts load after the editor was already open).
@@ -55,9 +60,65 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         );
     }
 
+    /** Caches the initialized workspace root so resolveCustomTextEditor skips findInitializedRoot. */
+    setInitializedRoot(root: vscode.Uri | null): void {
+        this.cachedInitializedRoot = root;
+        this.hasReceivedRoot = true;
+    }
+
     /** Re-pushes contact tooltip data to all open todo editor panels. */
     refreshContactTooltips(): void {
         for (const push of this.activePanelTooltipPushers) push();
+    }
+
+    /** Converts a parsed task into a UI-ready object, using caches to avoid redundant markdown renders. */
+    private toUITask(task: ParsedCollectorTask, isCompleted: boolean, index: number): UITask {
+        const id = `${isCompleted ? "c" : "a"}-${index}`;
+
+        let sourceRelativePath: string | null = null;
+        if (isCompleted && task.suffix?.source) {
+            sourceRelativePath = task.suffix.source;
+        } else if (!isCompleted && this.cachedSourceByBody) {
+            sourceRelativePath = this.cachedSourceByBody.get(task.bodyWithoutSuffix) ?? null;
+        }
+
+        const cleanBody = stripHangingIndent(task.bodyWithoutSuffix);
+
+        let bodyHtml = this.mdCache.get(cleanBody);
+        if (!bodyHtml) {
+            bodyHtml = this.md.render(cleanBody);
+            this.mdCache.set(cleanBody, bodyHtml);
+        }
+
+        return {
+            id,
+            bodyHtml,
+            bodyMarkdown: cleanBody,
+            completedDate: isCompleted ? (task.suffix?.completedDate ?? null) : null,
+            sourceRelativePath,
+        };
+    }
+
+    /** Builds contact tooltip entries from the expansion map, deduplicating by text. */
+    private buildContactTooltipEntries(): ContactTooltipEntry[] {
+        if (!this.expansionMap) return [];
+        const entries = this.expansionMap.getExpansionEntries();
+        if (entries.length === 0) return [];
+
+        const tooltipEntries: ContactTooltipEntry[] = [];
+        const seen = new Set<string>();
+        for (const { text, contact } of entries) {
+            if (seen.has(text)) continue;
+            seen.add(text);
+            const briefMd = buildContactTooltipMarkdown(contact, false);
+            const detailedMd = buildContactTooltipMarkdown(contact, true);
+            tooltipEntries.push({
+                text,
+                briefHtml: this.md.render(briefMd),
+                detailedHtml: this.md.render(detailedMd),
+            });
+        }
+        return tooltipEntries;
     }
 
     async resolveCustomTextEditor(
@@ -65,38 +126,7 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel: vscode.WebviewPanel,
         _token: vscode.CancellationToken,
     ): Promise<void> {
-        // 1. Configure webview and set HTML IMMEDIATELY so the webview JS
-        //    starts loading while we do I/O in parallel.
-        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
-        webviewPanel.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [distUri],
-        };
-
-        const nonce = getNonce();
-        const webviewJs = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.js"));
-        const webviewCss = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.css"));
-        webviewPanel.webview.html = getHtmlForWebview(webviewPanel.webview, nonce, webviewJs, webviewCss);
-
-        // 2. Wait for webview ready signal.
-        //    Without this handshake the first postMessage can arrive before the
-        //    webview script has attached its message listener.
-        const readyPromise = new Promise<void>((resolve) => {
-            const readyListener = webviewPanel.webview.onDidReceiveMessage((msg) => {
-                if (msg?.type === "ready") {
-                    readyListener.dispose();
-                    resolve();
-                }
-            });
-            // Safety: if the webview never sends ready (e.g. script error),
-            // fall through after 1 s so the editor isn't permanently blank.
-            setTimeout(() => { readyListener.dispose(); resolve(); }, 1000);
-        });
-
-        // 3. Read task index in parallel with webview ready handshake.
-        //    refreshTaskIndex is defined before Promise.all so it can be chained
-        //    onto findInitializedRoot — the task index read starts as soon as the
-        //    workspace root is known, without waiting for the webview ready signal.
+        this.configureWebviewPanel(webviewPanel);
 
         const refreshTaskIndex = async (root: vscode.Uri | null): Promise<void> => {
             if (!root) return;
@@ -112,18 +142,20 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             }
         };
 
-        const roots = vscode.workspace.workspaceFolders?.map(f => f.uri) ?? [];
-        const [workspaceRoot] = await Promise.all([
-            this.manifest.findInitializedRoot(roots).then(async (root) => {
-                await refreshTaskIndex(root);
-                return root;
-            }),
-            readyPromise,
-        ]);
+        // Use cached root when available; fall back to discovery only on cold start.
+        let workspaceRoot: vscode.Uri | null;
+        if (this.hasReceivedRoot) {
+            workspaceRoot = this.cachedInitializedRoot;
+        } else {
+            const roots = vscode.workspace.workspaceFolders?.map(f => f.uri) ?? [];
+            workspaceRoot = await this.manifest.findInitializedRoot(roots);
+        }
 
-        // 4. Resolve task by stable positional ID from the current document.
-        //    IDs use the format "a-<index>" (active) / "c-<index>" (completed)
-        //    so they survive across re-renders without a mutable lookup map.
+        // Only read task index from disk when not already cached.
+        if (!this.cachedSourceByBody) {
+            await refreshTaskIndex(workspaceRoot);
+        }
+
         const resolveTask = (id: string, doc: TodoDocument): { task: ParsedCollectorTask; section: "active" | "completed"; index: number } | null => {
             const m = /^([ac])-(\d+)$/.exec(id);
             if (!m) return null;
@@ -134,87 +166,15 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             return { task: tasks[idx], section: isCompleted ? "completed" : "active", index: idx };
         };
 
-        // 6. pushUpdate function — uses caches to avoid redundant work.
-        const pushUpdate = () => {
-            const text = document.getText();
-
-            // Skip no-op: if the document text hasn't changed since last push,
-            // there's nothing new to render.
-            if (text === this.lastPushedText) return;
-            this.lastPushedText = text;
-
-            const doc = parseTodoDocument(text);
-
-            const toUITask = (task: ParsedCollectorTask, isCompleted: boolean, index: number): UITask => {
-                const id = `${isCompleted ? "c" : "a"}-${index}`;
-
-                // Resolve source path via cached reverse map (O(1))
-                let sourceRelativePath: string | null = null;
-                if (isCompleted && task.suffix?.source) {
-                    sourceRelativePath = task.suffix.source;
-                } else if (!isCompleted && this.cachedSourceByBody) {
-                    sourceRelativePath = this.cachedSourceByBody.get(task.bodyWithoutSuffix) ?? null;
-                }
-
-                const cleanBody = stripHangingIndent(task.bodyWithoutSuffix);
-
-                // Cached markdown render — only re-render when body text changes
-                let bodyHtml = this.mdCache.get(cleanBody);
-                if (!bodyHtml) {
-                    bodyHtml = this.md.render(cleanBody);
-                    this.mdCache.set(cleanBody, bodyHtml);
-                }
-
-                return {
-                    id,
-                    bodyHtml,
-                    bodyMarkdown: cleanBody,
-                    completedDate: isCompleted ? (task.suffix?.completedDate ?? null) : null,
-                    sourceRelativePath,
-                };
-            };
-
-            const active = doc.active.map((t, i) => toUITask(t, false, i));
-            const completed = doc.completed.map((t, i) => toUITask(t, true, i));
-
-            const msg: ToWebviewMessage = { type: "update", active, completed };
-            webviewPanel.webview.postMessage(msg);
-        };
+        const pushUpdate = this.createPushUpdate(document, webviewPanel);
 
         const pushContactTooltips = () => {
-            if (!this.expansionMap) return;
-            const entries = this.expansionMap.getExpansionEntries();
-            if (entries.length === 0) return;
-
-            const tooltipEntries: ContactTooltipEntry[] = [];
-            const seen = new Set<string>();
-            for (const { text, contact } of entries) {
-                if (seen.has(text)) continue;
-                seen.add(text);
-                const briefMd = buildContactTooltipMarkdown(contact, false);
-                const detailedMd = buildContactTooltipMarkdown(contact, true);
-                tooltipEntries.push({
-                    text,
-                    briefHtml: this.md.render(briefMd),
-                    detailedHtml: this.md.render(detailedMd),
-                });
-            }
-
+            const tooltipEntries = this.buildContactTooltipEntries();
+            if (tooltipEntries.length === 0) return;
             const msg: ToWebviewMessage = { type: "contactTooltips", entries: tooltipEntries };
             webviewPanel.webview.postMessage(msg);
         };
 
-        pushUpdate();
-        pushContactTooltips();
-
-        // Track this panel so refreshContactTooltips() can push updates later.
-        this.activePanelTooltipPushers.add(pushContactTooltips);
-
-        // 8. Helper to apply edits and save so the task collector's onDidSave
-        // handler ingests changes via reconcileCollector (collector-first sync).
-        // Do NOT use memoria.syncTasks here — that triggers fullSync which
-        // re-renders the collector from the index without reading it first,
-        // discarding any new manual tasks.
         const applyEdit = async (newText: string): Promise<void> => {
             const edit = new vscode.WorkspaceEdit();
             edit.replace(
@@ -223,8 +183,6 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 newText,
             );
             await vscode.workspace.applyEdit(edit);
-            // Explicit save() triggers onDidSave in TaskCollector, which runs
-            // reconcileCollector to ingest collector edits — this is the intended data flow.
             await document.save();
         };
 
@@ -232,7 +190,10 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             await vscode.commands.executeCommand("memoria.syncTasks");
         };
 
-        // 9. Message handler — delegated to the extracted module
+        // Wire events first so the webview's "ready" message is handled immediately.
+        // The "ready" handler re-pushes data, so we don't need to block on waitForWebviewReady.
+        this.activePanelTooltipPushers.add(pushContactTooltips);
+
         let lastOpenedSourceUri: vscode.Uri | null = null;
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const provider = this;
@@ -253,28 +214,72 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
             setLastOpenedSourceUri: (uri) => { lastOpenedSourceUri = uri; },
         };
 
-        const messageHandler = (msg: ToExtensionMessage) => handleTodoEditorMessage(msg, messageCtx);
+        this.wireEditorEvents(messageCtx, pushUpdate, pushContactTooltips);
 
-        // 10. Register disposables
+        // Push initial data — may be lost if the webview script hasn't loaded yet,
+        // but the "ready" handler will re-push when the webview signals readiness.
+        pushUpdate();
+        pushContactTooltips();
+    }
+
+    /** Configures the webview panel with scripts and sets initial HTML. */
+    private configureWebviewPanel(webviewPanel: vscode.WebviewPanel): void {
+        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
+        webviewPanel.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [distUri],
+        };
+
+        const nonce = getNonce();
+        const webviewJs = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.js"));
+        const webviewCss = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.css"));
+        webviewPanel.webview.html = getHtmlForWebview(webviewPanel.webview, nonce, webviewJs, webviewCss);
+    }
+
+    /** Creates a debounce-safe push function that sends parsed document content to the webview. */
+    private createPushUpdate(
+        document: vscode.TextDocument,
+        webviewPanel: vscode.WebviewPanel,
+    ): () => void {
+        return () => {
+            const text = document.getText();
+            if (text === this.lastPushedText) return;
+            this.lastPushedText = text;
+
+            const doc = parseTodoDocument(text);
+            const active = doc.active.map((t, i) => this.toUITask(t, false, i));
+            const completed = doc.completed.map((t, i) => this.toUITask(t, true, i));
+
+            const msg: ToWebviewMessage = { type: "update", active, completed };
+            webviewPanel.webview.postMessage(msg);
+        };
+    }
+
+    /** Wires up message handling, text-change debouncing, and disposal cleanup. */
+    private wireEditorEvents(
+        ctx: TodoEditorMessageContext,
+        pushUpdate: () => void,
+        pushContactTooltips: () => void,
+    ): void {
+        const messageHandler = (msg: ToExtensionMessage) => handleTodoEditorMessage(msg, ctx);
+
         const disposables: vscode.Disposable[] = [];
 
         disposables.push(
-            webviewPanel.webview.onDidReceiveMessage(messageHandler),
+            ctx.webviewPanel.webview.onDidReceiveMessage(messageHandler),
         );
 
-        // Debounce text-change updates to avoid cascading re-parses when
-        // applyEdit + save fire multiple change events in quick succession.
         let changeTimer: ReturnType<typeof setTimeout> | null = null;
         disposables.push(
             vscode.workspace.onDidChangeTextDocument(e => {
-                if (e.document.uri.toString() === document.uri.toString()) {
+                if (e.document.uri.toString() === ctx.document.uri.toString()) {
                     if (changeTimer) clearTimeout(changeTimer);
                     changeTimer = setTimeout(pushUpdate, 80);
                 }
             }),
         );
 
-        webviewPanel.onDidDispose(() => {
+        ctx.webviewPanel.onDidDispose(() => {
             this.activePanelTooltipPushers.delete(pushContactTooltips);
             this.lastPushedText = "";
             if (changeTimer) clearTimeout(changeTimer);

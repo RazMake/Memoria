@@ -18,14 +18,11 @@
 // to remain valid from the collector's location.
 import path from "node:path";
 import { normalizePath } from "../../utils/path";
-import { escapeRegExp } from "../../utils/regex";
+import { parseFenceState, isFenceBoundary } from "../../utils/fenceParser";
 
 // Matches any URI scheme (http://, mailto:, vscode://, etc.) so that absolute URLs
 // are skipped — only relative paths without a scheme are rewritten.
 const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+\-.]*:/;
-// Detects the opening of a fenced code block (``` or ~~~) so its contents are
-// passed through unchanged and code samples are never corrupted by path rewriting.
-const FENCE_RE = /^([`~]{3,})/;;
 
 interface ProcessOptions {
     transform: (value: string) => string;
@@ -65,13 +62,14 @@ function processBody(body: string, options: ProcessOptions): { body: string; ord
     const ordinals = new Set<number>();
     let fence: { marker: "`" | "~"; length: number } | null = null;
     let ordinal = 0;
+    const nextOrdinal = () => ++ordinal;
 
     for (const line of lines) {
         const trimmed = line.trimStart();
 
         if (fence) {
             result.push(line);
-            if (isFenceBoundary(trimmed, fence.marker, fence.length)) {
+            if (isFenceBoundary(trimmed, fence)) {
                 fence = null;
             }
             continue;
@@ -84,28 +82,37 @@ function processBody(body: string, options: ProcessOptions): { body: string; ord
             continue;
         }
 
-        const refMatch = line.match(/^(\s*\[[^\]]+\]:\s*)(<[^>]+>|\S+)(.*)$/);
-        if (refMatch) {
-            const rawDestination = refMatch[2];
-            const destination = unwrapAngleBrackets(rawDestination);
-            if (isRewriteCandidate(destination)) {
-                ordinal += 1;
-                ordinals.add(ordinal);
-                const rewritten = shouldRewrite(ordinal, options.rewriteOrdinals)
-                    ? wrapWithSameDelimiters(rawDestination, options.transform(destination))
-                    : rawDestination;
-                result.push(refMatch[1] + rewritten + refMatch[3]);
-                continue;
-            }
+        const rewrittenRef = rewriteRefDefinition(line, options, ordinals, nextOrdinal);
+        if (rewrittenRef !== null) {
+            result.push(rewrittenRef);
+            continue;
         }
 
-        result.push(rewriteInlineTokens(line, options, ordinals, () => ++ordinal));
+        result.push(rewriteInlineTokens(line, options, ordinals, nextOrdinal));
     }
 
-    return {
-        body: result.join("\n"),
-        ordinals,
-    };
+    return { body: result.join("\n"), ordinals };
+}
+
+function rewriteRefDefinition(
+    line: string,
+    options: ProcessOptions,
+    ordinals: Set<number>,
+    nextOrdinal: () => number,
+): string | null {
+    const refMatch = line.match(/^(\s*\[[^\]]+\]:\s*)(<[^>]+>|\S+)(.*)$/);
+    if (!refMatch) return null;
+
+    const rawDestination = refMatch[2];
+    const destination = unwrapAngleBrackets(rawDestination);
+    if (!isRewriteCandidate(destination)) return null;
+
+    const ordinal = nextOrdinal();
+    ordinals.add(ordinal);
+    const rewritten = shouldRewrite(ordinal, options.rewriteOrdinals)
+        ? wrapWithSameDelimiters(rawDestination, options.transform(destination))
+        : rawDestination;
+    return refMatch[1] + rewritten + refMatch[3];
 }
 
 function rewriteInlineTokens(
@@ -263,21 +270,6 @@ function unwrapAngleBrackets(value: string): string {
 
 function wrapWithSameDelimiters(original: string, nextValue: string): string {
     return original.startsWith("<") && original.endsWith(">") ? `<${nextValue}>` : nextValue;
-}
-
-function parseFenceState(line: string): { marker: "`" | "~"; length: number } | null {
-    const match = FENCE_RE.exec(line);
-    if (!match) {
-        return null;
-    }
-    return {
-        marker: match[1][0] as "`" | "~",
-        length: match[1].length,
-    };
-}
-
-function isFenceBoundary(line: string, marker: "`" | "~", length: number): boolean {
-    return new RegExp(`^${escapeRegExp(marker)}{${length},}`).test(line);
 }
 
 function shouldRewrite(ordinal: number, rewriteOrdinals?: Set<number> | null): boolean {

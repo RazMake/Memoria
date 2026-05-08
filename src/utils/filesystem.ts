@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { textDecoder } from "./encoding";
+import { textDecoder, textEncoder } from "./encoding";
 
 /**
  * Reads the full text content of a file via the VS Code filesystem API.
@@ -12,6 +12,13 @@ export async function readTextFile(fs: typeof vscode.workspace.fs, uri: vscode.U
     } catch {
         return "";
     }
+}
+
+/**
+ * Writes text content to a file via the VS Code filesystem API.
+ */
+export async function writeTextFile(fs: typeof vscode.workspace.fs, uri: vscode.Uri, text: string): Promise<void> {
+    await fs.writeFile(uri, textEncoder.encode(text));
 }
 
 /**

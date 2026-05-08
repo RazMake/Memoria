@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ageInDays, formatDate, isTaskExpired } from "../../../../src/features/taskCollector/aging";
+import { ageInDays, formatISODate } from "../../../../src/utils/dateUtils";
+import { isTaskExpired } from "../../../../src/features/taskCollector/aging";
 import type { TaskIndexEntry } from "../../../../src/features/taskCollector/types";
 
 describe("aging", () => {
-    describe("formatDate", () => {
+    describe("formatISODate", () => {
         it("should return an ISO date string in YYYY-MM-DD format", () => {
-            expect(formatDate(new Date("2026-04-16T15:30:00.000Z"))).toBe("2026-04-16");
+            expect(formatISODate(new Date("2026-04-16T15:30:00.000Z"))).toBe("2026-04-16");
         });
 
         it("should use UTC date regardless of time component", () => {
-            expect(formatDate(new Date("2026-04-16T23:59:59.999Z"))).toBe("2026-04-16");
+            expect(formatISODate(new Date("2026-04-16T23:59:59.999Z"))).toBe("2026-04-16");
         });
     });
 

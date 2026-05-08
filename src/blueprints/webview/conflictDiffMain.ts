@@ -144,6 +144,16 @@ function el(tag: string, className?: string): HTMLElement {
     return e;
 }
 
+function renderDiffLine(parent: HTMLElement, className: string, prefixChar: string, line: string): void {
+    const lineEl = el("div", `diff-line ${className}`);
+    const prefix = el("span", "line-prefix");
+    prefix.textContent = prefixChar;
+    const content = el("span", "line-content");
+    content.innerHTML = escapeHtml(line) || "&nbsp;";
+    lineEl.append(prefix, content);
+    parent.appendChild(lineEl);
+}
+
 function render(): void {
     const root = document.getElementById("root")!;
     root.textContent = "";
@@ -192,13 +202,7 @@ function render(): void {
     for (const section of sections) {
         if (section.kind === "context") {
             for (const line of section.lines) {
-                const lineEl = el("div", "diff-line context-line");
-                const prefix = el("span", "line-prefix");
-                prefix.textContent = " ";
-                const content = el("span", "line-content");
-                content.innerHTML = escapeHtml(line) || "&nbsp;";
-                lineEl.append(prefix, content);
-                diffView.appendChild(lineEl);
+                renderDiffLine(diffView, "context-line", " ", line);
             }
         } else {
             changeCount++;
@@ -234,24 +238,12 @@ function render(): void {
 
             // Deleted lines (from pre-existing)
             for (const line of section.deletedLines) {
-                const lineEl = el("div", "diff-line deleted-line");
-                const prefix = el("span", "line-prefix");
-                prefix.textContent = "−";
-                const content = el("span", "line-content");
-                content.innerHTML = escapeHtml(line) || "&nbsp;";
-                lineEl.append(prefix, content);
-                hunk.appendChild(lineEl);
+                renderDiffLine(hunk, "deleted-line", "−", line);
             }
 
             // Inserted lines (from new version)
             for (const line of section.insertedLines) {
-                const lineEl = el("div", "diff-line inserted-line");
-                const prefix = el("span", "line-prefix");
-                prefix.textContent = "+";
-                const content = el("span", "line-content");
-                content.innerHTML = escapeHtml(line) || "&nbsp;";
-                lineEl.append(prefix, content);
-                hunk.appendChild(lineEl);
+                renderDiffLine(hunk, "inserted-line", "+", line);
             }
 
             diffView.appendChild(hunk);

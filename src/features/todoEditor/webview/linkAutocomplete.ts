@@ -1,14 +1,10 @@
 import type { LinkSuggestion } from './types';
 import { vscode } from './state';
-import { el } from './utils';
+import { createAutocompleteDropdown } from './autocompleteDropdown';
 import { detectLinkContext } from './linkContext';
 export type { LinkContext } from './linkContext';
 export { detectLinkContext } from './linkContext';
 
-let dropdownEl: HTMLElement | null = null;
-let items: LinkSuggestion[] = [];
-let selectedIndex = -1;
-let activeInput: HTMLInputElement | HTMLTextAreaElement | null = null;
 /** Start of the link target region inside parens, i.e. the char after '('. */
 let parenStart = -1;
 /** Whether we're currently completing a heading (after #). */
@@ -20,8 +16,10 @@ let suppressNextInput = false;
 /** Monotonic query counter to discard stale async responses. */
 let queryId = 0;
 
+const dropdown = createAutocompleteDropdown<LinkSuggestion>(acceptLinkItem);
+
 export function isLinkDropdownVisible(): boolean {
-    return dropdownEl !== null && items.length > 0;
+    return dropdown.isVisible();
 }
 
 /**
@@ -34,13 +32,13 @@ export function onLinkInput(input: HTMLInputElement | HTMLTextAreaElement): void
         suppressNextInput = false;
         return;
     }
-    activeInput = input;
+    dropdown.setActiveInput(input);
     const value = input.value;
     const cursor = input.selectionStart ?? value.length;
 
     const ctx = detectLinkContext(value, cursor);
     if (!ctx) {
-        hideLinkDropdown();
+        dropdown.hide();
         return;
     }
 
@@ -64,65 +62,32 @@ export function onLinkInput(input: HTMLInputElement | HTMLTextAreaElement): void
  * Returns true if the key was consumed.
  */
 export function onLinkKeydown(e: KeyboardEvent): boolean {
-    if (!isLinkDropdownVisible()) return false;
-
-    switch (e.key) {
-        case 'ArrowDown':
-            selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-            renderLinkDropdown();
-            return true;
-        case 'ArrowUp':
-            selectedIndex = Math.max(selectedIndex - 1, 0);
-            renderLinkDropdown();
-            return true;
-        case 'Tab':
-        case 'Enter':
-            if (selectedIndex >= 0 && selectedIndex < items.length) {
-                acceptLinkItem(items[selectedIndex]);
-                return true;
-            }
-            return false;
-        case 'Escape':
-            hideLinkDropdown();
-            return true;
-        default:
-            return false;
-    }
+    return dropdown.handleKeydown(e, acceptLinkItem);
 }
 
 /** Receive link suggestions from the extension host. */
 export function handleLinkSuggestions(suggestions: LinkSuggestion[], responseQueryId?: number): void {
-    // Discard stale responses from earlier queries
     if (responseQueryId !== undefined && responseQueryId !== queryId) return;
-    items = suggestions;
-    selectedIndex = items.length > 0 ? 0 : -1;
-    if (items.length > 0) {
-        renderLinkDropdown();
-    } else {
-        hideLinkDropdown();
-    }
+    dropdown.show(suggestions);
 }
 
 /** Clean up. */
 export function disposeLinkAutocomplete(): void {
-    hideLinkDropdown();
-    activeInput = null;
+    dropdown.dispose();
     parenStart = -1;
     completingHeading = false;
     headingFilePath = '';
     suppressNextInput = false;
 }
 
-// ── Private helpers ──────────────────────────────────────────────
-
 function acceptLinkItem(item: LinkSuggestion): void {
+    const activeInput = dropdown.getActiveInput();
     if (!activeInput) return;
 
     const cursor = activeInput.selectionStart ?? activeInput.value.length;
     const value = activeInput.value;
 
     if (completingHeading) {
-        // Replace from after '#' to cursor
         const contentBeforeHash = value.slice(parenStart, cursor);
         const hashIdx = contentBeforeHash.indexOf('#');
         const replaceStart = parenStart + hashIdx + 1;
@@ -132,7 +97,6 @@ function acceptLinkItem(item: LinkSuggestion): void {
         const newCursor = replaceStart + item.insertText.length;
         activeInput.setSelectionRange(newCursor, newCursor);
     } else {
-        // Replace from parenStart to cursor
         const before = value.slice(0, parenStart);
         const after = value.slice(cursor);
         activeInput.value = before + item.insertText + after;
@@ -148,61 +112,6 @@ function acceptLinkItem(item: LinkSuggestion): void {
     if (!isDirectory) {
         suppressNextInput = true;
     }
-    // Fire input event so auto-grow works (and re-triggers for directories)
     activeInput.dispatchEvent(new Event('input', { bubbles: true }));
-    hideLinkDropdown();
-}
-
-function renderLinkDropdown(): void {
-    if (!activeInput) return;
-
-    if (!dropdownEl) {
-        dropdownEl = el('div', 'snippet-dropdown');
-        const wrap = activeInput.closest('.popup-input-wrap');
-        if (wrap) {
-            (wrap as HTMLElement).style.position = 'relative';
-            wrap.appendChild(dropdownEl);
-        } else {
-            activeInput.parentElement?.appendChild(dropdownEl);
-        }
-    }
-
-    dropdownEl.innerHTML = '';
-    items.forEach((item, i) => {
-        const row = el('div', 'snippet-dropdown-item');
-        if (i === selectedIndex) row.classList.add('selected');
-
-        const label = el('span', 'snippet-dropdown-label');
-        label.textContent = item.label;
-        row.appendChild(label);
-
-        if (item.description) {
-            const desc = el('span', 'snippet-dropdown-desc');
-            desc.textContent = item.description;
-            row.appendChild(desc);
-        }
-
-        row.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            acceptLinkItem(item);
-        });
-        row.addEventListener('mouseenter', () => {
-            selectedIndex = i;
-            renderLinkDropdown();
-        });
-
-        dropdownEl!.appendChild(row);
-    });
-
-    const selectedEl = dropdownEl.querySelector('.selected');
-    if (selectedEl) selectedEl.scrollIntoView({ block: 'nearest' });
-}
-
-function hideLinkDropdown(): void {
-    if (dropdownEl) {
-        dropdownEl.remove();
-        dropdownEl = null;
-    }
-    items = [];
-    selectedIndex = -1;
+    dropdown.hide();
 }

@@ -13,6 +13,7 @@
 import * as vscode from "vscode";
 import { getLocation, type Location } from "jsonc-parser";
 import { getWorkspaceRoots, getRootFolderName, classifyFolderKey, classifyFilePath } from "../../blueprints/workspaceUtils";
+import { stripTrailingSlash } from "../../utils/path";
 import { extractPartialValue } from "../../utils/jsonCompletionHelpers";
 import {
     isTopLevelKey,
@@ -47,7 +48,7 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
         const offset = document.offsetAt(position);
         const location = getLocation(text, offset);
 
-        if (isTopLevelKey(location)) {
+        if (isTopLevelKey(location, "defaultFiles")) {
             return this.topLevelKeyCompletions();
         }
 
@@ -128,115 +129,109 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
         const roots = getWorkspaceRoots();
         const rootNameSet = new Set(roots.map(getRootFolderName));
 
-        // Determine the prefix (everything up to and including the last "/").
         const lastSlash = partialKey.lastIndexOf("/");
         const prefix = lastSlash >= 0 ? partialKey.slice(0, lastSlash + 1) : "";
 
+        if (!prefix) {
+            return this.buildRootLevelFolderCompletions(roots, rootNameSet, existingKeys, replaceRange);
+        }
+        return this.buildNestedFolderCompletions(roots, rootNameSet, existingKeys, prefix, replaceRange);
+    }
+
+    /** Initial level: show root names and immediate top-level folders. */
+    private async buildRootLevelFolderCompletions(
+        roots: vscode.Uri[],
+        rootNameSet: Set<string>,
+        existingKeys: Set<string>,
+        replaceRange: vscode.Range,
+    ): Promise<vscode.CompletionItem[]> {
         const items: vscode.CompletionItem[] = [];
         const seen = new Set<string>();
 
-        if (!prefix) {
-            // ── Initial level: show root names and immediate top-level folders ──
-            for (const root of roots) {
-                const rootName = getRootFolderName(root);
+        for (const root of roots) {
+            const rootName = getRootFolderName(root);
 
-                // Root name entry (e.g. "MyProject/") for root-prefixed keys
-                if (!seen.has(`root:${rootName}`)) {
-                    seen.add(`root:${rootName}`);
-                    const item = new vscode.CompletionItem(
-                        rootName + "/",
-                        vscode.CompletionItemKind.Folder,
-                    );
-                    item.detail = `Scope to "${rootName}" workspace root`;
-                    item.insertText = rootName + "/";
-                    item.filterText = rootName + "/";
-                    item.sortText = `1_${rootName}`;
-                    item.range = replaceRange;
-                    item.command = {
-                        command: "editor.action.triggerSuggest",
-                        title: "Re-trigger completions",
-                    };
-                    items.push(item);
-                }
-
-                // Immediate child folders (relative format)
-                const children = await listImmediateSubfolders(root);
-                for (const name of children) {
-                    const relativeKey = name + "/";
-                    if (seen.has(`rel:${relativeKey}`)) continue;
-                    seen.add(`rel:${relativeKey}`);
-
-                    if (existingKeys.has(relativeKey)) continue;
-
-                    const item = new vscode.CompletionItem(
-                        relativeKey,
-                        vscode.CompletionItemKind.Folder,
-                    );
-                    item.detail = "Matches in any workspace root";
-                    item.insertText = relativeKey;
-                    item.filterText = relativeKey;
-                    item.sortText = `0_${relativeKey}`;
-                    item.range = replaceRange;
-                    item.command = {
-                        command: "editor.action.triggerSuggest",
-                        title: "Re-trigger completions",
-                    };
-                    items.push(item);
-                }
+            // Root name entry (e.g. "MyProject/") for root-prefixed keys
+            if (!seen.has(`root:${rootName}`)) {
+                seen.add(`root:${rootName}`);
+                items.push(this.makeFolderItem(
+                    rootName + "/", rootName + "/", rootName + "/",
+                    `1_${rootName}`, `Scope to "${rootName}" workspace root`, replaceRange,
+                ));
             }
-        } else {
-            // ── Subsequent level: show children of the resolved prefix ──
-            // Handle the case where prefix is exactly "<rootName>/" — classifyFolderKey
-            // requires content after the root segment, so detect this first.
-            const firstSlash = prefix.indexOf("/");
-            const firstSegment = prefix.slice(0, firstSlash);
-            const isExactRootPrefix = rootNameSet.has(firstSegment) && prefix.length === firstSlash + 1;
 
-            const { isRootSpecific, relFolder, rootName } = isExactRootPrefix
-                ? { isRootSpecific: true, relFolder: "", rootName: firstSegment }
-                : classifyFolderKey(prefix, rootNameSet);
+            // Immediate child folders (relative format)
+            const children = await listImmediateSubfolders(root);
+            for (const name of children) {
+                const relativeKey = name + "/";
+                if (seen.has(`rel:${relativeKey}`)) continue;
+                seen.add(`rel:${relativeKey}`);
 
-            const targetRoots = isRootSpecific
-                ? roots.filter((r) => getRootFolderName(r) === rootName)
-                : roots;
+                if (existingKeys.has(relativeKey)) continue;
 
-            const relSegments = (relFolder.endsWith("/") ? relFolder.slice(0, -1) : relFolder)
-                .split("/")
-                .filter(Boolean);
-
-            for (const root of targetRoots) {
-                const targetUri = vscode.Uri.joinPath(root, ...relSegments);
-                const children = await listImmediateSubfolders(targetUri);
-
-                for (const name of children) {
-                    const fullKey = prefix + name + "/";
-                    if (seen.has(fullKey)) continue;
-                    seen.add(fullKey);
-
-                    if (existingKeys.has(fullKey)) continue;
-
-                    const item = new vscode.CompletionItem(
-                        name + "/",
-                        vscode.CompletionItemKind.Folder,
-                    );
-                    item.detail = isRootSpecific
-                        ? `Matches only in "${rootName}"`
-                        : "Matches in any workspace root";
-                    item.insertText = fullKey;
-                    item.filterText = fullKey;
-                    item.sortText = `0_${name}`;
-                    item.range = replaceRange;
-                    item.command = {
-                        command: "editor.action.triggerSuggest",
-                        title: "Re-trigger completions",
-                    };
-                    items.push(item);
-                }
+                items.push(this.makeFolderItem(
+                    relativeKey, relativeKey, relativeKey,
+                    `0_${relativeKey}`, "Matches in any workspace root", replaceRange,
+                ));
             }
         }
 
         return items;
     }
+
+    /** Subsequent level: show children of the resolved prefix. */
+    private async buildNestedFolderCompletions(
+        roots: vscode.Uri[],
+        rootNameSet: Set<string>,
+        existingKeys: Set<string>,
+        prefix: string,
+        replaceRange: vscode.Range,
+    ): Promise<vscode.CompletionItem[]> {
+        const items: vscode.CompletionItem[] = [];
+        const seen = new Set<string>();
+
+        // Handle the case where prefix is exactly "<rootName>/" — classifyFolderKey
+        // requires content after the root segment, so detect this first.
+        const firstSlash = prefix.indexOf("/");
+        const firstSegment = prefix.slice(0, firstSlash);
+        const isExactRootPrefix = rootNameSet.has(firstSegment) && prefix.length === firstSlash + 1;
+
+        const { isRootSpecific, relFolder, rootName } = isExactRootPrefix
+            ? { isRootSpecific: true, relFolder: "", rootName: firstSegment }
+            : classifyFolderKey(prefix, rootNameSet);
+
+        const targetRoots = isRootSpecific
+            ? roots.filter((r) => getRootFolderName(r) === rootName)
+            : roots;
+
+        const relSegments = stripTrailingSlash(relFolder)
+            .split("/")
+            .filter(Boolean);
+
+        for (const root of targetRoots) {
+            const targetUri = vscode.Uri.joinPath(root, ...relSegments);
+            const children = await listImmediateSubfolders(targetUri);
+
+            for (const name of children) {
+                const fullKey = prefix + name + "/";
+                if (seen.has(fullKey)) continue;
+                seen.add(fullKey);
+
+                if (existingKeys.has(fullKey)) continue;
+
+                items.push(this.makeFolderItem(
+                    name + "/", fullKey, fullKey,
+                    `0_${name}`,
+                    isRootSpecific ? `Matches only in "${rootName}"` : "Matches in any workspace root",
+                    replaceRange,
+                ));
+            }
+        }
+
+        return items;
+    }
+
+    // ── File value completions ──────────────────────────────────────────
 
     private async fileValueCompletions(
         text: string,
@@ -247,109 +242,124 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
         const existingValues = getExistingArrayValues(text, folderKey);
         const roots = getWorkspaceRoots();
 
-        // Determine which roots to search based on key format.
         const rootNameSet = new Set(roots.map(getRootFolderName));
         const { isRootSpecific, relFolder, rootName } = classifyFolderKey(folderKey, rootNameSet);
 
-        // The partial value determines the subdirectory to list.
-        // e.g. partialValue "A/" → list children of <folder>/A/
-        // e.g. partialValue "A/B/" → list children of <folder>/A/B/
         const lastSlash = partialValue.lastIndexOf("/");
         const prefix = lastSlash >= 0 ? partialValue.slice(0, lastSlash + 1) : "";
 
-        // Check if the partial value is workspace-absolute (starts with a root name prefix).
-        // If so, list files from the root rather than from the folder context.
         const { isWorkspaceAbsolute, rootName: fileRootName } = classifyFilePath(
             prefix || partialValue,
             rootNameSet,
         );
 
+        if (isWorkspaceAbsolute) {
+            return this.buildWorkspaceAbsoluteFileCompletions(
+                roots, existingValues, prefix, fileRootName, replaceRange,
+            );
+        }
+        return this.buildRelativeFileCompletions(
+            roots, existingValues, isRootSpecific, relFolder, rootName, prefix, replaceRange,
+        );
+    }
+
+    /** Workspace-absolute mode: list relative to the matching root, ignoring folder context. */
+    private async buildWorkspaceAbsoluteFileCompletions(
+        roots: vscode.Uri[],
+        existingValues: Set<string>,
+        prefix: string,
+        fileRootName: string,
+        replaceRange: vscode.Range,
+    ): Promise<vscode.CompletionItem[]> {
         const items: vscode.CompletionItem[] = [];
         const seen = new Set<string>();
 
-        if (isWorkspaceAbsolute) {
-            // Workspace-absolute mode: list relative to the matching root, ignoring folder context.
-            const absoluteRoots = roots.filter((r) => getRootFolderName(r) === fileRootName);
-            // Strip the "RootName/" prefix that the user has already typed.
-            const prefixAfterRoot = prefix.slice(fileRootName.length + 1);
-            const prefixSegments = prefixAfterRoot ? prefixAfterRoot.slice(0, -1).split("/").filter(Boolean) : [];
+        const absoluteRoots = roots.filter((r) => getRootFolderName(r) === fileRootName);
+        // Strip the "RootName/" prefix that the user has already typed.
+        const prefixAfterRoot = prefix.slice(fileRootName.length + 1);
+        const prefixSegments = prefixAfterRoot ? prefixAfterRoot.slice(0, -1).split("/").filter(Boolean) : [];
 
-            for (const root of absoluteRoots) {
-                const targetUri = vscode.Uri.joinPath(root, ...prefixSegments);
+        for (const root of absoluteRoots) {
+            const targetUri = vscode.Uri.joinPath(root, ...prefixSegments);
 
-                let entries: [string, vscode.FileType][];
-                try {
-                    entries = await vscode.workspace.fs.readDirectory(targetUri);
-                } catch {
-                    continue;
-                }
-
-                for (const [name, type] of entries) {
-                    if (name.startsWith(".")) continue;
-
-                    const isFolder = (type & vscode.FileType.Directory) !== 0;
-                    const fullPath = fileRootName + "/" + prefixAfterRoot + name + (isFolder ? "/" : "");
-
-                    if (!isFolder && existingValues.has(fullPath)) continue;
-                    if (seen.has(fullPath)) continue;
-                    seen.add(fullPath);
-
-                    const item = new vscode.CompletionItem(
-                        name + (isFolder ? "/" : ""),
-                        isFolder ? vscode.CompletionItemKind.Folder : vscode.CompletionItemKind.File,
-                    );
-                    item.detail = isFolder
-                        ? `Subfolder in "${fileRootName}" — type / to drill deeper`
-                        : `File in "${fileRootName}"`;
-                    item.insertText = fullPath;
-                    item.filterText = fullPath;
-                    item.sortText = isFolder ? `0_${name}` : `1_${name}`;
-                    item.range = replaceRange;
-
-                    if (isFolder) {
-                        item.command = {
-                            command: "editor.action.triggerSuggest",
-                            title: "Re-trigger completions",
-                        };
-                    }
-
-                    items.push(item);
-                }
+            let entries: [string, vscode.FileType][];
+            try {
+                entries = await vscode.workspace.fs.readDirectory(targetUri);
+            } catch {
+                continue;
             }
 
-            // When no prefix has been typed yet (user just started), also add root name
-            // entries so they can discover the workspace-absolute path syntax.
-            if (!prefix) {
-                for (const root of roots) {
-                    const rName = getRootFolderName(root);
-                    if (seen.has(`root:${rName}`)) continue;
-                    seen.add(`root:${rName}`);
+            for (const [name, type] of entries) {
+                if (name.startsWith(".")) continue;
 
-                    const item = new vscode.CompletionItem(rName + "/", vscode.CompletionItemKind.Folder);
-                    item.detail = `Open from the "${rName}" workspace root`;
-                    item.insertText = rName + "/";
-                    item.filterText = rName + "/";
-                    item.sortText = `2_${rName}`;
-                    item.range = replaceRange;
+                const isFolder = (type & vscode.FileType.Directory) !== 0;
+                const fullPath = fileRootName + "/" + prefixAfterRoot + name + (isFolder ? "/" : "");
+
+                if (!isFolder && existingValues.has(fullPath)) continue;
+                if (seen.has(fullPath)) continue;
+                seen.add(fullPath);
+
+                const item = new vscode.CompletionItem(
+                    name + (isFolder ? "/" : ""),
+                    isFolder ? vscode.CompletionItemKind.Folder : vscode.CompletionItemKind.File,
+                );
+                item.detail = isFolder
+                    ? `Subfolder in "${fileRootName}" — type / to drill deeper`
+                    : `File in "${fileRootName}"`;
+                item.insertText = fullPath;
+                item.filterText = fullPath;
+                item.sortText = isFolder ? `0_${name}` : `1_${name}`;
+                item.range = replaceRange;
+
+                if (isFolder) {
                     item.command = {
                         command: "editor.action.triggerSuggest",
                         title: "Re-trigger completions",
                     };
-                    items.push(item);
                 }
-            }
 
-            return items;
+                items.push(item);
+            }
         }
 
-        // Folder-relative mode (existing behaviour).
+        // When no prefix has been typed yet (user just started), also add root name
+        // entries so they can discover the workspace-absolute path syntax.
+        if (!prefix) {
+            for (const root of roots) {
+                const rName = getRootFolderName(root);
+                if (seen.has(`root:${rName}`)) continue;
+                seen.add(`root:${rName}`);
+
+                items.push(this.makeFolderItem(
+                    rName + "/", rName + "/", rName + "/",
+                    `2_${rName}`, `Open from the "${rName}" workspace root`, replaceRange,
+                ));
+            }
+        }
+
+        return items;
+    }
+
+    /** Folder-relative mode: list files relative to the folder key's resolved directory. */
+    private async buildRelativeFileCompletions(
+        roots: vscode.Uri[],
+        existingValues: Set<string>,
+        isRootSpecific: boolean,
+        relFolder: string,
+        rootName: string,
+        prefix: string,
+        replaceRange: vscode.Range,
+    ): Promise<vscode.CompletionItem[]> {
+        const items: vscode.CompletionItem[] = [];
+        const seen = new Set<string>();
+
         const targetRoots = isRootSpecific
             ? roots.filter((r) => getRootFolderName(r) === rootName)
             : roots;
 
         for (const root of targetRoots) {
             // Build the full folder path: root + relative folder + prefix from partial value.
-            const folderSegments = (relFolder.endsWith("/") ? relFolder.slice(0, -1) : relFolder)
+            const folderSegments = stripTrailingSlash(relFolder)
                 .split("/")
                 .filter(Boolean);
             const prefixSegments = prefix ? prefix.slice(0, -1).split("/").filter(Boolean) : [];
@@ -409,20 +419,37 @@ export class DefaultFileCompletionProvider implements vscode.CompletionItemProvi
                 if (seen.has(key)) continue;
                 seen.add(key);
 
-                const item = new vscode.CompletionItem(rName + "/", vscode.CompletionItemKind.Folder);
-                item.detail = `Open from the "${rName}" workspace root`;
-                item.insertText = rName + "/";
-                item.filterText = rName + "/";
-                item.sortText = `2_${rName}`;
-                item.range = replaceRange;
-                item.command = {
-                    command: "editor.action.triggerSuggest",
-                    title: "Re-trigger completions",
-                };
-                items.push(item);
+                items.push(this.makeFolderItem(
+                    rName + "/", rName + "/", rName + "/",
+                    `2_${rName}`, `Open from the "${rName}" workspace root`, replaceRange,
+                ));
             }
         }
 
         return items;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    /** Create a folder CompletionItem that re-triggers suggestions after insertion. */
+    private makeFolderItem(
+        label: string,
+        insertText: string,
+        filterText: string,
+        sortText: string,
+        detail: string,
+        replaceRange: vscode.Range,
+    ): vscode.CompletionItem {
+        const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Folder);
+        item.detail = detail;
+        item.insertText = insertText;
+        item.filterText = filterText;
+        item.sortText = sortText;
+        item.range = replaceRange;
+        item.command = {
+            command: "editor.action.triggerSuggest",
+            title: "Re-trigger completions",
+        };
+        return item;
     }
 }

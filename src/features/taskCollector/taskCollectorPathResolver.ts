@@ -10,6 +10,10 @@ import { isMarkdownPath } from "../../utils/markdown";
 import { makeSourceKey } from "./taskIndex";
 import type { SourceContext } from "./taskHelpers";
 import type { TaskCollectorConfig } from "./types";
+import { BACKUP_FOLDER_NAME } from "../../blueprints/types";
+
+const INTERNAL_EXCLUDE_PREFIXES = [".memoria/", BACKUP_FOLDER_NAME + "/"] as const;
+const INTERNAL_EXCLUDE_GLOBS = ["**/.memoria/**", `**/${BACKUP_FOLDER_NAME}/**`] as const;
 
 export function describeUri(
     uri: vscode.Uri,
@@ -89,7 +93,6 @@ export async function isTrackedSourceUri(
     workspaceRoot: vscode.Uri | null,
     collectorPath: string | null,
     config: TaskCollectorConfig,
-    readConfig: () => Promise<TaskCollectorConfig>,
 ): Promise<boolean> {
     if (!isMarkdownPath(uri.path)) {
         return false;
@@ -104,20 +107,18 @@ export async function isTrackedSourceUri(
         return false;
     }
 
-    const effectiveConfig = config ?? await readConfig();
-    if (context.relativePath.startsWith(".memoria/") || context.relativePath.startsWith("WorkspaceInitializationBackups/")) {
+    if (INTERNAL_EXCLUDE_PREFIXES.some((prefix) => context.relativePath.startsWith(prefix))) {
         return false;
     }
 
-    const includeMatch = effectiveConfig.include.some((pattern) => minimatch(context.relativePath, pattern, { dot: true }));
+    const includeMatch = config.include.some((pattern) => minimatch(context.relativePath, pattern, { dot: true }));
     if (!includeMatch) {
         return false;
     }
 
     const excludePatterns = [
-        ...effectiveConfig.exclude,
-        "**/.memoria/**",
-        "**/WorkspaceInitializationBackups/**",
+        ...config.exclude,
+        ...INTERNAL_EXCLUDE_GLOBS,
     ];
     return !excludePatterns.some((pattern) => minimatch(context.relativePath, pattern, { dot: true }));
 }

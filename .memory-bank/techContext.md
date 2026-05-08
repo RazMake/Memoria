@@ -33,7 +33,7 @@
 | `npm run package` | Package VSIX to `publish/` |
 
 ## Test Architecture (Dual-Suite)
-- **Unit tests** (`tests/unit-tests/`): Vitest, runs in Node.js, mocks `vscode` module entirely. Folder structure mirrors `src/`. < 100ms per test. **221 tests**.
+- **Unit tests** (`tests/unit-tests/`): Vitest, runs in Node.js, mocks `vscode` module entirely. Folder structure mirrors `src/`. < 100ms per test. **1225 tests, 74 test files**.
 - **E2E tests** (`tests/e2e-tests/`): Mocha TDD, runs in real Extension Host via `@vscode/test-cli`. 15s timeout. Tests real vscode API. **7 tests**.
 - **Coverage**: Istanbul provider, 85% thresholds (statements, branches, functions, lines). `extension.ts` and `types.ts` excluded from coverage.
 

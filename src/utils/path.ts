@@ -15,3 +15,8 @@
 export function normalizePath(value: string): string {
     return value.replace(/\\/g, "/");
 }
+
+/** Removes a trailing forward slash from a string, if present. */
+export function stripTrailingSlash(value: string): string {
+    return value.endsWith("/") ? value.slice(0, -1) : value;
+}

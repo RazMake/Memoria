@@ -1,11 +1,5 @@
-import { ageInDays, formatISODate } from "../../utils/dateUtils";
+import { ageInDays } from "../../utils/dateUtils";
 import type { TaskIndexEntry } from "./types";
-
-export { ageInDays };
-
-export function formatDate(value: Date): string {
-    return formatISODate(value);
-}
 
 // Completed tasks are retained for completedRetentionDays so the user can review recent
 // history in the collector and undo accidental completions. After the retention window

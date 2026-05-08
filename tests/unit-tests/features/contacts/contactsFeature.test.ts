@@ -65,7 +65,22 @@ vi.mock("vscode", () => {
         }
     }
 
+    class EventEmitter {
+        private listeners: Array<(...args: unknown[]) => void> = [];
+        event = (listener: (...args: unknown[]) => void) => {
+            this.listeners.push(listener);
+            return { dispose: () => { this.listeners = this.listeners.filter((l) => l !== listener); } };
+        };
+        fire(...args: unknown[]) {
+            for (const l of this.listeners) l(...args);
+        }
+        dispose() {
+            this.listeners = [];
+        }
+    }
+
     return {
+        EventEmitter,
         FileType: {
             File: 1,
             Directory: 2,

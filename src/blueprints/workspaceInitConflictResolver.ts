@@ -15,15 +15,19 @@
 // and folder-level decisions are made before individual file decisions.
 
 import * as vscode from "vscode";
+import { walkWorkspaceTree } from "./blueprintBuilders";
 import { computeFileHash } from "./hashUtils";
+import { stripTrailingSlash } from "../utils/path";
 import { getNonce, getConflictDiffHtml } from "./conflictDiffHtml";
 import { textDecoder, textEncoder } from "../utils/encoding";
+import { waitForWebviewReady } from "../utils/webview";
 import type {
     BlueprintDefinition,
     BlueprintManifest,
     ReinitPlan,
     WorkspaceEntry,
 } from "./types";
+import { BACKUP_FOLDER_NAME } from "./types";
 
 export class WorkspaceInitConflictResolver {
     constructor(
@@ -48,7 +52,7 @@ export class WorkspaceInitConflictResolver {
         const isDifferentBlueprint = currentManifest.blueprintId !== newDefinition.id;
 
         // Phase A: Categorize all blueprint files — parallel I/O, no UI.
-        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition, isDifferentBlueprint);
+        const extraFolders = await this.findExtraFolders(workspaceRoot, newDefinition);
         const flatFiles = this.flattenWorkspaceFiles(newDefinition.workspace);
 
         const mergeResults = await Promise.all(
@@ -90,7 +94,7 @@ export class WorkspaceInitConflictResolver {
 
         const picked = await vscode.window.showQuickPick(items, {
             title: "Memoria: Extra folders found",
-            placeHolder: "Uncheck folders to move them to WorkspaceInitializationBackups/ (checked = keep)",
+            placeHolder: "Uncheck folders to move them to " + BACKUP_FOLDER_NAME + "/ (checked = keep)",
             canPickMany: true,
         });
 
@@ -188,23 +192,17 @@ export class WorkspaceInitConflictResolver {
         const cssUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "conflict-diff.css"));
         panel.webview.html = getConflictDiffHtml(panel.webview, nonce, scriptUri, cssUri);
 
-        // Send init data once the webview script is ready.
-        let initSent = false;
-        const sendInit = () => {
-            if (initSent) return;
-            initSent = true;
+        // Wait for webview ready, then send init data.
+        void waitForWebviewReady(panel.webview).then(() => {
             try {
                 panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
             } catch {
-                // Panel was disposed before the timeout fired — nothing to do.
+                // Panel was disposed before init could be sent — nothing to do.
             }
-        };
+        });
 
         panel.webview.onDidReceiveMessage(async (msg) => {
             switch (msg?.type) {
-                case "ready":
-                    sendInit();
-                    break;
                 case "keepPreExisting":
                     await this.fs.writeFile(workspaceUri, textEncoder.encode(preExisting));
                     panel.dispose();
@@ -220,9 +218,6 @@ export class WorkspaceInitConflictResolver {
                     break;
             }
         });
-
-        // Fallback: send init after 1 s if the ready signal never arrives.
-        setTimeout(sendInit, 1000);
     }
 
     /**
@@ -278,16 +273,15 @@ export class WorkspaceInitConflictResolver {
     private async findExtraFolders(
         workspaceRoot: vscode.Uri,
         newDefinition: BlueprintDefinition,
-        allFoldersAreExtra: boolean
     ): Promise<string[]> {
         const entries = await this.fs.readDirectory(workspaceRoot);
         const blueprintTopLevelFolders = new Set(
             newDefinition.workspace
                 .filter((e) => e.isFolder)
-                .map((e) => e.name.replace(/\/$/, ""))
+                .map((e) => stripTrailingSlash(e.name))
         );
 
-        const excludedFolders = new Set(["WorkspaceInitializationBackups", ".memoria"]);
+        const excludedFolders = new Set([BACKUP_FOLDER_NAME, ".memoria"]);
 
         return entries
             .filter(([name, type]) => {
@@ -298,31 +292,20 @@ export class WorkspaceInitConflictResolver {
             .map(([name]) => name);
     }
 
-    private flattenWorkspaceFiles(entries: WorkspaceEntry[], prefix = "", result: string[] = []): string[] {
-        for (const entry of entries) {
-            const name = entry.name.replace(/\/$/, "");
-            const relativePath = prefix ? `${prefix}/${name}` : name;
-            if (entry.isFolder) {
-                if (entry.children) {
-                    this.flattenWorkspaceFiles(entry.children, relativePath, result);
-                }
-            } else {
-                result.push(relativePath);
-            }
-        }
-        return result;
+    private flattenWorkspaceFiles(entries: WorkspaceEntry[]): string[] {
+        return walkWorkspaceTree(entries, (_entry, path) => path);
     }
 
     private async backupFile(workspaceRoot: vscode.Uri, relativePath: string): Promise<void> {
         try {
             const segments = relativePath.split("/");
             const src = vscode.Uri.joinPath(workspaceRoot, ...segments);
-            const dest = vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups", ...segments);
+            const dest = vscode.Uri.joinPath(workspaceRoot, BACKUP_FOLDER_NAME, ...segments);
 
             const destParent =
                 segments.length > 1
-                    ? vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups", ...segments.slice(0, -1))
-                    : vscode.Uri.joinPath(workspaceRoot, "WorkspaceInitializationBackups");
+                    ? vscode.Uri.joinPath(workspaceRoot, BACKUP_FOLDER_NAME, ...segments.slice(0, -1))
+                    : vscode.Uri.joinPath(workspaceRoot, BACKUP_FOLDER_NAME);
             await this.fs.createDirectory(destParent);
             await this.fs.copy(src, dest, { overwrite: true });
         } catch {

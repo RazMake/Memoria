@@ -3,7 +3,6 @@ import { BlueprintRegistry } from "./blueprints/blueprintRegistry";
 import { ManifestManager } from "./blueprints/manifestManager";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
-import { FeatureManager } from "./features/featureManager";
 
 /**
  * Sets the VS Code context key `memoria.workspaceInitialized`.
@@ -38,7 +37,7 @@ export async function checkForBlueprintUpdates(
     registry: BlueprintRegistry,
     engine: BlueprintEngine,
     resolver: WorkspaceInitConflictResolver,
-    featureManager: FeatureManager
+    onWorkspaceReinitialized: (root: vscode.Uri) => Promise<void>,
 ): Promise<void> {
     if (!initializedRoot) {
         return;
@@ -73,8 +72,7 @@ export async function checkForBlueprintUpdates(
 
     try {
         await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
-        await updateWorkspaceInitializedContext(initializedRoot);
-        await featureManager.refresh(initializedRoot);
+        await onWorkspaceReinitialized(initializedRoot);
         vscode.window.showInformationMessage(
             `Memoria: Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
         );

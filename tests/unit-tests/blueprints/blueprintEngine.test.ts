@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { BlueprintEngine, buildFeaturesConfig, buildSeedSourceMap, extractContactsFeature, extractDecorationRules, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintEngine";
-import type { BlueprintDefinition, BlueprintFeature, FeaturesConfig } from "../../../src/blueprints/types";
+import { BlueprintEngine } from "../../../src/blueprints/blueprintEngine";
+import { buildFeaturesConfig, buildSeedSourceMap, extractFeature, mergeFeaturesConfig, mergeDefaultFileMap } from "../../../src/blueprints/blueprintBuilders";
+import type { BlueprintDefinition, BlueprintFeature, DecorationsFeatureEntry, FeaturesConfig } from "../../../src/blueprints/types";
 
 // BlueprintEngine uses only injected collaborators — no direct vscode API calls.
 // We mock the vscode module minimally in case any imported dependency references it.
@@ -572,13 +573,13 @@ describe("BlueprintEngine", () => {
     });
 });
 
-describe("extractContactsFeature", () => {
+describe("extractFeature", () => {
     it("should return the contacts feature when present", () => {
-        expect(extractContactsFeature(contactsDefinition.features)).toEqual(contactsFeature);
+        expect(extractFeature(contactsDefinition.features, "contacts")).toEqual(contactsFeature);
     });
 
     it("should return null when the blueprint has no contacts feature", () => {
-        expect(extractContactsFeature(mockDefinition.features)).toBeNull();
+        expect(extractFeature(mockDefinition.features, "contacts")).toBeNull();
     });
 });
 
@@ -649,7 +650,7 @@ describe("buildFeaturesConfig", () => {
     });
 });
 
-describe("extractDecorationRules", () => {
+describe("extractFeature (decorations)", () => {
     it("should return rules from the decorations feature", () => {
         const features: BlueprintFeature[] = [{
             id: "decorations",
@@ -658,11 +659,11 @@ describe("extractDecorationRules", () => {
             enabledByDefault: true,
             rules: [{ filter: "Folder/", color: "charts.green" }],
         }];
-        expect(extractDecorationRules(features)).toEqual([{ filter: "Folder/", color: "charts.green" }]);
+        expect(extractFeature<DecorationsFeatureEntry>(features, "decorations")?.rules ?? []).toEqual([{ filter: "Folder/", color: "charts.green" }]);
     });
 
     it("should return empty array when no decorations feature exists", () => {
-        expect(extractDecorationRules([])).toEqual([]);
+        expect(extractFeature<DecorationsFeatureEntry>([], "decorations")?.rules ?? []).toEqual([]);
     });
 });
 

@@ -6,8 +6,9 @@
 
 import * as vscode from "vscode";
 import { computeFileHash } from "./hashUtils";
-import { normalizePath } from "../utils/path";
+import { normalizePath, stripTrailingSlash } from "../utils/path";
 import type { WorkspaceEntry, ScaffoldResult } from "./types";
+import { BACKUP_FOLDER_NAME } from "./types";
 
 /**
  * Creates the workspace folder/file tree defined by a blueprint and returns a manifest of
@@ -55,7 +56,7 @@ export class FileScaffold {
         for (const entry of entries) {
             this.validateEntryName(entry.name);
 
-            const entryUri = vscode.Uri.joinPath(currentUri, entry.name.replace(/\/$/, ""));
+            const entryUri = vscode.Uri.joinPath(currentUri, stripTrailingSlash(entry.name));
             this.assertWithinRoot(rootUri, entryUri);
 
             if (entry.isFolder) {
@@ -112,8 +113,8 @@ export class FileScaffold {
         }
         const relativePath = this.toRelativePath(rootUri, folderUri);
         const segments = relativePath.split("/");
-        const backupParent = vscode.Uri.joinPath(rootUri, "WorkspaceInitializationBackups", ...segments.slice(0, -1));
-        const backupDest = vscode.Uri.joinPath(rootUri, "WorkspaceInitializationBackups", ...segments);
+        const backupParent = vscode.Uri.joinPath(rootUri, BACKUP_FOLDER_NAME, ...segments.slice(0, -1));
+        const backupDest = vscode.Uri.joinPath(rootUri, BACKUP_FOLDER_NAME, ...segments);
         await this.fs.createDirectory(backupParent);
         await this.fs.rename(folderUri, backupDest, { overwrite: false });
     }

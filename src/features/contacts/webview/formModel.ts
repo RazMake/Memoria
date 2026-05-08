@@ -1,3 +1,4 @@
+import { formatError } from "../../../utils/error";
 import { isMarkdownPath } from "../../../utils/markdown";
 import { generateTitle } from "../titleGenerator";
 import type { CareerLevelReference, CareerPathReference, Contact, ContactKind, ContactTitlePair, ContactsViewContact, ContactsViewFormRequest, ContactsViewSnapshot } from "../types";
@@ -62,7 +63,7 @@ export function createFormState(snapshot: ContactsViewSnapshot, request: Contact
 export function synchronizeFormDraft(form: ContactsFormState, snapshot: ContactsViewSnapshot): void {
     const targetKind = getTargetGroupKind(snapshot, form);
     if (form.draft.kind !== targetKind) {
-        form.draft = convertContactForKind(form.draft, targetKind);
+        form.draft = convertContactKind(form.draft, targetKind);
     }
 
     if (form.draft.kind !== "report") {
@@ -111,7 +112,7 @@ export function validateForm(snapshot: ContactsViewSnapshot, form: ContactsFormS
                         errors.group = "A group with that name already exists.";
                     }
                 } catch (error) {
-                    errors.group = error instanceof Error ? error.message : String(error);
+                    errors.group = formatError(error);
                 }
             }
         } else if (!findGroup(snapshot, form.selectedGroupFile)) {
@@ -378,46 +379,10 @@ function initializeReportTitleMode(
 }
 
 function convertContactForTarget(sourceContact: ContactsViewContact, targetKind: ContactKind): Contact {
-    if (sourceContact.kind === targetKind) {
-        return cloneContact(sourceContact);
-    }
-
-    if (targetKind === "colleague") {
-        return {
-            kind: "colleague",
-            id: sourceContact.id,
-            nickname: sourceContact.nickname,
-            fullName: sourceContact.fullName,
-            title: sourceContact.title,
-            careerPathKey: sourceContact.careerPathKey,
-            pronounsKey: sourceContact.pronounsKey,
-            extraFields: { ...sourceContact.extraFields },
-            droppedFields: { ...sourceContact.droppedFields },
-        };
-    }
-
-    const droppedFields = { ...sourceContact.droppedFields };
-    const levelId = droppedFields.LevelId ?? "";
-    const levelStartDate = droppedFields.LevelStartDate ?? "";
-    delete droppedFields.LevelId;
-    delete droppedFields.LevelStartDate;
-
-    return {
-        kind: "report",
-        id: sourceContact.id,
-        nickname: sourceContact.nickname,
-        fullName: sourceContact.fullName,
-        title: "",
-        careerPathKey: sourceContact.careerPathKey,
-        levelId,
-        levelStartDate,
-        pronounsKey: sourceContact.pronounsKey,
-        extraFields: { ...sourceContact.extraFields },
-        droppedFields,
-    };
+    return convertContactKind(sourceContact, targetKind);
 }
 
-function convertContactForKind(sourceContact: Contact, targetKind: ContactKind): Contact {
+function convertContactKind(sourceContact: Contact, targetKind: ContactKind): Contact {
     if (sourceContact.kind === targetKind) {
         return cloneContact(sourceContact);
     }

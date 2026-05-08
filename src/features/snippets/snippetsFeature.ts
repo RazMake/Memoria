@@ -1,12 +1,19 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "../../blueprints/manifestManager";
-import type { ContactsFeature as ContactsFeatureType } from "../contacts/contactsFeature";
 import type { ResolvedContact } from "../contacts/contactUtils";
 import type { SnippetDefinition, SnippetContext, LoadedSnippetFile } from "./types";
 import type { SnippetProvider } from "./snippetCompletionProvider";
 import type { ContactExpansionMap } from "./snippetHoverProvider";
 import { compileSnippetFile } from "./snippetCompiler";
 import { generateContactSnippets } from "./contactSnippets";
+import { DebouncedFileWatcher } from "../../utils/debouncedFileWatcher";
+
+/** Minimal interface for the contact data needed by SnippetsFeature (DIP). */
+export interface ContactDataSource {
+    isActive(): boolean;
+    getAllContacts(): ResolvedContact[];
+    onDidUpdate(listener: (snapshot: unknown) => void): vscode.Disposable;
+}
 
 export class SnippetsFeature implements vscode.Disposable, SnippetProvider, ContactExpansionMap {
     private workspaceRoot: vscode.Uri | null = null;
@@ -16,9 +23,7 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
     private contactSnippets: SnippetDefinition[] = [];
     private pathSafeSnippets: SnippetDefinition[] = [];
     private contactExpansionEntries: Array<{ text: string; contact: ResolvedContact }> = [];
-    private watcher: vscode.FileSystemWatcher | null = null;
-    private watcherSubscriptions: vscode.Disposable[] = [];
-    private reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    private fileWatcher: DebouncedFileWatcher | null = null;
     private contactsDisposable: vscode.Disposable | null = null;
 
     private readonly _onDidUpdateExpansionMap = new vscode.EventEmitter<void>();
@@ -26,7 +31,7 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
 
     constructor(
         private readonly manifest: ManifestManager,
-        private readonly contactsFeature: ContactsFeatureType | null = null,
+        private readonly contactsFeature: ContactDataSource | null = null,
         private readonly debounceMs: number = 300,
         private readonly fs: typeof vscode.workspace.fs = vscode.workspace.fs,
     ) {}
@@ -61,11 +66,8 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
     }
 
     async stop(): Promise<void> {
-        this.clearReloadTimer();
-        for (const d of this.watcherSubscriptions) d.dispose();
-        this.watcherSubscriptions = [];
-        this.watcher?.dispose();
-        this.watcher = null;
+        this.fileWatcher?.dispose();
+        this.fileWatcher = null;
         this.contactsDisposable?.dispose();
         this.contactsDisposable = null;
         this.active = false;
@@ -185,37 +187,16 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         const manifestData = await this.manifest.readManifest(this.workspaceRoot);
         const fileManifest = manifestData?.fileManifest ?? {};
 
-        let entries: [string, vscode.FileType][];
-        try {
-            entries = await this.fs.readDirectory(folderUri);
-        } catch {
-            this.loadedFiles = [];
-            this.pathSafeSnippets = [];
-            return;
-        }
+        const compiled = await this.discoverAndCompileSnippets(folderUri);
 
-        const tsFiles = entries
-            .filter(([name, type]) => type === vscode.FileType.File && name.endsWith(".ts"))
-            .map(([name]) => name);
-
-        const loaded: LoadedSnippetFile[] = [];
-
-        for (const fileName of tsFiles) {
-            const fileUri = vscode.Uri.joinPath(folderUri, fileName);
+        const loaded: LoadedSnippetFile[] = compiled.map(({ fileName, snippets, error }) => {
             const relativePath = `${this.snippetsFolder}/${fileName}`;
             const isBuiltIn = relativePath in fileManifest;
-
-            try {
-                const snippets = await compileSnippetFile(fileUri, this.fs);
-                loaded.push({ filePath: relativePath, isBuiltIn, snippets });
-            } catch (err) {
-                const message = (err as Error).message ?? "Unknown error";
-                vscode.window.showWarningMessage(
-                    `Memoria: Failed to load snippet file '${fileName}': ${message}`,
-                );
-                loaded.push({ filePath: relativePath, isBuiltIn, snippets: [], error: message });
+            if (error) {
+                return { filePath: relativePath, isBuiltIn, snippets: [], error };
             }
-        }
+            return { filePath: relativePath, isBuiltIn, snippets };
+        });
 
         this.loadedFiles = loaded;
         this.pathSafeSnippets = loaded
@@ -234,30 +215,46 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         }
 
         const folderUri = vscode.Uri.joinPath(workspaceRoot, snippetsConfig.snippetsFolder);
+        const compiled = await this.discoverAndCompileSnippets(folderUri, true);
+
+        this.pathSafeSnippets = compiled
+            .flatMap((c) => c.snippets)
+            .filter((s) => s.pathSafe === true);
+    }
+
+    /** Discovers .ts files in a folder and compiles each into snippet definitions. */
+    private async discoverAndCompileSnippets(
+        folderUri: vscode.Uri,
+        silent = false,
+    ): Promise<Array<{ fileName: string; snippets: SnippetDefinition[]; error?: string }>> {
         let entries: [string, vscode.FileType][];
         try {
             entries = await this.fs.readDirectory(folderUri);
         } catch {
-            this.pathSafeSnippets = [];
-            return;
+            return [];
         }
 
         const tsFiles = entries
             .filter(([name, type]) => type === vscode.FileType.File && name.endsWith(".ts"))
             .map(([name]) => name);
 
-        const allSnippets: SnippetDefinition[] = [];
+        const results: Array<{ fileName: string; snippets: SnippetDefinition[]; error?: string }> = [];
         for (const fileName of tsFiles) {
             const fileUri = vscode.Uri.joinPath(folderUri, fileName);
             try {
                 const snippets = await compileSnippetFile(fileUri, this.fs);
-                allSnippets.push(...snippets);
-            } catch {
-                // Silently skip failed files when loading path-safe only.
+                results.push({ fileName, snippets });
+            } catch (err) {
+                const message = (err as Error).message ?? "Unknown error";
+                if (!silent) {
+                    vscode.window.showWarningMessage(
+                        `Memoria: Failed to load snippet file '${fileName}': ${message}`,
+                    );
+                }
+                results.push({ fileName, snippets: [], error: message });
             }
         }
-
-        this.pathSafeSnippets = allSnippets.filter((s) => s.pathSafe === true);
+        return results;
     }
 
     private refreshContactSnippets(): void {
@@ -319,21 +316,11 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
     private installWatcher(): void {
         if (!this.workspaceRoot || !this.snippetsFolder) return;
 
-        const pattern = new vscode.RelativePattern(
-            this.workspaceRoot,
-            `${this.snippetsFolder}/*.ts`,
-        );
-        this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-        const scheduleReload = () => {
-            this.clearReloadTimer();
-            this.reloadTimer = setTimeout(() => void this.reloadAllSnippets(), this.debounceMs);
-        };
-
-        this.watcherSubscriptions.push(
-            this.watcher.onDidCreate(scheduleReload),
-            this.watcher.onDidChange(scheduleReload),
-            this.watcher.onDidDelete(scheduleReload),
+        this.fileWatcher = new DebouncedFileWatcher(this.debounceMs, () => {
+            void this.reloadAllSnippets();
+        });
+        this.fileWatcher.watch(
+            new vscode.RelativePattern(this.workspaceRoot, `${this.snippetsFolder}/*.ts`),
         );
     }
 
@@ -343,12 +330,5 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         this.contactsDisposable = this.contactsFeature.onDidUpdate(() => {
             this.refreshContactSnippets();
         });
-    }
-
-    private clearReloadTimer(): void {
-        if (this.reloadTimer !== null) {
-            clearTimeout(this.reloadTimer);
-            this.reloadTimer = null;
-        }
     }
 }

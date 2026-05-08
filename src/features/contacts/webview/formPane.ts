@@ -26,9 +26,11 @@ import {
 } from "./state";
 import type { ContactsFormState, ContactsViewSnapshot } from "./types";
 
+type RenderAll = (options?: { preserveFormFocus?: boolean }) => void;
+
 export function renderFormPane(
     formPaneEl: HTMLElement,
-    renderAll: (options?: { preserveFormFocus?: boolean }) => void,
+    renderAll: RenderAll,
     preserveFocus: boolean,
 ): void {
     const preservedFocus = preserveFocus ? captureFocus(formPaneEl) : null;
@@ -65,12 +67,30 @@ export function renderFormPane(
     form.appendChild(bannerHost);
 
     const body = el("div", "contacts-form-scroll");
+    body.appendChild(renderGeneralSection(formState, snapshot, sourceGroup?.name ?? null, renderAll));
+    body.appendChild(renderRoleSection(formState, snapshot, targetKind, renderAll));
+    form.appendChild(body);
+    form.appendChild(renderFooter(formState, state.submitting, renderAll));
+
+    formPaneEl.appendChild(form);
+
+    if (preservedFocus) {
+        restoreFocus(formPaneEl, preservedFocus);
+    }
+}
+
+function renderGeneralSection(
+    formState: ContactsFormState,
+    snapshot: ContactsViewSnapshot & { active: true },
+    sourceGroupName: string | null,
+    renderAll: RenderAll,
+): HTMLElement {
     const generalSection = el("section", "contacts-form-section");
     const generalTitle = el("div", "contacts-form-section-title");
     generalTitle.textContent = formState.mode === "move" ? "Destination" : "Details";
     generalSection.appendChild(generalTitle);
 
-    appendGroupField(generalSection, formState, snapshot, sourceGroup?.name ?? null, renderAll);
+    appendGroupField(generalSection, formState, snapshot, sourceGroupName, renderAll);
 
     const idReadOnly = formState.mode !== "add";
     generalSection.appendChild(createInputField({
@@ -126,8 +146,15 @@ export function renderFormPane(
         }, renderAll, { clearErrors: ["pronounsKey"] }),
     }));
 
-    body.appendChild(generalSection);
+    return generalSection;
+}
 
+function renderRoleSection(
+    formState: ContactsFormState,
+    snapshot: ContactsViewSnapshot & { active: true },
+    targetKind: string,
+    renderAll: RenderAll,
+): HTMLElement {
     const roleSection = el("section", "contacts-form-section");
     const roleTitle = el("div", "contacts-form-section-title");
     roleTitle.textContent = targetKind === "report" ? "Role and level" : "Role";
@@ -149,65 +176,7 @@ export function renderFormPane(
     }));
 
     if (formState.draft.kind === "report") {
-        const levelOptions = buildLevelOptions(snapshot, formState.draft);
-        roleSection.appendChild(createSelectField({
-            field: "levelId",
-            label: "Level",
-            value: formState.draft.levelId,
-            placeholder: formState.draft.careerPathKey ? "Select the level" : "Select a career path first",
-            options: levelOptions,
-            disabled: !formState.draft.careerPathKey,
-            helpText: levelOptions.length === 0 && formState.draft.careerPathKey
-                    ? "No levels are available for this career path."
-                    : undefined,
-            error: formState.errors.levelId,
-            onChange: (value) => mutateForm((formDraft) => {
-                if (formDraft.draft.kind === "report") {
-                    formDraft.draft.levelId = value;
-                }
-            }, renderAll, { clearErrors: true, resync: true }),
-        }));
-
-        const reportTitleOptions = buildReportTitleOptions(snapshot, formState);
-        if (reportTitleOptions.length > 1) {
-            roleSection.appendChild(createSelectField({
-                field: "reportTitleMode",
-                label: "Title",
-                value: formState.reportTitleMode,
-                options: reportTitleOptions,
-                error: formState.errors.title,
-                helpText: "Pick the stored custom title or switch back to the generated title.",
-                onChange: (value) => mutateForm((formDraft) => {
-                    formDraft.reportTitleMode = value === "custom" ? "custom" : "generated";
-                }, renderAll, { clearErrors: true, resync: true }),
-            }));
-        } else {
-            roleSection.appendChild(createInputField({
-                field: "title",
-                label: "Title",
-                value: formState.draft.title,
-                readOnly: true,
-                placeholder: "Choose a career path and level",
-                tooltip: formState.reportTitleMode === "custom"
-                    ? "This contact currently stores a custom title."
-                    : "Report titles are generated from the selected career path and level.",
-                error: formState.errors.title,
-            }));
-        }
-
-        roleSection.appendChild(createDateInputField({
-            field: "levelStartDate",
-            label: "Level start date",
-            value: formState.draft.levelStartDate,
-            displayValue: formState.levelStartDateDisplay,
-            error: formState.errors.levelStartDate,
-            onInput: (displayValue, isoValue, commit) => mutateForm((formDraft) => {
-                if (formDraft.draft.kind === "report") {
-                    formDraft.levelStartDateDisplay = displayValue;
-                    formDraft.draft.levelStartDate = isoValue;
-                }
-            }, renderAll, { clearErrors: ["levelStartDate"], render: commit }),
-        }));
+        appendReportFields(roleSection, formState, snapshot, renderAll);
     } else {
         roleSection.appendChild(createGroupedTitleField({
             field: "title",
@@ -227,16 +196,89 @@ export function renderFormPane(
         }));
     }
 
-    body.appendChild(roleSection);
+    return roleSection;
+}
 
-    form.appendChild(body);
+function appendReportFields(
+    roleSection: HTMLElement,
+    formState: ContactsFormState,
+    snapshot: ContactsViewSnapshot & { active: true },
+    renderAll: RenderAll,
+): void {
+    if (formState.draft.kind !== "report") return;
 
+    const levelOptions = buildLevelOptions(snapshot, formState.draft);
+    roleSection.appendChild(createSelectField({
+        field: "levelId",
+        label: "Level",
+        value: formState.draft.levelId,
+        placeholder: formState.draft.careerPathKey ? "Select the level" : "Select a career path first",
+        options: levelOptions,
+        disabled: !formState.draft.careerPathKey,
+        helpText: levelOptions.length === 0 && formState.draft.careerPathKey
+                ? "No levels are available for this career path."
+                : undefined,
+        error: formState.errors.levelId,
+        onChange: (value) => mutateForm((formDraft) => {
+            if (formDraft.draft.kind === "report") {
+                formDraft.draft.levelId = value;
+            }
+        }, renderAll, { clearErrors: true, resync: true }),
+    }));
+
+    const reportTitleOptions = buildReportTitleOptions(snapshot, formState);
+    if (reportTitleOptions.length > 1) {
+        roleSection.appendChild(createSelectField({
+            field: "reportTitleMode",
+            label: "Title",
+            value: formState.reportTitleMode,
+            options: reportTitleOptions,
+            error: formState.errors.title,
+            helpText: "Pick the stored custom title or switch back to the generated title.",
+            onChange: (value) => mutateForm((formDraft) => {
+                formDraft.reportTitleMode = value === "custom" ? "custom" : "generated";
+            }, renderAll, { clearErrors: true, resync: true }),
+        }));
+    } else {
+        roleSection.appendChild(createInputField({
+            field: "title",
+            label: "Title",
+            value: formState.draft.title,
+            readOnly: true,
+            placeholder: "Choose a career path and level",
+            tooltip: formState.reportTitleMode === "custom"
+                ? "This contact currently stores a custom title."
+                : "Report titles are generated from the selected career path and level.",
+            error: formState.errors.title,
+        }));
+    }
+
+    roleSection.appendChild(createDateInputField({
+        field: "levelStartDate",
+        label: "Level start date",
+        value: formState.draft.levelStartDate,
+        displayValue: formState.levelStartDateDisplay,
+        error: formState.errors.levelStartDate,
+        onInput: (displayValue, isoValue, commit) => mutateForm((formDraft) => {
+            if (formDraft.draft.kind === "report") {
+                formDraft.levelStartDateDisplay = displayValue;
+                formDraft.draft.levelStartDate = isoValue;
+            }
+        }, renderAll, { clearErrors: ["levelStartDate"], render: commit }),
+    }));
+}
+
+function renderFooter(
+    formState: ContactsFormState,
+    submitting: boolean,
+    renderAll: RenderAll,
+): HTMLElement {
     const footer = el("div", "contacts-form-footer");
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
     cancelButton.className = "contacts-secondary-button";
     cancelButton.textContent = formState.mode === "move" ? "Cancel move" : "Cancel";
-    cancelButton.disabled = state.submitting;
+    cancelButton.disabled = submitting;
     cancelButton.addEventListener("click", () => {
         if (getState().submitting) {
             return;
@@ -249,19 +291,13 @@ export function renderFormPane(
     const saveButton = document.createElement("button");
     saveButton.type = "submit";
     saveButton.className = "contacts-primary-button";
-    saveButton.textContent = state.submitting
+    saveButton.textContent = submitting
         ? saveButtonLabel(formState.mode, true)
         : saveButtonLabel(formState.mode, false);
-    saveButton.disabled = state.submitting;
+    saveButton.disabled = submitting;
 
     footer.append(cancelButton, saveButton);
-    form.appendChild(footer);
-
-    formPaneEl.appendChild(form);
-
-    if (preservedFocus) {
-        restoreFocus(formPaneEl, preservedFocus);
-    }
+    return footer;
 }
 
 function appendGroupField(
@@ -269,7 +305,7 @@ function appendGroupField(
     formState: ContactsFormState,
     snapshot: ContactsViewSnapshot & { active: true },
     sourceGroupName: string | null,
-    renderAll: (options?: { preserveFormFocus?: boolean }) => void,
+    renderAll: RenderAll,
 ): void {
     if (formState.mode === "edit") {
         const group = formState.sourceGroupFile ? findGroup(snapshot, formState.sourceGroupFile) : null;
@@ -324,7 +360,7 @@ function appendGroupField(
     }
 }
 
-function handleSave(renderAll: (options?: { preserveFormFocus?: boolean }) => void): void {
+function handleSave(renderAll: RenderAll): void {
     const liveState = getState();
     const snapshotState = liveState.snapshot;
     const activeForm = liveState.activeForm;
@@ -362,7 +398,7 @@ function handleSave(renderAll: (options?: { preserveFormFocus?: boolean }) => vo
 
 function mutateForm(
     mutator: (form: ContactsFormState) => void,
-    renderAll: (options?: { preserveFormFocus?: boolean }) => void,
+    renderAll: RenderAll,
     options?: { clearErrors?: true | string[]; resync?: boolean; render?: boolean },
 ): void {
     const snapshot = getState().snapshot;

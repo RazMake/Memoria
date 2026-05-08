@@ -8,6 +8,7 @@
 
 import * as vscode from "vscode";
 import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
+import { BACKUP_FOLDER_NAME } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 import type { TelemetryEmitter } from "../telemetry";
 import { textDecoder, textEncoder } from "../utils/encoding";
@@ -35,7 +36,7 @@ export class ManifestManager {
     /** Returns true when .memoria/blueprint.json exists at the workspace root. */
     async isInitialized(workspaceRoot: vscode.Uri): Promise<boolean> {
         try {
-            await this.fs.stat(this.manifestUri(workspaceRoot));
+            await this.fs.stat(this.configUri(workspaceRoot, "blueprint.json"));
             return true;
         } catch {
             return false;
@@ -65,7 +66,7 @@ export class ManifestManager {
     async backupMemoriaDir(oldRoot: vscode.Uri, newRoot: vscode.Uri): Promise<string[]> {
         const failedPaths: string[] = [];
         const srcDir = this.memoriaDir(oldRoot);
-        const destDir = vscode.Uri.joinPath(newRoot, "WorkspaceInitializationBackups", ".memoria");
+        const destDir = vscode.Uri.joinPath(newRoot, BACKUP_FOLDER_NAME, ".memoria");
 
         let entries: [string, vscode.FileType][];
         try {
@@ -94,16 +95,15 @@ export class ManifestManager {
     }
 
     async readManifest(workspaceRoot: vscode.Uri): Promise<BlueprintManifest | null> {
-        return this.readJson<BlueprintManifest>(this.manifestUri(workspaceRoot));
+        return this.readJson<BlueprintManifest>(this.configUri(workspaceRoot, "blueprint.json"));
     }
 
     async writeManifest(workspaceRoot: vscode.Uri, manifest: BlueprintManifest): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.manifestUri(workspaceRoot), manifest);
+        await this.writeConfig(workspaceRoot, "blueprint.json", manifest);
     }
 
     async readDefaultFiles(workspaceRoot: vscode.Uri): Promise<Record<string, DefaultFilesEntry> | null> {
-        const config = await this.readJson<DefaultFilesConfig>(this.defaultFilesUri(workspaceRoot));
+        const config = await this.readJson<DefaultFilesConfig>(this.configUri(workspaceRoot, "default-files.json"));
         if (!config?.defaultFiles) {
             return null;
         }
@@ -125,90 +125,60 @@ export class ManifestManager {
     }
 
     async writeDefaultFiles(workspaceRoot: vscode.Uri, defaultFiles: Record<string, DefaultFilesEntry>): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.defaultFilesUri(workspaceRoot), { defaultFiles } satisfies DefaultFilesConfig);
+        await this.writeConfig(workspaceRoot, "default-files.json", { defaultFiles } satisfies DefaultFilesConfig);
     }
 
     async readDecorations(workspaceRoot: vscode.Uri): Promise<DecorationsConfig | null> {
-        return this.readJson<DecorationsConfig>(this.decorationsUri(workspaceRoot));
+        return this.readJson<DecorationsConfig>(this.configUri(workspaceRoot, "decorations.json"));
     }
 
     async writeDecorations(workspaceRoot: vscode.Uri, config: DecorationsConfig): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.decorationsUri(workspaceRoot), config);
+        await this.writeConfig(workspaceRoot, "decorations.json", config);
     }
 
     async readDotfolders(workspaceRoot: vscode.Uri): Promise<DotfoldersConfig | null> {
-        return this.readJson<DotfoldersConfig>(this.dotfoldersUri(workspaceRoot));
+        return this.readJson<DotfoldersConfig>(this.configUri(workspaceRoot, "dotfolders.json"));
     }
 
     async writeDotfolders(workspaceRoot: vscode.Uri, config: DotfoldersConfig): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.dotfoldersUri(workspaceRoot), config);
+        await this.writeConfig(workspaceRoot, "dotfolders.json", config);
     }
 
     async readFeatures(workspaceRoot: vscode.Uri): Promise<FeaturesConfig | null> {
-        return this.readJson<FeaturesConfig>(this.featuresUri(workspaceRoot));
+        return this.readJson<FeaturesConfig>(this.configUri(workspaceRoot, "features.json"));
     }
 
     async writeFeatures(workspaceRoot: vscode.Uri, config: FeaturesConfig): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.featuresUri(workspaceRoot), config);
+        await this.writeConfig(workspaceRoot, "features.json", config);
     }
 
     async readTaskCollectorConfig(workspaceRoot: vscode.Uri): Promise<TaskCollectorConfig | null> {
-        return this.readJson<TaskCollectorConfig>(this.taskCollectorConfigUri(workspaceRoot));
+        return this.readJson<TaskCollectorConfig>(this.configUri(workspaceRoot, "task-collector.json"));
     }
 
     async writeTaskCollectorConfig(workspaceRoot: vscode.Uri, config: TaskCollectorConfig): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.taskCollectorConfigUri(workspaceRoot), config);
+        await this.writeConfig(workspaceRoot, "task-collector.json", config);
     }
 
     async readTaskIndex(workspaceRoot: vscode.Uri): Promise<StoredTaskIndex | null> {
-        return this.readJson<StoredTaskIndex>(this.taskIndexUri(workspaceRoot));
+        return this.readJson<StoredTaskIndex>(this.configUri(workspaceRoot, "tasks-index.json"));
     }
 
     async writeTaskIndex(workspaceRoot: vscode.Uri, index: StoredTaskIndex): Promise<void> {
-        await this.ensureMemoriaDir(workspaceRoot);
-        await this.writeJson(this.taskIndexUri(workspaceRoot), index);
+        await this.writeConfig(workspaceRoot, "tasks-index.json", index);
     }
 
     async deleteTaskIndex(workspaceRoot: vscode.Uri): Promise<void> {
         try {
-            await this.fs.delete(this.taskIndexUri(workspaceRoot));
+            await this.fs.delete(this.configUri(workspaceRoot, "tasks-index.json"));
         } catch {
             // tasks-index.json may not exist yet — this is expected on first init and safe to
             // ignore. Re-init always rebuilds the index from scratch, so a missing file is fine.
         }
     }
 
-    private manifestUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "blueprint.json");
-    }
-
-    private defaultFilesUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "default-files.json");
-    }
-
-    private decorationsUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "decorations.json");
-    }
-
-    private dotfoldersUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "dotfolders.json");
-    }
-
-    private featuresUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "features.json");
-    }
-
-    private taskCollectorConfigUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "task-collector.json");
-    }
-
-    private taskIndexUri(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", "tasks-index.json");
+    private configUri(root: vscode.Uri, filename: string): vscode.Uri {
+        return vscode.Uri.joinPath(root, ".memoria", filename);
     }
 
     private memoriaDir(root: vscode.Uri): vscode.Uri {
@@ -222,6 +192,11 @@ export class ManifestManager {
         }
         await this.fs.createDirectory(this.memoriaDir(root));
         this.ensuredDirs.add(key);
+    }
+
+    private async writeConfig(root: vscode.Uri, filename: string, value: unknown): Promise<void> {
+        await this.ensureMemoriaDir(root);
+        await this.writeJson(this.configUri(root, filename), value);
     }
 
     private async readJson<T>(uri: vscode.Uri): Promise<T | null> {

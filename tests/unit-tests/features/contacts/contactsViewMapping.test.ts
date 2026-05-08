@@ -3,7 +3,6 @@ import {
     buildDroppedFields,
     buildWritableContact,
     cloneFieldMap,
-    disposeAll,
     isToExtensionMessage,
     mapContact,
     mapFormRequest,
@@ -328,22 +327,6 @@ describe("contactsViewMapping", () => {
             clone.A = "changed";
 
             expect(original.A).toBe("1");
-        });
-    });
-
-    describe("disposeAll", () => {
-        it("should call dispose on all items", () => {
-            const disposable1 = { dispose: vi.fn() };
-            const disposable2 = { dispose: vi.fn() };
-
-            disposeAll([disposable1, disposable2]);
-
-            expect(disposable1.dispose).toHaveBeenCalledOnce();
-            expect(disposable2.dispose).toHaveBeenCalledOnce();
-        });
-
-        it("should handle empty array", () => {
-            expect(() => disposeAll([])).not.toThrow();
         });
     });
 

@@ -144,6 +144,35 @@ describe("TodoEditorProvider", () => {
         vi.clearAllMocks();
     });
 
+    // --- setInitializedRoot ---
+
+    describe("setInitializedRoot", () => {
+        it("should skip findInitializedRoot when root is pre-cached", async () => {
+            const manifest = makeManifest();
+            const provider = new TodoEditorProvider(manifest, makeExtensionUri());
+            const fakeRoot = { toString: () => "file:///workspace" } as any;
+            provider.setInitializedRoot(fakeRoot);
+
+            const panel = makeMockPanel();
+            const doc = makeMockDocument("# To do\n\n# Completed\n");
+            await provider.resolveCustomTextEditor(doc, panel as any, makeCancellationToken());
+
+            expect(manifest.findInitializedRoot).not.toHaveBeenCalled();
+        });
+
+        it("should fall back to findInitializedRoot when root is not pre-cached", async () => {
+            const manifest = makeManifest();
+            const provider = new TodoEditorProvider(manifest, makeExtensionUri());
+            // Do NOT call setInitializedRoot
+
+            const panel = makeMockPanel();
+            const doc = makeMockDocument("# To do\n\n# Completed\n");
+            await provider.resolveCustomTextEditor(doc, panel as any, makeCancellationToken());
+
+            expect(manifest.findInitializedRoot).toHaveBeenCalled();
+        });
+    });
+
     // --- Constructor ---
 
     describe("constructor", () => {

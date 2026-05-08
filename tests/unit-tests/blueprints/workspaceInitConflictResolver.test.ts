@@ -573,6 +573,9 @@ describe("WorkspaceInitConflictResolver", () => {
                 listener({ type: "ready" });
             }
 
+            // waitForWebviewReady resolves asynchronously; flush the microtask queue.
+            await new Promise((r) => setTimeout(r, 0));
+
             expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
                 expect.objectContaining({
                     type: "init",

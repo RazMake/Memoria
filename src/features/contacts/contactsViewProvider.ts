@@ -13,7 +13,9 @@ import type {
     ContactsSnapshot,
     ResolvedContact,
 } from "./contactsFeature";
-import { mapSnapshot, mapFormRequest, buildWritableContact, isToExtensionMessage, disposeAll } from "./contactsViewMapping";
+import { formatError } from "../../utils/error";
+import { mapSnapshot, mapFormRequest, buildWritableContact, isToExtensionMessage } from "./contactsViewMapping";
+import { disposeAll } from "./contactUtils";
 import { getHtmlForWebview, getNonce } from "./contactsViewHtml";
 
 const CONTACTS_WEBVIEW_BUNDLE = "contacts-webview.js";
@@ -212,7 +214,7 @@ export class ContactsViewProvider implements vscode.WebviewViewProvider, vscode.
             }
         } catch (error) {
             await this.reportError(
-                `Memoria: Could not save person - ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Could not save person - ${formatError(error)}`
             );
         }
     }
@@ -222,7 +224,7 @@ export class ContactsViewProvider implements vscode.WebviewViewProvider, vscode.
             await this.feature.deleteContact(contactId);
         } catch (error) {
             await this.reportError(
-                `Memoria: Could not delete person - ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Could not delete person - ${formatError(error)}`
             );
         }
     }
@@ -264,7 +266,7 @@ export class ContactsViewProvider implements vscode.WebviewViewProvider, vscode.
             vscode.window.showInformationMessage(`Moved ${label} to ${targetGroup.name}.`);
         } catch (error) {
             await this.reportError(
-                `Memoria: Could not move person - ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Could not move person - ${formatError(error)}`
             );
         }
     }

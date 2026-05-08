@@ -9,6 +9,33 @@ import { SnippetCompletionProvider } from "./features/snippets/snippetCompletion
 import { SnippetHoverProvider } from "./features/snippets/snippetHoverProvider";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 
+/**
+ * Manages a disposable resource that is created on enable and disposed on disable.
+ * Eliminates the duplicated if-enabled/if-disabled toggle pattern across feature handlers.
+ */
+function createToggle(): {
+    enable: (factory: () => vscode.Disposable) => void;
+    disable: () => void;
+    dispose: () => void;
+} {
+    let disposable: vscode.Disposable | undefined;
+    return {
+        enable(factory) {
+            if (!disposable) {
+                disposable = factory();
+            }
+        },
+        disable() {
+            disposable?.dispose();
+            disposable = undefined;
+        },
+        dispose() {
+            disposable?.dispose();
+            disposable = undefined;
+        },
+    };
+}
+
 export function registerFeatureHandlers(
     context: vscode.ExtensionContext,
     featureManager: FeatureManager,
@@ -17,17 +44,11 @@ export function registerFeatureHandlers(
     contactsFeature: ContactsFeature,
     snippetsFeature: SnippetsFeature,
 ): void {
-    let contactsViewDisposable: vscode.Disposable | undefined;
-    let snippetCompletionDisposable: vscode.Disposable | undefined;
-    let snippetHoverDisposable: vscode.Disposable | undefined;
-    let snippetHoverCommandDisposable: vscode.Disposable | undefined;
+    const contactsToggle = createToggle();
+    const snippetsToggle = createToggle();
 
-    context.subscriptions.push({
-        dispose: () => {
-            contactsViewDisposable?.dispose();
-            contactsViewDisposable = undefined;
-        },
-    });
+    context.subscriptions.push({ dispose: () => contactsToggle.dispose() });
+    context.subscriptions.push({ dispose: () => snippetsToggle.dispose() });
 
     featureManager.register("decorations", (root, enabled) =>
         decorationProvider.refresh(root, enabled, getWorkspaceRoots())
@@ -40,21 +61,14 @@ export function registerFeatureHandlers(
     featureManager.register("contacts", async (root, enabled) => {
         await contactsFeature.refresh(root, enabled);
 
-        if (enabled && !contactsViewDisposable) {
-            const provider = new ContactsViewProvider(contactsFeature, context.extensionUri);
-            const registration = ContactsViewProvider.register(context, provider);
-            contactsViewDisposable = {
-                dispose: () => {
-                    registration.dispose();
-                    provider.dispose();
-                },
-            };
-            return;
-        }
-
-        if (!enabled && contactsViewDisposable) {
-            contactsViewDisposable.dispose();
-            contactsViewDisposable = undefined;
+        if (enabled) {
+            contactsToggle.enable(() => {
+                const provider = new ContactsViewProvider(contactsFeature, context.extensionUri);
+                const registration = ContactsViewProvider.register(context, provider);
+                return vscode.Disposable.from(registration, provider);
+            });
+        } else {
+            contactsToggle.disable();
         }
     });
 
@@ -62,32 +76,28 @@ export function registerFeatureHandlers(
         await snippetsFeature.refresh(root, enabled);
         await vscode.commands.executeCommand("setContext", "memoria.snippetsActive", enabled && root !== null);
 
-        if (enabled && !snippetCompletionDisposable) {
-            const completionProvider = new SnippetCompletionProvider(snippetsFeature);
-            snippetCompletionDisposable = vscode.languages.registerCompletionItemProvider(
-                { scheme: "file" },
-                completionProvider,
-                "{", "@",
-            );
-            const hoverProvider = new SnippetHoverProvider(snippetsFeature);
-            snippetHoverDisposable = vscode.languages.registerHoverProvider(
-                { scheme: "file" },
-                hoverProvider,
-            );
-            snippetHoverCommandDisposable = vscode.commands.registerCommand(
-                "memoria.showDetailedContactHover",
-                () => hoverProvider.showDetailedHover(),
-            );
-            return;
-        }
-
-        if (!enabled && snippetCompletionDisposable) {
-            snippetCompletionDisposable.dispose();
-            snippetCompletionDisposable = undefined;
-            snippetHoverDisposable?.dispose();
-            snippetHoverDisposable = undefined;
-            snippetHoverCommandDisposable?.dispose();
-            snippetHoverCommandDisposable = undefined;
+        if (enabled) {
+            snippetsToggle.enable(() => {
+                const completionProvider = new SnippetCompletionProvider(snippetsFeature);
+                const hoverProvider = new SnippetHoverProvider(snippetsFeature);
+                return vscode.Disposable.from(
+                    vscode.languages.registerCompletionItemProvider(
+                        { scheme: "file" },
+                        completionProvider,
+                        "{", "@",
+                    ),
+                    vscode.languages.registerHoverProvider(
+                        { scheme: "file" },
+                        hoverProvider,
+                    ),
+                    vscode.commands.registerCommand(
+                        "memoria.showDetailedContactHover",
+                        () => hoverProvider.showDetailedHover(),
+                    ),
+                );
+            });
+        } else {
+            snippetsToggle.disable();
         }
     });
 }

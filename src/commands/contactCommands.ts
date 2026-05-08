@@ -5,6 +5,7 @@ import {
     type ContactsFeature,
     type ResolvedContact,
 } from "../features/contacts/contactsFeature";
+import { formatError } from "../utils/error";
 
 export type ContactCommandTarget = string | { contactId: string };
 
@@ -66,7 +67,7 @@ export function createDeletePersonCommand(feature: ContactsFeature): (target?: C
             await feature.deleteContact(contact.id);
         } catch (error) {
             vscode.window.showErrorMessage(
-                `Memoria: Could not delete person — ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Could not delete person — ${formatError(error)}`
             );
         }
     };
@@ -104,7 +105,7 @@ export function createMovePersonCommand(feature: ContactsFeature): (target?: Con
             await feature.moveContact(contact.id, targetGroup.groupFile);
         } catch (error) {
             vscode.window.showErrorMessage(
-                `Memoria: Could not move person — ${error instanceof Error ? error.message : String(error)}`
+                `Memoria: Could not move person — ${formatError(error)}`
             );
         }
     };

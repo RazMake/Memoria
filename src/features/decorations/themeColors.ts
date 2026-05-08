@@ -109,6 +109,16 @@ export const THEME_COLOR_MAP: ReadonlyMap<string, ThemeColorEntry> = new Map(
     THEME_COLORS.map((entry) => [entry.id, entry]),
 );
 
+/** Stable category sort-order derived from the first occurrence of each category in THEME_COLORS. */
+export const CATEGORY_ORDER: ReadonlyMap<string, number> = new Map(
+    THEME_COLORS.reduce<Array<[string, number]>>((acc, entry) => {
+        if (!acc.some(([cat]) => cat === entry.category)) {
+            acc.push([entry.category, acc.length]);
+        }
+        return acc;
+    }, []),
+);
+
 /** Parse a "#RRGGBB" or "#RRGGBBAA" hex string into 0-255 RGB components. */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     const h = hex.replace(/^#/, "");

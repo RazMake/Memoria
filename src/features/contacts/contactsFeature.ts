@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { ContactGroup as BlueprintContactGroup } from "../../blueprints/types";
 import { normalizePath } from "../../utils/path";
+import { DebouncedFileWatcher } from "../../utils/debouncedFileWatcher";
 import {
     addContact as addContactToDocument,
     removeContactById,
@@ -23,14 +24,13 @@ import {
     requireGroup,
     toCustomGroupFileName,
     writeGroupDocument,
-    writeTextFile,
 } from "./contactMutations";
+import { writeTextFile } from "../../utils/filesystem";
 import {
     buildResolvedContact,
     buildResolvedReferenceData,
     buildShortTitleLookup,
     createEmptyReferenceData,
-    disposeAll,
     joinRelativePath,
     stripMarkdownExtension,
     type ResolvedContact,
@@ -55,9 +55,6 @@ export type {
 } from "./contactUtils";
 
 export const CONTACTS_INACTIVE_MESSAGE = "Memoria: Contacts is not enabled for this workspace.";
-
-type UpdateListener = (snapshot: ContactsSnapshot) => void;
-type FormRequestListener = (request: ContactsFormOpenRequest) => void;
 
 export interface ContactGroupSummary {
     file: string;
@@ -88,12 +85,12 @@ export class ContactsFeature implements vscode.Disposable {
     private blueprintGroups: BlueprintContactGroup[] = [];
     private groups: LoadedGroupState[] = [];
     private referenceData: ContactsReferenceData = createEmptyReferenceData();
-    private watcher: vscode.FileSystemWatcher | null = null;
-    private watcherSubscriptions: vscode.Disposable[] = [];
-    private reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    private fileWatcher: DebouncedFileWatcher | null = null;
     private active = false;
-    private readonly updateListeners = new Set<UpdateListener>();
-    private readonly formRequestListeners = new Set<FormRequestListener>();
+    private readonly _onDidUpdate = new vscode.EventEmitter<ContactsSnapshot>();
+    readonly onDidUpdate = this._onDidUpdate.event;
+    private readonly _onDidRequestFormOpen = new vscode.EventEmitter<ContactsFormOpenRequest>();
+    readonly onDidRequestFormOpen = this._onDidRequestFormOpen.event;
 
     constructor(
         private readonly manifest: ManifestManager,
@@ -137,11 +134,8 @@ export class ContactsFeature implements vscode.Disposable {
     }
 
     async stop(): Promise<void> {
-        this.clearReloadTimer();
-        disposeAll(this.watcherSubscriptions);
-        this.watcherSubscriptions = [];
-        this.watcher?.dispose();
-        this.watcher = null;
+        this.fileWatcher?.dispose();
+        this.fileWatcher = null;
 
         const hadState = this.active || this.groups.length > 0 || this.referenceData.pronouns.length > 0;
 
@@ -161,8 +155,8 @@ export class ContactsFeature implements vscode.Disposable {
 
     dispose(): void {
         void this.stop();
-        this.updateListeners.clear();
-        this.formRequestListeners.clear();
+        this._onDidUpdate.dispose();
+        this._onDidRequestFormOpen.dispose();
     }
 
     isActive(): boolean {
@@ -210,16 +204,6 @@ export class ContactsFeature implements vscode.Disposable {
             contacts: this.getAllContacts(),
             referenceData: this.getResolvedReferenceData(),
         };
-    }
-
-    onDidUpdate(listener: UpdateListener): vscode.Disposable {
-        this.updateListeners.add(listener);
-        return { dispose: () => this.updateListeners.delete(listener) };
-    }
-
-    onDidRequestFormOpen(listener: FormRequestListener): vscode.Disposable {
-        this.formRequestListeners.add(listener);
-        return { dispose: () => this.formRequestListeners.delete(listener) };
     }
 
     requestAddContactForm(preferredGroupFile?: string): void {
@@ -273,14 +257,7 @@ export class ContactsFeature implements vscode.Disposable {
 
         const updatedDocument = addContactToDocument(group.document, preparedContact);
         await writeGroupDocument(this.fs, peopleRoot, group.file, updatedDocument);
-        await this.reloadFromDisk(true);
-
-        const added = this.getContactById(preparedContact.id);
-        if (!added) {
-            throw new Error(`Contact "${preparedContact.id}" was saved but could not be reloaded.`);
-        }
-
-        return added;
+        return this.persistAndVerify(preparedContact.id);
     }
 
     async editContact(contactId: string, groupFile: string, contact: Contact): Promise<ResolvedContact> {
@@ -300,14 +277,7 @@ export class ContactsFeature implements vscode.Disposable {
         updatedDocument = addContactToDocument(updatedDocument, preparedContact);
 
         await writeGroupDocument(this.fs, peopleRoot, source.group.file, updatedDocument);
-        await this.reloadFromDisk(true);
-
-        const updated = this.getContactById(preparedContact.id);
-        if (!updated) {
-            throw new Error(`Contact "${preparedContact.id}" was saved but could not be reloaded.`);
-        }
-
-        return updated;
+        return this.persistAndVerify(preparedContact.id);
     }
 
     async deleteContact(contactId: string): Promise<void> {
@@ -338,48 +308,28 @@ export class ContactsFeature implements vscode.Disposable {
 
         await writeGroupDocument(this.fs, peopleRoot, targetGroup.file, updatedTargetDocument);
         await writeGroupDocument(this.fs, peopleRoot, source.group.file, updatedSourceDocument);
+        return this.persistAndVerify(movedContact.id);
+    }
+
+    private async persistAndVerify(contactId: string): Promise<ResolvedContact> {
         await this.reloadFromDisk(true);
-
-        const updated = this.getContactById(movedContact.id);
-        if (!updated) {
-            throw new Error(`Contact "${movedContact.id}" was moved but could not be reloaded.`);
+        const contact = this.getContactById(contactId);
+        if (!contact) {
+            throw new Error(`Contact "${contactId}" was saved but could not be reloaded.`);
         }
-
-        return updated;
+        return contact;
     }
 
     // Uses a scoped FileSystemWatcher rather than workspace-level save events because contacts
     // are confined to a single folder tree (the blueprint's people folder).
     private installWatcher(): void {
         const { peopleRoot } = this.requireRuntimeContext();
-        const pattern = new vscode.RelativePattern(peopleRoot, "**/*.md");
-        this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
-        this.watcherSubscriptions = [
-            this.watcher.onDidChange((uri) => this.scheduleReload(uri)),
-            this.watcher.onDidCreate((uri) => this.scheduleReload(uri)),
-            this.watcher.onDidDelete((uri) => this.scheduleReload(uri)),
-        ];
-    }
-
-    private scheduleReload(_uri: vscode.Uri): void {
-        if (!this.active) {
-            return;
-        }
-
-        this.clearReloadTimer();
-        this.reloadTimer = setTimeout(() => {
-            this.reloadTimer = null;
-            void this.reloadFromDisk(true);
-        }, this.debounceMs);
-    }
-
-    private clearReloadTimer(): void {
-        if (!this.reloadTimer) {
-            return;
-        }
-
-        clearTimeout(this.reloadTimer);
-        this.reloadTimer = null;
+        this.fileWatcher = new DebouncedFileWatcher(this.debounceMs, () => {
+            if (this.active) {
+                void this.reloadFromDisk(true);
+            }
+        });
+        this.fileWatcher.watch(new vscode.RelativePattern(peopleRoot, "**/*.md"));
     }
 
     private async reloadFromDisk(showWarnings: boolean): Promise<void> {
@@ -389,7 +339,35 @@ export class ContactsFeature implements vscode.Disposable {
             loadReferenceData(this.fs, peopleRoot),
         ]);
 
+        const { referenceData, correctedGroups, warnings } =
+            await this.enforceIntegrity(peopleRoot, groups, loadedReferenceData);
+
+        this.referenceData = referenceData;
+        this.groups = correctedGroups.map((entry) => entry.group);
+
+        await this.updateContextKeys();
+        this.emitUpdate();
+
+        if (showWarnings) {
+            for (const message of warnings) {
+                vscode.window.showWarningMessage(message);
+            }
+        }
+    }
+
+    /** Runs integrity checks on career levels and contacts, auto-correcting invalid references. */
+    private async enforceIntegrity(
+        peopleRoot: vscode.Uri,
+        groups: LoadedGroupState[],
+        loadedReferenceData: ContactsReferenceData,
+    ): Promise<{
+        referenceData: ContactsReferenceData;
+        correctedGroups: Array<{ group: LoadedGroupState; correctedContacts: number }>;
+        warnings: string[];
+    }> {
+        const warnings: string[] = [];
         let referenceData = loadedReferenceData;
+
         const careerLevelCorrections = findCareerLevelIntegrityCorrections(
             loadedReferenceData.careerLevels,
             loadedReferenceData.interviewTypes,
@@ -408,6 +386,9 @@ export class ContactsFeature implements vscode.Disposable {
                 ...loadedReferenceData,
                 careerLevels: correctedCareerLevels,
             };
+            warnings.push(
+                `Memoria: ${careerLevelCorrections.length} career level(s) in ${CAREER_LEVELS_FILE} referenced missing interview types and were updated to defaults.`
+            );
         }
 
         const correctedGroups = await Promise.all(groups.map(async (group) => {
@@ -419,38 +400,18 @@ export class ContactsFeature implements vscode.Disposable {
             const correctedDocument = applyContactIntegrityCorrections(group.document, corrections);
             await writeGroupDocument(this.fs, peopleRoot, group.file, correctedDocument);
 
+            const correctedContacts = new Set(corrections.map((correction) => correction.contactId)).size;
+            warnings.push(
+                `Memoria: ${correctedContacts} contact(s) in ${group.file} referenced missing data types and were updated to defaults.`
+            );
+
             return {
-                group: {
-                    ...group,
-                    document: correctedDocument,
-                },
-                correctedContacts: new Set(corrections.map((correction) => correction.contactId)).size,
+                group: { ...group, document: correctedDocument },
+                correctedContacts,
             };
         }));
 
-        this.referenceData = referenceData;
-        this.groups = correctedGroups.map((entry) => entry.group);
-
-        await this.updateContextKeys();
-        this.emitUpdate();
-
-        if (showWarnings) {
-            if (careerLevelCorrections.length > 0) {
-                vscode.window.showWarningMessage(
-                    `Memoria: ${careerLevelCorrections.length} career level(s) in ${CAREER_LEVELS_FILE} referenced missing interview types and were updated to defaults.`
-                );
-            }
-
-            for (const entry of correctedGroups) {
-                if (entry.correctedContacts === 0) {
-                    continue;
-                }
-
-                vscode.window.showWarningMessage(
-                    `Memoria: ${entry.correctedContacts} contact(s) in ${entry.group.file} referenced missing data types and were updated to defaults.`
-                );
-            }
-        }
+        return { referenceData, correctedGroups, warnings };
     }
 
     private requireRuntimeContext(): { workspaceRoot: vscode.Uri; peopleRoot: vscode.Uri } {
@@ -474,24 +435,11 @@ export class ContactsFeature implements vscode.Disposable {
     }
 
     private emitUpdate(): void {
-        const snapshot = this.getSnapshot();
-        for (const listener of this.updateListeners) {
-            try {
-                listener(snapshot);
-            } catch {
-                // Listener errors must not break the feature runtime.
-            }
-        }
+        this._onDidUpdate.fire(this.getSnapshot());
     }
 
     private emitFormRequest(request: ContactsFormOpenRequest): void {
-        for (const listener of this.formRequestListeners) {
-            try {
-                listener({ ...request });
-            } catch {
-                // Listener errors must not break the feature runtime.
-            }
-        }
+        this._onDidRequestFormOpen.fire({ ...request });
     }
 }
 

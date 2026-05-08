@@ -1,6 +1,6 @@
 import type { ResolvedContact } from "../contacts/contactUtils";
 import type { SnippetDefinition, SnippetContext } from "./types";
-import { elapsedSince, formatElapsed } from "./dateUtils";
+import { elapsedSince, formatElapsed } from "../../utils/dateUtils";
 
 export function generateContactSnippets(contacts: ResolvedContact[]): SnippetDefinition[] {
     return contacts.map((contact) => ({
@@ -27,40 +27,32 @@ function getContactFormatOptions(contact: ResolvedContact): string[] {
 }
 
 function formatContact(contact: ResolvedContact, format: string): string {
-    switch (format) {
-        case "Id":
-            return contact.id;
-        case "Nickname":
-            return contact.nickname;
-        case "Full Name":
-            return contact.fullName;
-        case "Nickname (title)":
-            return `${contact.nickname} (${contact.shortTitle})`;
-        case "Full Name (title)":
-            return `${contact.fullName} (${contact.shortTitle})`;
-        case "Nickname (id)":
-            return `${contact.nickname} (${contact.id})`;
-        case "Full Name (id)":
-            return `${contact.fullName} (${contact.id})`;
-        case "Nickname (level)":
-            if (contact.kind === "report") {
-                return `${contact.nickname} (${contact.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`;
-            }
-            return contact.fullName;
-        case "Full Name (level)":
-            if (contact.kind === "report") {
-                return `${contact.fullName} (${contact.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`;
-            }
-            return contact.fullName;
-        case "Full Name (level, for X months - since MM-dd-YYYY)":
-            if (contact.kind === "report") {
-                const level = contact.resolvedCareerLevel?.key.toUpperCase() ?? "?";
-                const startDate = (contact as { levelStartDate: string }).levelStartDate;
+    const formatters: Record<string, (c: ResolvedContact) => string> = {
+        "Id": (c) => c.id,
+        "Nickname": (c) => c.nickname,
+        "Full Name": (c) => c.fullName,
+        "Nickname (title)": (c) => `${c.nickname} (${c.shortTitle})`,
+        "Full Name (title)": (c) => `${c.fullName} (${c.shortTitle})`,
+        "Nickname (id)": (c) => `${c.nickname} (${c.id})`,
+        "Full Name (id)": (c) => `${c.fullName} (${c.id})`,
+        "Nickname (level)": (c) =>
+            c.kind === "report"
+                ? `${c.nickname} (${c.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`
+                : c.fullName,
+        "Full Name (level)": (c) =>
+            c.kind === "report"
+                ? `${c.fullName} (${c.resolvedCareerLevel?.key.toUpperCase() ?? "?"})`
+                : c.fullName,
+        "Full Name (level, for X months - since MM-dd-YYYY)": (c) => {
+            if (c.kind === "report") {
+                const level = c.resolvedCareerLevel?.key.toUpperCase() ?? "?";
+                const startDate = (c as { levelStartDate: string }).levelStartDate;
                 const elapsed = elapsedSince(startDate);
-                return `${contact.fullName} (${level}, for ${formatElapsed(elapsed)} - from: ${startDate})`;
+                return `${c.fullName} (${level}, for ${formatElapsed(elapsed)} - from: ${startDate})`;
             }
-            return contact.fullName;
-        default:
-            return contact.fullName;
-    }
+            return c.fullName;
+        },
+    };
+
+    return (formatters[format] ?? (() => contact.fullName))(contact);
 }

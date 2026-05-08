@@ -20,10 +20,8 @@ import type {
     ContactsReferenceData,
     PronounsReference,
 } from "./types";
-import { textEncoder } from "../../utils/encoding";
 import { isMarkdownPath } from "../../utils/markdown";
-
-const encoder = textEncoder;
+import { writeTextFile } from "../../utils/filesystem";
 
 const INVALID_GROUP_NAME_RE = /[\\/:*?"<>|]/;
 
@@ -186,13 +184,7 @@ export async function writeGroupDocument(
     await writeTextFile(fs, vscode.Uri.joinPath(peopleRoot, ...segments), serializeContactGroupDocument(document));
 }
 
-export async function writeTextFile(
-    fs: typeof vscode.workspace.fs,
-    uri: vscode.Uri,
-    text: string,
-): Promise<void> {
-    await fs.writeFile(uri, encoder.encode(text));
-}
+
 
 export function toCustomGroupFileName(name: string): string {
     const trimmedName = name.trim();

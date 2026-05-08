@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { transform } from "sucrase";
 import type { SnippetDefinition } from "./types";
-import * as dateUtils from "./dateUtils";
+import * as dateUtils from "../../utils/dateUtils";
 import * as markdownUtils from "./markdownUtils";
 import { textDecoder } from "../../utils/encoding";
 

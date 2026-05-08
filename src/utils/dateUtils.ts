@@ -34,13 +34,17 @@ export function elapsedSince(dateStr: string, now: Date = new Date()): ElapsedTi
  * - `"2 years"`
  * - `"0 months"` (same month)
  */
+function pluralize(n: number, singular: string): string {
+    return `${n} ${n === 1 ? singular : singular + "s"}`;
+}
+
 export function formatElapsed(elapsed: ElapsedTime): string {
     const parts: string[] = [];
     if (elapsed.years > 0) {
-        parts.push(`${elapsed.years} ${elapsed.years === 1 ? "year" : "years"}`);
+        parts.push(pluralize(elapsed.years, "year"));
     }
     if (elapsed.months > 0) {
-        parts.push(`${elapsed.months} ${elapsed.months === 1 ? "month" : "months"}`);
+        parts.push(pluralize(elapsed.months, "month"));
     }
     return parts.length > 0 ? parts.join(", ") : "0 months";
 }
@@ -56,54 +60,41 @@ const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "Ju
 const DAYS_OF_WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /**
- * Formats a `Date` into a date string using the given format token.
+ * Formats a `Date` into a date string using the given format template.
  *
- * Supported formats: `"YYYY-MM-dd"`, `"MM/dd/YYYY"`, `"dddd, MMM dd, YYYY"`.
+ * Supported tokens: `YYYY` (year), `MMM` (full month name), `MM` (zero-padded month),
+ * `dddd` (day-of-week name), `dd` (zero-padded day).
  */
 export function formatDate(now: Date, fmt: string): string {
-    const yyyy = now.getFullYear();
-    const mm = pad(now.getMonth() + 1);
-    const dd = pad(now.getDate());
-    const mon = MONTHS[now.getMonth()];
-    const dayName = DAYS_OF_WEEK[now.getDay()];
-    const monthFull = MONTHS_FULL[now.getMonth()];
+    const tokens: Record<string, string> = {
+        YYYY: String(now.getFullYear()),
+        MMM: MONTHS_FULL[now.getMonth()],
+        MM: pad(now.getMonth() + 1),
+        dddd: DAYS_OF_WEEK[now.getDay()],
+        dd: pad(now.getDate()),
+    };
 
-    switch (fmt) {
-        case "YYYY-MM-dd":
-            return `${yyyy}-${mm}-${dd}`;
-        case "MM/dd/YYYY":
-            return `${mm}/${dd}/${yyyy}`;
-        case "dddd, MMM dd, YYYY":
-            return `${dayName}, ${monthFull} ${dd}, ${yyyy}`;
-        default:
-            return `${yyyy}-${mm}-${dd}`;
-    }
+    return fmt.replace(/YYYY|MMM|MM|dddd|dd/g, (match) => tokens[match]);
 }
 
 /**
- * Formats a `Date` into a time string using the given format token.
+ * Formats a `Date` into a time string using the given format template.
  *
- * Supported formats: `"HH:mm"`, `"HH:mm:ss"`, `"hh:mm AM/PM"`, `"hh:mm:ss AM/PM"`.
+ * Supported tokens: `HH` (24-hour), `hh` (12-hour), `mm` (minutes),
+ * `ss` (seconds), `AM/PM` (period).
  */
 export function formatTime(now: Date, fmt: string): string {
     const hh24 = pad(now.getHours());
-    const min = pad(now.getMinutes());
-    const sec = pad(now.getSeconds());
     const hh12 = pad(now.getHours() % 12 || 12);
-    const ampm = now.getHours() < 12 ? "AM" : "PM";
+    const tokens: Record<string, string> = {
+        HH: hh24,
+        hh: hh12,
+        mm: pad(now.getMinutes()),
+        ss: pad(now.getSeconds()),
+        "AM/PM": now.getHours() < 12 ? "AM" : "PM",
+    };
 
-    switch (fmt) {
-        case "HH:mm":
-            return `${hh24}:${min}`;
-        case "HH:mm:ss":
-            return `${hh24}:${min}:${sec}`;
-        case "hh:mm AM/PM":
-            return `${hh12}:${min} ${ampm}`;
-        case "hh:mm:ss AM/PM":
-            return `${hh12}:${min}:${sec} ${ampm}`;
-        default:
-            return `${hh24}:${min}`;
-    }
+    return fmt.replace(/AM\/PM|HH|hh|mm|ss/g, (match) => tokens[match]);
 }
 
 // ── ISO date / age helpers ──────────────────────────────────────────
@@ -143,12 +134,12 @@ function formatDueLabel(days: number): string {
     const weeks = Math.floor(days / 7);
     const remainder = days % 7;
     if (weeks === 0) {
-        return `${days} ${days === 1 ? "day" : "days"}`;
+        return pluralize(days, "day");
     }
     if (remainder === 0) {
-        return `${weeks} ${weeks === 1 ? "week" : "weeks"}`;
+        return pluralize(weeks, "week");
     }
-    return `${weeks} ${weeks === 1 ? "week" : "weeks"} and ${remainder} ${remainder === 1 ? "day" : "days"}`;
+    return `${pluralize(weeks, "week")} and ${pluralize(remainder, "day")}`;
 }
 
 /**

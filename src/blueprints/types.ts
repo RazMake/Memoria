@@ -6,6 +6,9 @@ import * as vscode from "vscode";
 import type { ContactKind } from "../features/contacts/types";
 import type { TaskCollectorConfig } from "../features/taskCollector/types";
 
+/** Folder name used to store backups during workspace (re-)initialization. */
+export const BACKUP_FOLDER_NAME = "WorkspaceInitializationBackups";
+
 /** Allowed values for the `default` field on a workspace entry. */
 export type DefaultScope = "relative" | "includingRoot";
 

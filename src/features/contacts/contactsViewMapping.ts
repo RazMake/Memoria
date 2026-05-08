@@ -26,10 +26,7 @@ export function mapSnapshot(snapshot: ContactsSnapshot): ContactsViewSnapshot {
                 extraFields: cloneFieldMap(entry.extraFields),
             })),
             careerLevels: snapshot.referenceData.careerLevels.map((entry) => ({
-                key: entry.key,
-                id: entry.id,
-                interviewType: entry.interviewType,
-                titlePattern: entry.titlePattern,
+                ...entry,
                 extraFields: cloneFieldMap(entry.extraFields),
             })),
             careerPaths: snapshot.referenceData.careerPaths.map((entry) => ({
@@ -46,28 +43,8 @@ export function mapSnapshot(snapshot: ContactsSnapshot): ContactsViewSnapshot {
 }
 
 export function mapContact(contact: ResolvedContact): ContactsViewContact {
-    if (contact.kind === "report") {
-        return {
-            kind: "report",
-            id: contact.id,
-            nickname: contact.nickname,
-            fullName: contact.fullName,
-            title: contact.title,
-            shortTitle: contact.shortTitle,
-            careerPathKey: contact.careerPathKey,
-            pronounsKey: contact.pronounsKey,
-            extraFields: cloneFieldMap(contact.extraFields),
-            droppedFields: cloneFieldMap(contact.droppedFields),
-            levelId: contact.levelId,
-            levelStartDate: contact.levelStartDate,
-            groupFile: contact.groupFile,
-            groupName: contact.groupName,
-            isCustomGroup: contact.isCustomGroup,
-        };
-    }
-
-    return {
-        kind: "colleague",
+    const base = {
+        kind: contact.kind,
         id: contact.id,
         nickname: contact.nickname,
         fullName: contact.fullName,
@@ -81,6 +58,17 @@ export function mapContact(contact: ResolvedContact): ContactsViewContact {
         groupName: contact.groupName,
         isCustomGroup: contact.isCustomGroup,
     };
+
+    if (contact.kind === "report") {
+        return {
+            ...base,
+            kind: "report",
+            levelId: contact.levelId,
+            levelStartDate: contact.levelStartDate,
+        };
+    }
+
+    return { ...base, kind: "colleague" };
 }
 
 export function mapFormRequest(request: ContactsFormOpenRequest): ContactsViewFormRequest {
@@ -93,24 +81,7 @@ export function buildWritableContact(draft: Contact, sourceContact: ContactsView
         : cloneFieldMap(draft.extraFields);
     const baseDroppedFields = buildDroppedFields(draft.kind, sourceContact, draft.droppedFields);
 
-    if (draft.kind === "report") {
-        return {
-            kind: "report",
-            id: draft.id.trim(),
-            nickname: draft.nickname.trim(),
-            fullName: draft.fullName.trim(),
-            title: draft.title.trim(),
-            careerPathKey: draft.careerPathKey.trim(),
-            levelId: draft.levelId.trim(),
-            levelStartDate: draft.levelStartDate.trim(),
-            pronounsKey: draft.pronounsKey.trim(),
-            extraFields: baseExtraFields,
-            droppedFields: baseDroppedFields,
-        };
-    }
-
-    return {
-        kind: "colleague",
+    const base = {
         id: draft.id.trim(),
         nickname: draft.nickname.trim(),
         fullName: draft.fullName.trim(),
@@ -120,6 +91,17 @@ export function buildWritableContact(draft: Contact, sourceContact: ContactsView
         extraFields: baseExtraFields,
         droppedFields: baseDroppedFields,
     };
+
+    if (draft.kind === "report") {
+        return {
+            kind: "report",
+            ...base,
+            levelId: draft.levelId.trim(),
+            levelStartDate: draft.levelStartDate.trim(),
+        };
+    }
+
+    return { kind: "colleague", ...base };
 }
 
 export function buildDroppedFields(
@@ -138,12 +120,6 @@ export function buildDroppedFields(
     }
 
     return droppedFields;
-}
-
-export function disposeAll(disposables: readonly vscode.Disposable[]): void {
-    for (const disposable of disposables) {
-        disposable.dispose();
-    }
 }
 
 export function cloneFieldMap(fields: ContactFieldMap): ContactFieldMap {

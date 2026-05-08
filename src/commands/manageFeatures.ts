@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../telemetry";
 import type { FeatureManager } from "../features/featureManager";
+import { requireInitializedRoot } from "./commandHelpers";
 
 export function createManageFeaturesCommand(
     manifest: ManifestManager,
@@ -13,17 +14,8 @@ export function createManageFeaturesCommand(
     featureManager: FeatureManager
 ): () => Promise<void> {
     return async () => {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            vscode.window.showErrorMessage("Memoria: No workspace is open.");
-            return;
-        }
-
-        const workspaceRoot = await manifest.findInitializedRoot(folders.map((f) => f.uri));
+        const workspaceRoot = await requireInitializedRoot(manifest);
         if (!workspaceRoot) {
-            vscode.window.showErrorMessage(
-                "Memoria: Workspace is not initialized. Run 'Memoria: Initialize workspace' first."
-            );
             return;
         }
 

@@ -52,7 +52,7 @@ describe("blueprintUpdateCheck", () => {
         const mockRegistry = { getBlueprintDefinition: vi.fn() };
         const mockEngine = { reinitialize: vi.fn() };
         const mockResolver = {} as any;
-        const mockFeatureManager = { refresh: vi.fn() } as any;
+        const mockOnReinitialized = vi.fn().mockResolvedValue(undefined);
 
         beforeEach(() => {
             mockManifest.readManifest.mockReset();
@@ -62,7 +62,7 @@ describe("blueprintUpdateCheck", () => {
 
         it("should return early when no initialized root", async () => {
             await checkForBlueprintUpdates(
-                null, mockManifest as any, mockRegistry as any, mockEngine as any, mockResolver, mockFeatureManager,
+                null, mockManifest as any, mockRegistry as any, mockEngine as any, mockResolver, mockOnReinitialized,
             );
 
             expect(mockManifest.readManifest).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe("blueprintUpdateCheck", () => {
             mockManifest.readManifest.mockResolvedValue(null);
 
             await checkForBlueprintUpdates(
-                root, mockManifest as any, mockRegistry as any, mockEngine as any, mockResolver, mockFeatureManager,
+                root, mockManifest as any, mockRegistry as any, mockEngine as any, mockResolver, mockOnReinitialized,
             );
 
             expect(mockManifest.readManifest).toHaveBeenCalledWith(root);

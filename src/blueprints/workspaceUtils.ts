@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { stripTrailingSlash } from "../utils/path";
 
 /** Returns the URIs of all open workspace folders, or an empty array if none. */
 export function getWorkspaceRoots(): vscode.Uri[] {
@@ -12,9 +13,21 @@ export function getWorkspaceRoots(): vscode.Uri[] {
  */
 export function getRootFolderName(rootUri: { path: string }): string {
     const path = rootUri.path;
-    const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
+    const trimmed = stripTrailingSlash(path);
     const lastSlash = trimmed.lastIndexOf("/");
     return lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+}
+
+/**
+ * Splits a path at its first "/" and returns the leading segment and the remainder.
+ * Returns `null` when the path has no "/".
+ */
+function splitFirstSegment(path: string): { segment: string; rest: string } | null {
+    const firstSlash = path.indexOf("/");
+    if (firstSlash === -1) {
+        return null;
+    }
+    return { segment: path.slice(0, firstSlash), rest: path.slice(firstSlash + 1) };
 }
 
 /**
@@ -32,11 +45,13 @@ export function classifyFolderKey(
     key: string,
     rootNameSet: ReadonlySet<string>
 ): { isRootSpecific: boolean; relFolder: string; rootName: string } {
-    const firstSlash = key.indexOf("/");
-    const firstSegment = key.slice(0, firstSlash);
-    const isRootSpecific = rootNameSet.has(firstSegment) && key.length > firstSlash + 1;
-    const relFolder = isRootSpecific ? key.slice(firstSlash + 1) : key;
-    return { isRootSpecific, relFolder, rootName: firstSegment };
+    const split = splitFirstSegment(key);
+    if (!split) {
+        return { isRootSpecific: false, relFolder: key, rootName: "" };
+    }
+    const isRootSpecific = rootNameSet.has(split.segment) && split.rest.length > 0;
+    const relFolder = isRootSpecific ? split.rest : key;
+    return { isRootSpecific, relFolder, rootName: split.segment };
 }
 
 /**
@@ -54,12 +69,11 @@ export function classifyFilePath(
     filePath: string,
     rootNameSet: ReadonlySet<string>
 ): { isWorkspaceAbsolute: boolean; rootName: string; relPath: string } {
-    const firstSlash = filePath.indexOf("/");
-    if (firstSlash === -1) {
+    const split = splitFirstSegment(filePath);
+    if (!split) {
         return { isWorkspaceAbsolute: false, rootName: "", relPath: filePath };
     }
-    const firstSegment = filePath.slice(0, firstSlash);
-    const isWorkspaceAbsolute = rootNameSet.has(firstSegment);
-    const relPath = isWorkspaceAbsolute ? filePath.slice(firstSlash + 1) : filePath;
-    return { isWorkspaceAbsolute, rootName: firstSegment, relPath };
+    const isWorkspaceAbsolute = rootNameSet.has(split.segment);
+    const relPath = isWorkspaceAbsolute ? split.rest : filePath;
+    return { isWorkspaceAbsolute, rootName: split.segment, relPath };
 }

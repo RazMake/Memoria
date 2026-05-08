@@ -35,8 +35,8 @@ import {
     requireGroup,
     toCustomGroupFileName,
     writeGroupDocument,
-    writeTextFile,
 } from "../../../../src/features/contacts/contactMutations";
+import { writeTextFile } from "../../../../src/utils/filesystem";
 import type { LoadedGroupState } from "../../../../src/features/contacts/contactFileLoader";
 import type {
     ColleagueContact,

@@ -6,8 +6,7 @@ import { FileScaffold } from "./blueprints/fileScaffold";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
 import { getWorkspaceRoots } from "./blueprints/workspaceUtils";
-import { updateDefaultFileContext, registerDefaultFileWatcher, type DefaultFileWatcherHolder } from "./defaultFileContext";
-import { createOpenUserGuideCommand } from "./commands/openUserGuide";
+import { registerDefaultFileWatcher, type DefaultFileWatcherHolder } from "./defaultFileContext";
 import { BlueprintDecorationProvider } from "./features/decorations/blueprintDecorationProvider";
 import { DecorationCompletionProvider, DECORATIONS_JSON_SELECTOR } from "./features/decorations/decorationCompletionProvider";
 import { DecorationColorProvider } from "./features/decorations/decorationColorProvider";
@@ -17,8 +16,8 @@ import { ContactsFeature } from "./features/contacts/contactsFeature";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 import { SnippetsFeature } from "./features/snippets/snippetsFeature";
-import { checkForBlueprintUpdates, updateWorkspaceInitializedContext } from "./blueprintUpdateCheck";
-import { registerFileWatchers } from "./fileWatchers";
+import { checkForBlueprintUpdates } from "./blueprintUpdateCheck";
+import { registerFileWatchers, refreshWorkspaceState } from "./fileWatchers";
 import { registerCommands } from "./commandRegistration";
 import { registerFeatureHandlers } from "./featureSetup";
 
@@ -79,6 +78,77 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Register language providers and custom editors eagerly — they don't conflict with
     // other extensions' decoration providers and must be available before any file is opened.
+    registerLanguageProviders(context, todoEditorProvider);
+
+    // Discover the initialized root once and share it across all startup operations
+    // instead of calling findInitializedRoot() separately in each one (saves fs.stat round-trips).
+    const roots = getWorkspaceRoots();
+    const initializedRoot = await manifest.findInitializedRoot(roots);
+    todoEditorProvider.setInitializedRoot(initializedRoot);
+
+    // Set the context key and refresh features in parallel — they are independent.
+    await refreshWorkspaceState(initializedRoot, roots, manifest, featureManager);
+
+    // Register the FileDecorationProvider AFTER features are refreshed (so rules are
+    // already loaded) and after the built-in git extension has registered its own provider.
+    // VS Code merges decorations from multiple providers using "last registered wins" for
+    // colors. By registering here — after the await above — our custom colors override
+    // git's "modified file" orange that appears when the Task Collector updates the
+    // collector document.
+    context.subscriptions.push(
+        vscode.window.registerFileDecorationProvider(decorationProvider),
+    );
+
+    const defaultFileWatcherHolder: DefaultFileWatcherHolder = { current: undefined };
+
+    const onWorkspaceInitialized = async (workspaceRoot: vscode.Uri): Promise<void> => {
+        todoEditorProvider.setInitializedRoot(workspaceRoot);
+        await refreshWorkspaceState(workspaceRoot, roots, manifest, featureManager);
+        void registerDefaultFileWatcher(context, workspaceRoot, roots, manifest, defaultFileWatcherHolder);
+    };
+
+    // Check for blueprint updates in the background — this may show a dialog that blocks
+    // indefinitely and must not delay decoration rendering.
+    void checkForBlueprintUpdates(
+        initializedRoot,
+        manifest,
+        registry,
+        engine,
+        resolver,
+        onWorkspaceInitialized
+    ).catch(() => {
+        /* update check is best-effort — swallow errors silently */
+    });
+
+    registerFileWatchers(context, roots, manifest, featureManager, initializedRoot, defaultFileWatcherHolder);
+    void registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
+    registerCommands(
+        context,
+        {
+            engine,
+            registry,
+            manifest,
+            telemetry,
+            resolver,
+            featureManager,
+            taskCollectorFeature,
+            contactsFeature,
+            snippetsFeature,
+            extensionUri: context.extensionUri,
+            onWorkspaceInitialized,
+        },
+    );
+}
+
+export function deactivate(): void {
+    // Default-file watchers are tracked by the holder created in activate().
+    // Context subscriptions handle disposal of all other watchers.
+}
+
+function registerLanguageProviders(
+    context: vscode.ExtensionContext,
+    todoEditorProvider: TodoEditorProvider,
+): void {
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
             DECORATIONS_JSON_SELECTOR,
@@ -97,76 +167,4 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ),
         TodoEditorProvider.register(context, todoEditorProvider),
     );
-
-    // Discover the initialized root once and share it across all startup operations
-    // instead of calling findInitializedRoot() separately in each one (saves fs.stat round-trips).
-    const roots = getWorkspaceRoots();
-    const initializedRoot = await manifest.findInitializedRoot(roots);
-
-    // Set the context key and refresh features in parallel — they are independent.
-    await Promise.all([
-        updateWorkspaceInitializedContext(initializedRoot),
-        featureManager.refresh(initializedRoot),
-        updateDefaultFileContext(initializedRoot, roots, manifest),
-    ]);
-
-    // Register the FileDecorationProvider AFTER features are refreshed (so rules are
-    // already loaded) and after the built-in git extension has registered its own provider.
-    // VS Code merges decorations from multiple providers using "last registered wins" for
-    // colors. By registering here — after the await above — our custom colors override
-    // git's "modified file" orange that appears when the Task Collector updates the
-    // collector document.
-    context.subscriptions.push(
-        vscode.window.registerFileDecorationProvider(decorationProvider),
-    );
-
-    // Check for blueprint updates in the background — this may show a dialog that blocks
-    // indefinitely and must not delay decoration rendering.
-    void checkForBlueprintUpdates(
-        initializedRoot,
-        manifest,
-        registry,
-        engine,
-        resolver,
-        featureManager
-    ).catch(() => {
-        /* update check is best-effort — swallow errors silently */
-    });
-
-    const defaultFileWatcherHolder: DefaultFileWatcherHolder = { current: undefined };
-
-    const onWorkspaceInitialized = async (workspaceRoot: vscode.Uri): Promise<void> => {
-        await updateWorkspaceInitializedContext(workspaceRoot);
-        await featureManager.refresh(workspaceRoot);
-        await updateDefaultFileContext(workspaceRoot, roots, manifest);
-        registerDefaultFileWatcher(context, workspaceRoot, roots, manifest, defaultFileWatcherHolder);
-    };
-
-    registerFileWatchers(context, roots, manifest, featureManager, initializedRoot, defaultFileWatcherHolder);
-    registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
-    registerCommands(
-        context,
-        engine,
-        registry,
-        manifest,
-        telemetry,
-        resolver,
-        featureManager,
-        taskCollectorFeature,
-        contactsFeature,
-        snippetsFeature,
-        onWorkspaceInitialized,
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand(
-            "memoria.openUserGuide",
-            createOpenUserGuideCommand(context.extensionUri)
-        )
-    );
-}
-
-export function deactivate(): void {
-    // Default-file watchers are tracked by the holder created in activate().
-    // Context subscriptions handle disposal of all other watchers.
 }
