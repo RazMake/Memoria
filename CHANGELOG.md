@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.2
+
+- Added auto-updating of markdown links on file rename.
+- Added the capability to create a new file directly from the task editor.
+
 ## 0.0.1
 
 - Initial verson, _not publicly released_.  

@@ -24,6 +24,7 @@ export interface LinkSuggestion {
     label: string;
     insertText: string;
     description?: string;
+    action?: 'createFile';
 }
 
 export type VsCodeApi = ReturnType<typeof acquireVsCodeApi>;

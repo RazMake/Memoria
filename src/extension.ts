@@ -20,6 +20,7 @@ import { checkForBlueprintUpdates } from "./blueprintUpdateCheck";
 import { registerFileWatchers, refreshWorkspaceState } from "./fileWatchers";
 import { registerCommands } from "./commandRegistration";
 import { registerFeatureHandlers } from "./featureSetup";
+import { registerLinkReferenceWatcher } from "./linkReferenceWatcher";
 
 export { isNewerVersion } from "./blueprintUpdateCheck";
 
@@ -122,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     registerFileWatchers(context, roots, manifest, featureManager, initializedRoot, defaultFileWatcherHolder);
     void registerDefaultFileWatcher(context, initializedRoot, roots, manifest, defaultFileWatcherHolder);
+    registerLinkReferenceWatcher(context, telemetry);
     registerCommands(
         context,
         {

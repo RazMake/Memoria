@@ -404,9 +404,10 @@ describe("TodoEditorProvider", () => {
             await handler({ type: "linkPathQuery", prefix: "not", queryId: 2 });
 
             const msg = vi.mocked(panel.webview.postMessage).mock.calls[0][0] as any;
-            expect(msg.items).toHaveLength(2);
-            expect(msg.items[0].label).toBe("notebook.md");
-            expect(msg.items[1].label).toBe("notes.md");
+            expect(msg.items).toHaveLength(3);
+            expect(msg.items[0].label).toBe("+ Create new file");
+            expect(msg.items[1].label).toBe("notebook.md");
+            expect(msg.items[2].label).toBe("notes.md");
         });
 
         it("should handle 'linkPathQuery' error gracefully", async () => {

@@ -26,6 +26,7 @@ export interface LinkSuggestion {
     insertText: string;
     /** Optional description (e.g. folder path). */
     description?: string;
+    action?: 'createFile';
 }
 
 export type ToWebviewMessage =
@@ -34,7 +35,8 @@ export type ToWebviewMessage =
     | { type: 'snippetSuggestions'; items: SnippetSuggestion[] }
     | { type: 'snippetResult'; text: string }
     | { type: 'contactTooltips'; entries: ContactTooltipEntry[] }
-    | { type: 'linkSuggestions'; items: LinkSuggestion[]; queryId?: number };
+    | { type: 'linkSuggestions'; items: LinkSuggestion[]; queryId?: number }
+    | { type: 'fileCreated'; insertPath: string };
 
 export type ToExtensionMessage =
     | { type: 'ready' }
@@ -52,4 +54,5 @@ export type ToExtensionMessage =
     | { type: 'snippetAccept'; trigger: string; selectedText?: string }
     | { type: 'openLink'; href: string }
     | { type: 'linkPathQuery'; prefix: string; queryId?: number }
-    | { type: 'linkHeadingQuery'; path: string; prefix: string; queryId?: number };
+    | { type: 'linkHeadingQuery'; path: string; prefix: string; queryId?: number }
+    | { type: 'createLinkedFile'; linkText: string; dirPrefix: string };

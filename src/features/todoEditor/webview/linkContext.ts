@@ -50,3 +50,22 @@ export function detectLinkContext(text: string, cursor: number): LinkContext | u
     }
     return undefined;
 }
+
+/**
+ * Extracts the text between `[` and `]` immediately before a markdown link's `(`.
+ * Given `parenStart` (index of the char after `(`), walks backwards to find `[`.
+ * Returns the bracket text, or `undefined` if no valid bracket pair is found.
+ */
+export function extractLinkText(text: string, parenStart: number): string | undefined {
+    // parenStart points to char after '(', so parenStart-1 is '(' and parenStart-2 is ']'
+    if (parenStart < 3) return undefined;
+    if (text[parenStart - 1] !== '(' || text[parenStart - 2] !== ']') return undefined;
+    // Walk backwards from ']' to find matching '['
+    for (let i = parenStart - 3; i >= 0; i--) {
+        if (text[i] === '[') {
+            return text.slice(i + 1, parenStart - 2);
+        }
+        if (text[i] === '\n') return undefined;
+    }
+    return undefined;
+}

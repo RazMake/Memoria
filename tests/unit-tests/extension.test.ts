@@ -16,6 +16,7 @@ const mockCreateFileSystemWatcher = vi.fn(() => ({
     dispose: mockWatcherDispose,
 }));
 const mockOnDidDeleteFiles = vi.fn();
+const mockOnDidRenameFiles = vi.fn();
 
 vi.mock("vscode", () => ({
     commands: {
@@ -60,6 +61,10 @@ vi.mock("vscode", () => ({
         createFileSystemWatcher: (...args: any[]) => mockCreateFileSystemWatcher(...args),
         onDidDeleteFiles: (...args: any[]) => {
             mockOnDidDeleteFiles(...args);
+            return { dispose: vi.fn() };
+        },
+        onDidRenameFiles: (...args: any[]) => {
+            mockOnDidRenameFiles(...args);
             return { dispose: vi.fn() };
         },
         fs: {

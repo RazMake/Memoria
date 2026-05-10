@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectLinkContext } from "../../../../src/features/todoEditor/webview/linkContext";
+import { detectLinkContext, extractLinkText } from "../../../../src/features/todoEditor/webview/linkContext";
 
 describe("detectLinkContext", () => {
     describe("path mode", () => {
@@ -106,5 +106,43 @@ describe("detectLinkContext", () => {
             const ctx = detectLinkContext(text, cursor);
             expect(ctx).toEqual({ mode: "path", prefix: "path", parenStart: 18, filePath: "" });
         });
+    });
+});
+
+describe("extractLinkText", () => {
+    it("should return link text when given a standard markdown link", () => {
+        expect(extractLinkText("[link](", 7)).toBe("link");
+    });
+
+    it("should return full text when given a multi-word link", () => {
+        expect(extractLinkText("[My Task Name](", 15)).toBe("My Task Name");
+    });
+
+    it("should return link text when preceded by other text", () => {
+        expect(extractLinkText("some text [link](", 17)).toBe("link");
+    });
+
+    it("should return undefined when no bracket is present", () => {
+        expect(extractLinkText("(no bracket", 1)).toBeUndefined();
+    });
+
+    it("should return undefined when parenStart is 0", () => {
+        expect(extractLinkText("[link](", 0)).toBeUndefined();
+    });
+
+    it("should return undefined when parenStart is too small", () => {
+        expect(extractLinkText("[link](", 2)).toBeUndefined();
+    });
+
+    it("should return undefined when no opening bracket is found", () => {
+        expect(extractLinkText("text](", 6)).toBeUndefined();
+    });
+
+    it("should return closest bracket text when given nested brackets", () => {
+        expect(extractLinkText("[a]([b](", 8)).toBe("b");
+    });
+
+    it("should return undefined when newline appears between brackets", () => {
+        expect(extractLinkText("[multi\nline](", 13)).toBeUndefined();
     });
 });

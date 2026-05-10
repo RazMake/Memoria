@@ -20,3 +20,25 @@ export function normalizePath(value: string): string {
 export function stripTrailingSlash(value: string): string {
     return value.endsWith("/") ? value.slice(0, -1) : value;
 }
+
+/**
+ * Converts arbitrary text into a filesystem-safe, URL-friendly slug.
+ * Lowercase, replaces spaces/underscores with hyphens, strips non-alphanumeric
+ * characters (except hyphens and dots), collapses runs of hyphens, and trims
+ * leading/trailing hyphens.  Dots are preserved so file extensions survive.
+ */
+export function slugifyFilename(text: string): string {
+    return text
+        .toLowerCase()
+        .replace(/[\s_]+/g, "-")
+        .replace(/[^a-z0-9\-\.]/g, "")
+        .replace(/-{2,}/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Appends `.md` when the filename contains no dot; leaves it unchanged otherwise.
+ */
+export function ensureMdExtension(filename: string): string {
+    return filename.includes(".") ? filename : `${filename}.md`;
+}

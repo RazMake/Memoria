@@ -10,6 +10,7 @@ import { toHeadingSlug } from "../../utils/headingSlug";
 import { toggleNthCheckbox } from "./todoTaskHelpers";
 import { writeBackToSource, markRemovedInSource } from "./todoSourceSync";
 import type { SnippetProvider } from "../snippets/snippetCompletionProvider";
+import { slugifyFilename, ensureMdExtension } from "../../utils/path";
 
 const MAX_SNIPPET_SUGGESTIONS = 20;
 const MAX_LINK_SUGGESTIONS = 30;
@@ -83,6 +84,9 @@ export async function handleTodoEditorMessage(
             break;
         case "linkHeadingQuery":
             await handleLinkHeadingQuery(msg, ctx);
+            break;
+        case "createLinkedFile":
+            await handleCreateLinkedFile(msg, ctx);
             break;
     }
 }
@@ -394,6 +398,12 @@ async function handleLinkPathQuery(msg: Extract<ToExtensionMessage, { type: "lin
             if (aDir !== bDir) return aDir - bDir;
             return a.label.localeCompare(b.label);
         });
+        suggestions.unshift({
+            label: '+ Create new file',
+            insertText: '',
+            description: 'Create a new .md file here',
+            action: 'createFile',
+        });
         const reply: ToWebviewMessage = { type: "linkSuggestions", items: suggestions.slice(0, MAX_LINK_SUGGESTIONS), queryId: msg.queryId };
         ctx.webviewPanel.webview.postMessage(reply);
     } catch {
@@ -427,4 +437,31 @@ async function handleLinkHeadingQuery(msg: Extract<ToExtensionMessage, { type: "
     } catch {
         ctx.webviewPanel.webview.postMessage({ type: "linkSuggestions", items: [], queryId: msg.queryId } as ToWebviewMessage);
     }
+}
+
+async function handleCreateLinkedFile(msg: Extract<ToExtensionMessage, { type: "createLinkedFile" }>, ctx: TodoEditorMessageContext): Promise<void> {
+    const slugified = slugifyFilename(msg.linkText);
+    if (!slugified) return;
+
+    const filename = ensureMdExtension(slugified);
+    const docDir = vscode.Uri.joinPath(ctx.document.uri, "..");
+    const dirPrefix = msg.dirPrefix.replace(/\/+$/, "");
+    const targetUri = dirPrefix
+        ? vscode.Uri.joinPath(docDir, dirPrefix, filename)
+        : vscode.Uri.joinPath(docDir, filename);
+    const insertPath = dirPrefix ? `${dirPrefix}/${filename}` : filename;
+
+    try {
+        await vscode.workspace.fs.stat(targetUri);
+    } catch {
+        await vscode.workspace.fs.writeFile(targetUri, new Uint8Array(0));
+    }
+
+    const reply: ToWebviewMessage = { type: "fileCreated", insertPath };
+    ctx.webviewPanel.webview.postMessage(reply);
+
+    await vscode.window.showTextDocument(targetUri, {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: false,
+    });
 }

@@ -141,6 +141,16 @@ Each active task is displayed as a card with:
 
 When you type inside a markdown link's parentheses — e.g. `[text](` — Memoria suggests file paths from the workspace. After selecting a file, type `#` to get heading suggestions from that file.
 
+##### Create new file
+
+The first option in the autocomplete dropdown is always **+ Create new file**. Selecting it:
+1. Derives a filename from the link text (e.g. `[My Task]()` → `my-task.md`) — lowercase, spaces replaced with hyphens, `.md` appended if no extension.
+2. Creates the file in the current directory (or the subfolder you've navigated into).
+3. Inserts the file path into the link.
+4. Opens the new file beside the editor.
+
+If a file with the derived name already exists, Memoria links to it without overwriting.
+
 ### Completed section
 
 A collapsible section at the bottom of the editor (collapsed by default). Completed tasks show their completion date as a badge. Click a completed task's checkbox to move it back to active.
@@ -153,6 +163,10 @@ When the Task Collector feature is enabled for the current workspace, the Todo E
 - Collected tasks can resolve their source files for the source-link action.
 
 When the feature is disabled, the file still opens in the Todo Editor and remains editable, but `Sync` shows the same "Task Collector is not enabled for this workspace" error as the command.
+
+### File rename propagation
+
+When you rename a file or folder in the workspace (via the Explorer or any other method), Memoria automatically updates all markdown link references across **all** `.md` files to reflect the new path. Both `[text](path)` and `![alt](path)` links are updated, including links with `#anchor` fragments. Links inside fenced code blocks are left unchanged.
 
 ---
 

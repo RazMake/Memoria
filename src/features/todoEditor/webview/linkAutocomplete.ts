@@ -1,7 +1,7 @@
 import type { LinkSuggestion } from './types';
 import { vscode } from './state';
 import { createAutocompleteDropdown } from './autocompleteDropdown';
-import { detectLinkContext } from './linkContext';
+import { detectLinkContext, extractLinkText } from './linkContext';
 export type { LinkContext } from './linkContext';
 export { detectLinkContext } from './linkContext';
 
@@ -15,6 +15,8 @@ let headingFilePath = '';
 let suppressNextInput = false;
 /** Monotonic query counter to discard stale async responses. */
 let queryId = 0;
+/** Snapshot of state at the time a "create file" request was sent, for async response handling. */
+let pendingCreateFile: { parenStart: number; input: HTMLInputElement | HTMLTextAreaElement } | null = null;
 
 const dropdown = createAutocompleteDropdown<LinkSuggestion>(acceptLinkItem);
 
@@ -78,6 +80,7 @@ export function disposeLinkAutocomplete(): void {
     completingHeading = false;
     headingFilePath = '';
     suppressNextInput = false;
+    pendingCreateFile = null;
 }
 
 function acceptLinkItem(item: LinkSuggestion): void {
@@ -86,6 +89,16 @@ function acceptLinkItem(item: LinkSuggestion): void {
 
     const cursor = activeInput.selectionStart ?? activeInput.value.length;
     const value = activeInput.value;
+
+    if (item.action === 'createFile') {
+        const linkText = extractLinkText(value, parenStart);
+        if (!linkText) { dropdown.hide(); return; }
+        const dirPrefix = value.slice(parenStart, cursor);
+        pendingCreateFile = { parenStart, input: activeInput };
+        vscode.postMessage({ type: 'createLinkedFile', linkText, dirPrefix });
+        dropdown.hide();
+        return;
+    }
 
     if (completingHeading) {
         const contentBeforeHash = value.slice(parenStart, cursor);
@@ -114,4 +127,23 @@ function acceptLinkItem(item: LinkSuggestion): void {
     }
     activeInput.dispatchEvent(new Event('input', { bubbles: true }));
     dropdown.hide();
+}
+
+/** Handle the extension's response after creating a linked file. */
+export function handleFileCreated(insertPath: string): void {
+    if (!pendingCreateFile) return;
+    const { parenStart: ps, input } = pendingCreateFile;
+    pendingCreateFile = null;
+
+    const cursor = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, ps);
+    const after = input.value.slice(cursor);
+    // Ensure the closing ')' is present to complete the markdown link
+    const closeParen = after.startsWith(')') ? '' : ')';
+    input.value = before + insertPath + closeParen + after;
+    const newCursor = ps + insertPath.length + closeParen.length;
+    input.setSelectionRange(newCursor, newCursor);
+    input.focus();
+    suppressNextInput = true;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
 }

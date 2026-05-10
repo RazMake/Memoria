@@ -5,7 +5,7 @@ import { renderActiveList, invalidateActiveCache } from './activeList';
 import { renderCompletedSection, invalidateCompletedCache } from './completedList';
 import { openPopup, isPopupOpen } from './popup';
 import { handleSnippetSuggestions, handleSnippetResult } from './snippetAutocomplete';
-import { handleLinkSuggestions } from './linkAutocomplete';
+import { handleLinkSuggestions, handleFileCreated } from './linkAutocomplete';
 import { handleListKeydown, applyHighlight, validateHighlight } from './keyboardNav';
 
 const root = document.getElementById('root') ?? document.body;
@@ -54,6 +54,8 @@ window.addEventListener('message', (e: MessageEvent) => {
         handleSnippetResult(msg.text);
     } else if (msg?.type === 'linkSuggestions') {
         handleLinkSuggestions(msg.items, msg.queryId);
+    } else if (msg?.type === 'fileCreated') {
+        handleFileCreated(msg.insertPath);
     }
 });
 

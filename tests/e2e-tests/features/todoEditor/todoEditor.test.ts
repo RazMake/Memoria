@@ -217,6 +217,36 @@ suite("TodoEditor (E2E)", () => {
             assert.ok(collector.includes("# Completed"), "Collector should still have Completed section");
         });
     });
+
+    test("file rename updates markdown link references in .md files", async () => {
+        await activateExtension();
+        await initializeWorkspaceWithBlueprint("individual-contributor");
+        await waitForTaskCollectorReady();
+
+        // Create a target file and a .md file that references it
+        const inboxDir = vscode.Uri.joinPath(workspaceRoot, "03-Inbox");
+        const detailsUri = vscode.Uri.joinPath(inboxDir, "details.md");
+        const notesUri = vscode.Uri.joinPath(inboxDir, "notes.md");
+
+        await writeTextFile(detailsUri, "# Details\n\nSome content.\n");
+        await writeTextFile(notesUri, "# Notes\n\nSee [info](details.md) for more.\n");
+
+        // Rename the target file via WorkspaceEdit
+        const renamedUri = vscode.Uri.joinPath(inboxDir, "new-details.md");
+        const renameEdit = new vscode.WorkspaceEdit();
+        renameEdit.renameFile(detailsUri, renamedUri);
+        const applied = await vscode.workspace.applyEdit(renameEdit);
+        assert.ok(applied, "Rename edit should be applied successfully");
+
+        // Wait for the link reference watcher to update the referencing file
+        await waitFor(async () => {
+            const notesContent = normalizeNewlines(await readTextFile(notesUri));
+            assert.ok(
+                notesContent.includes("[info](new-details.md)"),
+                `Expected notes.md to reference new-details.md after rename. Got: ${JSON.stringify(notesContent)}`,
+            );
+        });
+    });
 });
 
 // ---------------------------------------------------------------------------
