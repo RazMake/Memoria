@@ -3,6 +3,7 @@ import { BlueprintRegistry } from "./blueprints/blueprintRegistry";
 import { ManifestManager } from "./blueprints/manifestManager";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
+import { formatError } from "./utils/error";
 
 /**
  * Sets the VS Code context key `memoria.workspaceInitialized`.
@@ -78,7 +79,7 @@ export async function checkForBlueprintUpdates(
         );
     } catch (err) {
         vscode.window.showErrorMessage(
-            `Memoria: Re-initialization failed — ${(err as Error).message}`
+            `Memoria: Re-initialization failed — ${formatError(err)}`
         );
     }
 }

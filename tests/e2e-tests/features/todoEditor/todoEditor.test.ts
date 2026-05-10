@@ -224,7 +224,7 @@ suite("TodoEditor (E2E)", () => {
 // ---------------------------------------------------------------------------
 
 async function activateExtension(): Promise<void> {
-    const extension = vscode.extensions.getExtension("RazMake.memoria");
+    const extension = vscode.extensions.getExtension("RazMake.memoria-notebook");
     assert.ok(extension, "Extension should be installed");
     await extension.activate();
 }

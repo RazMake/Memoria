@@ -114,15 +114,21 @@ function applyBodyUpdate(task: ParsedCollectorTask, newBody: string): void {
 
 async function handleReorder(msg: Extract<ToExtensionMessage, { type: "reorder" }>, ctx: TodoEditorMessageContext): Promise<void> {
     const doc = parseTodoDocument(ctx.document.getText());
-    const reordered: ParsedCollectorTask[] = [];
-    for (const id of msg.ids) {
-        const resolved = ctx.resolveTask(id, doc);
-        if (resolved) reordered.push(resolved.task);
+    const activeLen = doc.active.length;
+    if (msg.ids.length !== activeLen) return;
+
+    const reordered = new Array<ParsedCollectorTask>(activeLen);
+    for (let i = 0; i < activeLen; i++) {
+        const id = msg.ids[i];
+        // Active task IDs are always "a-<index>", extract index directly.
+        const dashPos = id.indexOf("-");
+        if (dashPos < 0 || id[0] !== "a") return;
+        const idx = parseInt(id.slice(dashPos + 1), 10);
+        if (idx >= activeLen || idx < 0) return;
+        reordered[i] = doc.active[idx];
     }
-    if (reordered.length === doc.active.length) {
-        doc.active = reordered;
-        await ctx.applyEdit(serializeDocument(doc));
-    }
+    doc.active = reordered;
+    await ctx.applyEdit(serializeDocument(doc));
 }
 
 async function handleComplete(msg: Extract<ToExtensionMessage, { type: "complete" }>, ctx: TodoEditorMessageContext): Promise<void> {

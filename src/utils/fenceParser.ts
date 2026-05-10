@@ -1,5 +1,3 @@
-import { escapeRegExp } from "./regex";
-
 const FENCE_RE = /^(`{3,}|~{3,})/;
 
 export interface FenceState {
@@ -19,5 +17,12 @@ export function parseFenceState(line: string): FenceState | null {
 }
 
 export function isFenceBoundary(line: string, fence: FenceState): boolean {
-    return new RegExp(`^${escapeRegExp(fence.marker)}{${fence.length},}`).test(line.trimStart());
+    const trimmed = line.trimStart();
+    const ch = fence.marker;
+    let count = 0;
+    for (let i = 0; i < trimmed.length; i++) {
+        if (trimmed[i] === ch) count++;
+        else break;
+    }
+    return count >= fence.length;
 }

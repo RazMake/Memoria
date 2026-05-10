@@ -183,6 +183,12 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
                 newText,
             );
             await vscode.workspace.applyEdit(edit);
+            // Push the update to the webview immediately instead of waiting for
+            // the onDidChangeTextDocument debounce timer — eliminates ~80ms of
+            // perceived latency on every user interaction (complete, reorder,
+            // edit, delete, etc.). The debounced handler will no-op via the
+            // lastPushedText check.
+            pushUpdate();
             await document.save();
         };
 

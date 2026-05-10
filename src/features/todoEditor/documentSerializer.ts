@@ -23,7 +23,7 @@ const COMPLETED_HEADING_RE = /^#{1,6}\s+Completed\s*$/i;
 
 export function parseTodoDocument(text: string): TodoDocument {
     const lines = text.split(/\r?\n/);
-    const parsed = parseCollectorDocument(text);
+    const parsed = parseCollectorDocument(text, lines);
 
     const preamble: string[] = [];
     const midSection: string[] = [];
@@ -177,19 +177,19 @@ export function updateTaskBody(task: ParsedCollectorTask, newBody: string): stri
 }
 
 export function serializeDocument(doc: TodoDocument): string {
-    const parts: string[] = [
-        ...doc.preamble,
-        ...doc.active.flatMap((t) => t.rawLines),
-        ...doc.midSection,
-        ...doc.completed.flatMap((t) => t.rawLines),
-        ...doc.epilogue,
-    ];
+    const parts: string[] = [];
+    for (let i = 0; i < doc.preamble.length; i++) parts.push(doc.preamble[i]);
+    for (const t of doc.active) for (let i = 0; i < t.rawLines.length; i++) parts.push(t.rawLines[i]);
+    for (let i = 0; i < doc.midSection.length; i++) parts.push(doc.midSection[i]);
+    for (const t of doc.completed) for (let i = 0; i < t.rawLines.length; i++) parts.push(t.rawLines[i]);
+    for (let i = 0; i < doc.epilogue.length; i++) parts.push(doc.epilogue[i]);
     return parts.join("\n");
 }
 
 const HANG_INDENT_RE = /^      /;
 
 export function stripHangingIndent(body: string): string {
+    if (!body.includes("\n")) return body;
     const lines = body.split("\n");
     return lines.map((l, i) => (i === 0 ? l : l.replace(HANG_INDENT_RE, ""))).join("\n");
 }

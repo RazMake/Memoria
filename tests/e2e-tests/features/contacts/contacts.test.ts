@@ -162,7 +162,7 @@ suite("Contacts feature (E2E)", () => {
 });
 
 async function activateExtension(): Promise<void> {
-    const extension = vscode.extensions.getExtension("RazMake.memoria");
+    const extension = vscode.extensions.getExtension("RazMake.memoria-notebook");
     assert.ok(extension, "The extension should be installed in the test host.");
     await extension.activate();
 }

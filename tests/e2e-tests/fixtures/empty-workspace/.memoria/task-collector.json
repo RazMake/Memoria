@@ -1,0 +1,13 @@
+{
+  "completedRetentionDays": 7,
+  "syncOnStartup": true,
+  "include": [
+    "**/*.md"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/.memoria/**"
+  ],
+  "debounceMs": 300
+}

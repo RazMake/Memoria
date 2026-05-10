@@ -22,8 +22,17 @@ export function formatDateLong(iso: string): string {
  * Strips `<script>` tags and event-handler attributes from pre-rendered HTML.
  * The extension host already produces the HTML via markdown-it, but defence-in-depth
  * is cheap so we sanitize anyway.
+ *
+ * Fast-path: when the HTML contains no `<script` tags, no `on` event-handler
+ * attributes, and no `javascript:` hrefs, skip the expensive DOM parse+serialize.
  */
+const NEEDS_SANITIZE_RE = /<script[\s>]|\bon\w+\s*=/i;
+const NEEDS_HREF_SANITIZE_RE = /javascript\s*:/i;
+
 export function sanitizeHtml(html: string): string {
+    if (!NEEDS_SANITIZE_RE.test(html) && !NEEDS_HREF_SANITIZE_RE.test(html)) {
+        return html;
+    }
     const div = document.createElement('div');
     div.innerHTML = html;
     for (const script of Array.from(div.querySelectorAll('script'))) {

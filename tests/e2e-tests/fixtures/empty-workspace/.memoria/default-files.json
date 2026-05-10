@@ -1,0 +1,9 @@
+{
+  "defaultFiles": {
+    "00-Workstreams/": {
+      "filesToOpen": [
+        "All.todo.md"
+      ]
+    }
+  }
+}

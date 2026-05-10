@@ -225,7 +225,7 @@
         "prepackage": "node -e \"require('fs').mkdirSync('../publish',{recursive:true})\"",
         "package": "node -e \"const p=require('./package.json');const {execSync}=require('child_process');execSync('vsce package --out ../publish/memoria-'+p.version+'.vsix',{stdio:'inherit'})\"",
         "typecheck": "tsc --noEmit",
-        "lint": "eslint . --ext .ts"
+        "lint": "eslint ."
     },
     "dependencies": {
         "@vscode/codicons": "^0.0.45",
@@ -238,19 +238,23 @@
         "yaml": "^2.8.3"
     },
     "devDependencies": {
+        "@eslint/js": "^10.0.1",
         "@types/markdown-it": "^14.1.2",
         "@types/mocha": "^10.0.10",
         "@types/node": "^25.6.0",
         "@types/vscode": "^1.116.0",
+        "@typescript-eslint/eslint-plugin": "^8.59.2",
+        "@typescript-eslint/parser": "^8.59.2",
         "@vitest/coverage-istanbul": "^4.1.4",
-        "@vitest/coverage-v8": "^4.1.4",
         "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2",
         "@vscode/vsce": "^3.9.1",
         "esbuild": "^0.28.0",
+        "eslint": "^10.3.0",
         "mocha": "^11.7.5",
         "patch-package": "^8.0.1",
         "typescript": "^6.0.3",
+        "typescript-eslint": "^8.59.2",
         "vitest": "^4.1.4"
     }
 }

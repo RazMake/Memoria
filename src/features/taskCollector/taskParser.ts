@@ -32,8 +32,12 @@ export function parseTaskBlocks(content: string): TaskBlock[] {
     return blocks;
 }
 
-export function parseCollectorDocument(content: string): ParsedCollectorDocument {
-    const lines = splitLines(content);
+export function parseCollectorDocument(content: string): ParsedCollectorDocument;
+export function parseCollectorDocument(content: string, preSplitLines: string[]): ParsedCollectorDocument;
+export function parseCollectorDocument(content: string, preSplitLines?: string[]): ParsedCollectorDocument {
+    const lines = preSplitLines ?? splitLines(content);
+    const active: ParsedCollectorTask[] = [];
+    const completed: ParsedCollectorTask[] = [];
     const tasks: ParsedCollectorTask[] = [];
     let section: CollectorSection = "active";
 
@@ -52,15 +56,14 @@ export function parseCollectorDocument(content: string): ParsedCollectorDocument
         }
 
         const { block, nextLine } = parseTaskAt(lines, lineIndex);
-        tasks.push(applyCollectorMetadata(block, section));
+        const task = applyCollectorMetadata(block, section);
+        tasks.push(task);
+        if (section === "active") active.push(task);
+        else completed.push(task);
         lineIndex = nextLine - 1;
     }
 
-    return {
-        active: tasks.filter((task) => task.section === "active"),
-        completed: tasks.filter((task) => task.section === "completed"),
-        tasks,
-    };
+    return { active, completed, tasks };
 }
 
 export function parseCollectorSuffixLine(line: string): ParsedCollectorSuffix | null {

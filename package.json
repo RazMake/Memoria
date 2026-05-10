@@ -1,6 +1,9 @@
 {
   "devDependencies": {
-    "ajv": "^8.18.0"
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "ajv": "^8.18.0",
+    "eslint": "^10.3.0"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1",

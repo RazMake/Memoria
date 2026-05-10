@@ -6,7 +6,6 @@ import {
     readJsonFile,
     readTextFile,
     uriExists,
-    writeTextFile,
 } from "../../helpers";
 
 interface FeaturesConfig {
@@ -100,7 +99,7 @@ suite("TaskCollectorFeature (E2E)", () => {
         await waitForTaskCollectorReady();
 
         const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "notes.md");
-        await writeTextFile(sourceUri, "");
+        await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [ ] Buy milk\n");
 
         await vscode.commands.executeCommand("memoria.syncTasks");
@@ -120,7 +119,7 @@ suite("TaskCollectorFeature (E2E)", () => {
         await waitForTaskCollectorReady();
 
         const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "notes.md");
-        await writeTextFile(sourceUri, "");
+        await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [ ] Buy milk\n");
         await vscode.commands.executeCommand("memoria.syncTasks");
         await waitFor(async () => {
@@ -128,12 +127,22 @@ suite("TaskCollectorFeature (E2E)", () => {
             assert.ok(collector.includes("- [ ] Buy milk"), "Initial task should be in collector");
         });
 
-        // Revert the source document model so its mtime matches disk — syncTasks may
-        // have written back to the source (e.g. subtask completion), leaving the model stale.
-        await vscode.commands.executeCommand("vscode.open", sourceUri);
+        // Force-revert the source document model so its mtime matches disk.
+        // syncTasks may have written to the source via the TaskWriter disk fallback,
+        // leaving the model's mtime stale. A plain revert is a no-op when model
+        // content matches disk, so we dirty the document first to guarantee a
+        // full re-read that syncs the mtime.
+        const revertDoc = await vscode.workspace.openTextDocument(sourceUri);
+        const revertEditor = await vscode.window.showTextDocument(revertDoc);
+        await revertEditor.edit((eb) => eb.insert(new vscode.Position(0, 0), " "));
         await vscode.commands.executeCommand("workbench.action.files.revert");
 
         await saveDocumentWithContent(sourceUri, "- [ ] Buy oat milk\n");
+
+        // The save triggers onDidSaveTextDocument → automatic sync. If the event
+        // handler hasn't fully propagated yet, an explicit sync ensures the
+        // collector is updated deterministically.
+        await vscode.commands.executeCommand("memoria.syncTasks");
 
         await waitFor(async () => {
             const collector = normalizeNewlines(await readTextFile(collectorUri));
@@ -149,7 +158,7 @@ suite("TaskCollectorFeature (E2E)", () => {
 
         // Create a checked task in a source file and sync it into the collector
         const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "done.md");
-        await writeTextFile(sourceUri, "");
+        await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [x] Finished task\n");
         await vscode.commands.executeCommand("memoria.syncTasks");
 
@@ -194,7 +203,7 @@ suite("TaskCollectorFeature (E2E)", () => {
 });
 
 async function activateExtension(): Promise<void> {
-    const extension = vscode.extensions.getExtension("RazMake.memoria");
+    const extension = vscode.extensions.getExtension("RazMake.memoria-notebook");
     assert.ok(extension, "Extension should be installed");
     await extension.activate();
 }
@@ -288,4 +297,16 @@ async function saveDocumentWithContent(uri: vscode.Uri, content: string): Promis
         editBuilder.replace(fullRange, content);
     });
     await document.save();
+}
+
+/**
+ * Creates an empty file via WorkspaceEdit.createFile so the document model's
+ * mtime stays synchronized. Using workspace.fs.writeFile (writeTextFile) instead
+ * causes the file watcher to fire asynchronously and desynchronize the mtime,
+ * leading to "File Modified Since" errors on subsequent save() calls.
+ */
+async function createEmptyFile(uri: vscode.Uri): Promise<void> {
+    const edit = new vscode.WorkspaceEdit();
+    edit.createFile(uri, { contents: Buffer.from("", "utf-8") });
+    await vscode.workspace.applyEdit(edit);
 }

@@ -14,16 +14,23 @@ export function annotateContacts(bodyEl: HTMLElement): void {
     const entries = getContactTooltips();
     if (entries.length === 0) return;
 
+    // Cache minimum entry length to skip text nodes too short to contain any contact.
+    let minLen = Infinity;
+    for (const e of entries) {
+        if (e.text.length < minLen) minLen = e.text.length;
+    }
+
     const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_TEXT);
     const textNodes: Text[] = [];
     while (walker.nextNode()) {
-        textNodes.push(walker.currentNode as Text);
+        const node = walker.currentNode as Text;
+        if (node.textContent && node.textContent.length >= minLen) {
+            textNodes.push(node);
+        }
     }
 
     for (const node of textNodes) {
-        const text = node.textContent;
-        if (!text) continue;
-        wrapContactMatches(node, text, entries);
+        wrapContactMatches(node, node.textContent!, entries);
     }
 }
 
