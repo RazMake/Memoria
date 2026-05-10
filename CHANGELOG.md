@@ -2,6 +2,7 @@
 
 ## 0.0.2
 
+- This version is _publicly released_.
 - Added auto-updating of markdown links on file rename.
 - Added the capability to create a new file directly from the task editor.
 
