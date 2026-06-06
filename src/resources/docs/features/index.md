@@ -20,7 +20,7 @@ These features are always active once the workspace is initialized. They do not 
 | Feature | Description |
 |---------|-------------|
 | [Open default file(s)](default-files.md) | Adds a custom entry in the right-click menu of the Explorer panel, which will open multiple files at once side by side |
-| [Dot-Folder hiding](dot-folder-hiding.md) | Hide `.memoria/` and other dot-folders from the Explorer |
+| [Folder/File Visibility](dot-folder-hiding.md) | Hide `.memoria/`, dot-files, and other entries from the Explorer |
 
 ## Packaged AI Instructions
 

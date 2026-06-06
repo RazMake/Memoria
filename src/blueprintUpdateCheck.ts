@@ -7,7 +7,7 @@ import { formatError } from "./utils/error";
 
 /**
  * Sets the VS Code context key `memoria.workspaceInitialized`.
- * This drives the `when` clause visibility of the toggleDotFolders command.
+ * This drives the `when` clause visibility of the toggle-visibility command.
  */
 export async function updateWorkspaceInitializedContext(
     initializedRoot: vscode.Uri | null

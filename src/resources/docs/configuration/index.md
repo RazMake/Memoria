@@ -2,7 +2,7 @@
 
 When you initialize a workspace, Memoria creates a `.memoria/` folder at the workspace root. This folder stores all configuration files that drive the extension's behavior.
 
-> **Tips:** You can hide this folder from the Explorer using [`Memoria: Toggle dot-folders`](../commands/toggle-dot-folders.md).
+> **Tips:** You can hide this folder from the Explorer using [`Memoria: Toggle folders/files visibility`](../commands/toggle-dot-folders.md).
 
 ## Files
 
@@ -12,7 +12,7 @@ When you initialize a workspace, Memoria creates a `.memoria/` folder at the wor
 | [features.json](features-json.md) | Stores feature toggle states |
 | [default-files.json](default-files-json.md) | Stores the map between folders and their list of default files (_to open from right-click menu_) |
 | [decorations.json](decorations-json.md) | Defines Explorer decoration rules (_setting colors and badges for folders/files_) |
-| [dotfolders.json](dotfolders-json.md) | Tracks managed `files.exclude` entries |
+| [dotfolders.json](dotfolders-json.md) | Tracks managed `files.exclude` entries for folders and files |
 | [task-collector.json](task-collector-json.md) | Runtime configuration for the Task Collector feature (_retention, scan patterns, debounce_) |
 
 ---

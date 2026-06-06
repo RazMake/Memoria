@@ -18,7 +18,7 @@ No. During initialization, Memoria only creates folders and files that don't alr
 
 ## Commands Not Showing
 
-### "Toggle dot-folders" and "Manage features" are missing from the Command Palette
+### "Toggle folders/files visibility" and "Manage features" are missing from the Command Palette
 
 These commands only appear after you've initialized the workspace. Run **Memoria: Initialize workspace** first.
 

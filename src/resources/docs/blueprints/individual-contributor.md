@@ -48,7 +48,7 @@ This template is meant to help developers and PMs (_individual contributors_) or
 
 ### Always on
 - [Open default file(s)](../features/default-files.md)
-- [Dot-Folder Hiding](../features/dot-folder-hiding.md)
+- [Folder/File Visibility](../features/dot-folder-hiding.md)
 
 ### Packaged AI Instructions
 

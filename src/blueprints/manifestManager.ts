@@ -140,6 +140,11 @@ export class ManifestManager {
         return this.readJson<DotfoldersConfig>(this.configUri(workspaceRoot, "dotfolders.json"));
     }
 
+    /** @deprecated Use {@link readVisibilityConfig} instead. */
+    async readVisibilityConfig(workspaceRoot: vscode.Uri): Promise<DotfoldersConfig | null> {
+        return this.readDotfolders(workspaceRoot);
+    }
+
     async writeDotfolders(workspaceRoot: vscode.Uri, config: DotfoldersConfig): Promise<void> {
         await this.writeConfig(workspaceRoot, "dotfolders.json", config);
     }

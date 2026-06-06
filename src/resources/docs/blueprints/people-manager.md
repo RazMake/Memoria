@@ -52,7 +52,7 @@ This template is meant to help managers organize their meeting notes and create 
 
 ### Always on
 - [Open default file(s)](../features/default-files.md)
-- [Dot-Folder Hiding](../features/dot-folder-hiding.md)
+- [Folder/File Visibility](../features/dot-folder-hiding.md)
 
 ### Packaged AI Instructions
 

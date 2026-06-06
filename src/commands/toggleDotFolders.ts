@@ -1,6 +1,7 @@
-// Factory for the "Memoria: Toggle dot-folders" command handler.
-// Toggles visibility of dot-folders (directories starting with ".") at the workspace root
-// by managing the workspace-level files.exclude setting.
+// Factory for the "Memoria: Toggle folders/files visibility" command handler.
+// Toggles visibility of dot-folders and dot-files (entries starting with ".") at the
+// workspace root by managing the workspace-level files.exclude setting.
+// Users can also add arbitrary paths (files or folders at any depth) to the managed list.
 //
 // Tracking which entries Memoria manages is stored in .memoria/dotfolders.json.
 // The command never touches files.exclude entries it does not own, ensuring it coexists
@@ -11,7 +12,7 @@ import type { ManifestManager } from "../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../telemetry";
 import { requireInitializedRoot } from "./commandHelpers";
 
-/** Persists the exclusion state to workspace config, dotfolders manifest, and telemetry. */
+/** Persists the exclusion state to workspace config, managed-entries manifest, and telemetry. */
 async function applyExclusions(
     config: vscode.WorkspaceConfiguration,
     workspaceRoot: vscode.Uri,
@@ -23,39 +24,39 @@ async function applyExclusions(
 ): Promise<void> {
     await config.update("exclude", exclude, vscode.ConfigurationTarget.Workspace);
     await manifest.writeDotfolders(workspaceRoot, { managedEntries: managed });
-    telemetry.logUsage("dotfolders.toggle", telemetryProps);
+    telemetry.logUsage("visibility.toggle", telemetryProps);
 }
 
-/** "All visible" path: scan for dot-folders and hide them all. */
-async function hideAllDotFolders(
+/** "All visible" path: scan for dot-entries (folders and files) and hide them all. */
+async function hideAllDotEntries(
     config: vscode.WorkspaceConfiguration,
     workspaceRoot: vscode.Uri,
     currentExclude: Record<string, boolean>,
     manifest: ManifestManager,
     telemetry: TelemetryEmitter,
 ): Promise<void> {
-    const dotFolders = await scanDotFolders(workspaceRoot);
-    if (dotFolders.length === 0) {
-        vscode.window.showInformationMessage("Memoria: No dot-folders found at the workspace root.");
+    const dotEntries = await scanDotEntries(workspaceRoot);
+    if (dotEntries.length === 0) {
+        vscode.window.showInformationMessage("Memoria: No items starting with '.' found at the workspace root.");
         return;
     }
 
     const updatedExclude = { ...currentExclude };
-    for (const name of dotFolders) {
+    for (const name of dotEntries) {
         updatedExclude[name] = true;
     }
 
-    await applyExclusions(config, workspaceRoot, updatedExclude, dotFolders, manifest, telemetry, {
+    await applyExclusions(config, workspaceRoot, updatedExclude, dotEntries, manifest, telemetry, {
         action: "hide",
-        count: dotFolders.length,
+        count: dotEntries.length,
     });
     vscode.window.showInformationMessage(
-        `Memoria: ${dotFolders.length} dot-folder(s) hidden.`
+        `Memoria: ${dotEntries.length} item(s) hidden.`
     );
 }
 
 /** "Some hidden" path: show a multi-select QuickPick for fine-grained control. */
-async function interactiveToggleDotFolders(
+async function interactiveToggleVisibility(
     config: vscode.WorkspaceConfiguration,
     workspaceRoot: vscode.Uri,
     currentExclude: Record<string, boolean>,
@@ -63,10 +64,10 @@ async function interactiveToggleDotFolders(
     manifest: ManifestManager,
     telemetry: TelemetryEmitter,
 ): Promise<void> {
-    // All managed dot-folders are listed; currently hidden ones are pre-checked.
-    const allDotFolders = await scanDotFolders(workspaceRoot);
-    // Merge with managed entries so newly-discovered dot-folders appear too.
-    const allToManage = [...new Set([...managedEntries, ...allDotFolders])];
+    // All managed entries are listed; currently hidden ones are pre-checked.
+    const allDotEntries = await scanDotEntries(workspaceRoot);
+    // Merge with managed entries so newly-discovered dot-entries appear too.
+    const allToManage = [...new Set([...managedEntries, ...allDotEntries])];
 
     const items = allToManage.map((name) => ({
         label: name,
@@ -74,7 +75,7 @@ async function interactiveToggleDotFolders(
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
-        title: "Memoria: Manage dot-folder visibility",
+        title: "Memoria: Manage folders/files visibility",
         placeHolder: "Checked = hidden, unchecked = visible",
         canPickMany: true,
     });
@@ -102,7 +103,7 @@ async function interactiveToggleDotFolders(
     });
 }
 
-export function createToggleDotFoldersCommand(
+export function createToggleVisibilityCommand(
     manifest: ManifestManager,
     telemetry: TelemetryEmitter
 ): () => Promise<void> {
@@ -118,7 +119,7 @@ export function createToggleDotFoldersCommand(
         const currentExclude: Record<string, boolean> = config.get<Record<string, boolean>>("exclude") ?? {};
 
         // Read managed entries from .memoria/dotfolders.json (empty on first use).
-        const dotfoldersConfig = await manifest.readDotfolders(workspaceRoot);
+        const dotfoldersConfig = await manifest.readVisibilityConfig(workspaceRoot);
         // Only entries that Memoria manages are ever hidden or shown.
         // This prevents the command from touching files.exclude entries added by the
         // user or other extensions, ensuring safe coexistence with other exclusion rules.
@@ -128,22 +129,22 @@ export function createToggleDotFoldersCommand(
         const hiddenManaged = managedEntries.filter((entry) => currentExclude[entry] === true);
 
         // Two code paths intentionally:
-        // 1. First toggle (nothing hidden yet): hides all discovered dot-folders at once —
+        // 1. First toggle (nothing hidden yet): hides all discovered dot-entries at once —
         //    fast and requires no user interaction.
         // 2. Subsequent toggles (some already hidden): shows a QuickPick for fine-grained
-        //    per-folder control, so the user can selectively show/hide individual entries.
+        //    per-entry control, so the user can selectively show/hide individual entries.
         if (hiddenManaged.length === 0) {
-            await hideAllDotFolders(config, workspaceRoot, currentExclude, manifest, telemetry);
+            await hideAllDotEntries(config, workspaceRoot, currentExclude, manifest, telemetry);
         } else {
-            await interactiveToggleDotFolders(config, workspaceRoot, currentExclude, managedEntries, manifest, telemetry);
+            await interactiveToggleVisibility(config, workspaceRoot, currentExclude, managedEntries, manifest, telemetry);
         }
     };
 }
 
-/** Returns the names of all directories starting with "." at the workspace root. */
-async function scanDotFolders(workspaceRoot: vscode.Uri): Promise<string[]> {
+/** Returns the names of all entries (directories and files) starting with "." at the workspace root. */
+async function scanDotEntries(workspaceRoot: vscode.Uri): Promise<string[]> {
     const entries = await vscode.workspace.fs.readDirectory(workspaceRoot);
     return entries
-        .filter(([name, type]) => type === vscode.FileType.Directory && name.startsWith("."))
+        .filter(([name]) => name.startsWith("."))
         .map(([name]) => name);
 }

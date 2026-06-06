@@ -23,11 +23,11 @@ suite("Re-initialize workspace (E2E)", () => {
         await deleteRecursive(memoriaDir);
     });
 
-    test("memoria.toggleDotFolders command is registered in the Extension Host", async () => {
+    test("memoria.toggleDotFolders (toggle visibility) command is registered in the Extension Host", async () => {
         const commands = await vscode.commands.getCommands(true);
         assert.ok(
             commands.includes("memoria.toggleDotFolders"),
-            "memoria.toggleDotFolders must be registered"
+            "memoria.toggleDotFolders (toggle visibility) must be registered"
         );
     });
 

@@ -29,7 +29,7 @@
             },
             {
                 "command": "memoria.toggleDotFolders",
-                "title": "Toggle dot-folders",
+                "title": "Toggle folders/files visibility",
                 "category": "Memoria"
             },
             {

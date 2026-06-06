@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createToggleDotFoldersCommand } from "../../../src/commands/toggleDotFolders";
+import { createToggleVisibilityCommand } from "../../../src/commands/toggleDotFolders";
 
 const mockShowErrorMessage = vi.fn();
 const mockShowInformationMessage = vi.fn();
@@ -41,11 +41,11 @@ const makeConfigWith = (exclude: Record<string, boolean>) => ({
     update: mockConfigUpdate,
 });
 
-describe("createToggleDotFoldersCommand", () => {
+describe("createToggleVisibilityCommand", () => {
     let mockManifest: any;
     let mockTelemetry: any;
 
-    const makeHandler = () => createToggleDotFoldersCommand(mockManifest, mockTelemetry);
+    const makeHandler = () => createToggleVisibilityCommand(mockManifest, mockTelemetry);
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -54,6 +54,7 @@ describe("createToggleDotFoldersCommand", () => {
             isInitialized: vi.fn().mockResolvedValue(true),
             findInitializedRoot: vi.fn().mockResolvedValue(rootUri),
             readDotfolders: vi.fn().mockResolvedValue(null),
+            readVisibilityConfig: vi.fn().mockResolvedValue(null),
             writeDotfolders: vi.fn().mockResolvedValue(undefined),
         };
         mockTelemetry = { logUsage: vi.fn() };
@@ -76,12 +77,12 @@ describe("createToggleDotFoldersCommand", () => {
         beforeEach(() => {
             mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
             // No managed entries → empty dotfolders.json
-            mockManifest.readDotfolders.mockResolvedValue({ managedEntries: [] });
+            mockManifest.readVisibilityConfig.mockResolvedValue({ managedEntries: [] });
             // files.exclude has nothing managed
             mockGetConfiguration.mockReturnValue(makeConfigWith({}));
         });
 
-        it("should scan workspace root for dot-folders when no entries are managed", async () => {
+        it("should scan workspace root for dot-entries when no entries are managed", async () => {
             mockReadDirectory.mockResolvedValue([[".git", 2], [".vscode", 2], ["src", 2]]);
             await makeHandler()();
             expect(mockReadDirectory).toHaveBeenCalled();
@@ -97,7 +98,19 @@ describe("createToggleDotFoldersCommand", () => {
             );
         });
 
-        it("should not add non-dot-folders to files.exclude", async () => {
+        it("should add dot-files to files.exclude", async () => {
+            mockReadDirectory.mockResolvedValue([[".gitignore", 1], [".editorconfig", 1], ["README.md", 1]]);
+            await makeHandler()();
+            expect(mockConfigUpdate).toHaveBeenCalledWith(
+                "exclude",
+                expect.objectContaining({ ".gitignore": true, ".editorconfig": true }),
+                expect.any(Number)
+            );
+            const updatedExclude = mockConfigUpdate.mock.calls[0][1];
+            expect(Object.keys(updatedExclude)).not.toContain("README.md");
+        });
+
+        it("should not add non-dot entries to files.exclude", async () => {
             mockReadDirectory.mockResolvedValue([[".git", 2], ["src", 2]]);
             await makeHandler()();
             const updatedExclude = mockConfigUpdate.mock.calls[0][1];
@@ -113,29 +126,29 @@ describe("createToggleDotFoldersCommand", () => {
             );
         });
 
-        it("should emit dotfolders.toggle telemetry with action=hide", async () => {
+        it("should emit visibility.toggle telemetry with action=hide", async () => {
             mockReadDirectory.mockResolvedValue([[".git", 2]]);
             await makeHandler()();
-            expect(mockTelemetry.logUsage).toHaveBeenCalledWith("dotfolders.toggle", expect.objectContaining({ action: "hide" }));
+            expect(mockTelemetry.logUsage).toHaveBeenCalledWith("visibility.toggle", expect.objectContaining({ action: "hide" }));
         });
 
-        it("should show an info message when no dot-folders are found", async () => {
+        it("should show an info message when no dot-entries are found", async () => {
             mockReadDirectory.mockResolvedValue([["src", 2], ["dist", 2]]);
             await makeHandler()();
-            expect(mockShowInformationMessage).toHaveBeenCalledWith(expect.stringContaining("No dot-folders found"));
+            expect(mockShowInformationMessage).toHaveBeenCalledWith(expect.stringContaining("No items starting with"));
         });
     });
 
     describe("QuickPick path (some hidden)", () => {
         beforeEach(() => {
             mockWorkspaceFolders.push({ uri: rootUri, name: "workspace" });
-            mockManifest.readDotfolders.mockResolvedValue({ managedEntries: [".git", ".vscode", ".memoria"] });
+            mockManifest.readVisibilityConfig.mockResolvedValue({ managedEntries: [".git", ".vscode", ".memoria"] });
             // .git and .vscode are hidden; .memoria is visible
             mockGetConfiguration.mockReturnValue(makeConfigWith({ ".git": true, ".vscode": true }));
             mockReadDirectory.mockResolvedValue([[".git", 2], [".vscode", 2], [".memoria", 2]]);
         });
 
-        it("should show a multi-select QuickPick with all managed dot-folders", async () => {
+        it("should show a multi-select QuickPick with all managed entries", async () => {
             mockShowQuickPick.mockResolvedValue([]);
             await makeHandler()();
             expect(mockShowQuickPick).toHaveBeenCalledWith(
@@ -174,11 +187,11 @@ describe("createToggleDotFoldersCommand", () => {
             expect(mockManifest.writeDotfolders).not.toHaveBeenCalled();
         });
 
-        it("should emit dotfolders.toggle telemetry with action=update", async () => {
+        it("should emit visibility.toggle telemetry with action=update", async () => {
             mockShowQuickPick.mockResolvedValue([{ label: ".git" }]);
             await makeHandler()();
             expect(mockTelemetry.logUsage).toHaveBeenCalledWith(
-                "dotfolders.toggle",
+                "visibility.toggle",
                 expect.objectContaining({ action: "update" })
             );
         });

@@ -5,7 +5,7 @@ import { ManifestManager } from "./blueprints/manifestManager";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
 import { createInitializeWorkspaceCommand } from "./commands/initializeWorkspace";
-import { createToggleDotFoldersCommand } from "./commands/toggleDotFolders";
+import { createToggleVisibilityCommand } from "./commands/toggleDotFolders";
 import { createManageFeaturesCommand } from "./commands/manageFeatures";
 import { createOpenDefaultFileCommand } from "./commands/openDefaultFile";
 import { createSyncTasksCommand } from "./commands/syncTasks";
@@ -57,7 +57,7 @@ export function registerCommands(
         ),
         vscode.commands.registerCommand(
             "memoria.toggleDotFolders",
-            createToggleDotFoldersCommand(manifest, telemetry)
+            createToggleVisibilityCommand(manifest, telemetry)
         ),
         vscode.commands.registerCommand(
             "memoria.manageFeatures",

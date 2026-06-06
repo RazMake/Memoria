@@ -196,6 +196,7 @@ export interface DecorationsConfig {
 
 /** Stored in .memoria/dotfolders.json — tracks which files.exclude entries Memoria owns. */
 export interface DotfoldersConfig {
+    /** Dot-entries and arbitrary file/folder paths managed by the visibility toggle. */
     managedEntries: string[];
 }
 

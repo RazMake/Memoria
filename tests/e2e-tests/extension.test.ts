@@ -18,7 +18,7 @@ suite("Extension Lifecycle", () => {
     test("commands are registered", async () => {
         const commands = await vscode.commands.getCommands(true);
         assert.ok(commands.includes("memoria.initializeWorkspace"), "memoria.initializeWorkspace should be registered");
-        assert.ok(commands.includes("memoria.toggleDotFolders"), "memoria.toggleDotFolders should be registered");
+        assert.ok(commands.includes("memoria.toggleDotFolders"), "memoria.toggleDotFolders (toggle visibility) should be registered");
         assert.ok(commands.includes("memoria.syncTasks"), "memoria.syncTasks should be registered");
     });
 });
