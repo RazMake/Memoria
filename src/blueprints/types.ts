@@ -88,8 +88,13 @@ export interface SnippetsFeatureEntry extends FeatureEntry {
     snippetsFolder: string;
 }
 
+/** A backup feature — schedules and runs workspace file backups. */
+export interface BackupFeatureEntry extends FeatureEntry {
+    id: "backup";
+}
+
 /** Discriminated union of all known feature types. Expand as new features are added. */
-export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry | SnippetsFeatureEntry;
+export type BlueprintFeature = DecorationsFeatureEntry | TaskCollectorFeatureEntry | ContactsFeatureEntry | SnippetsFeatureEntry | BackupFeatureEntry;
 
 /**
  * Default files split by scope, as returned by `resolveDefaultFiles()`.

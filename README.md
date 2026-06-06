@@ -8,6 +8,7 @@ Scaffold a personal knowledge base in a workspace — organize notes, meetings, 
 - **Explorer decorations** — Color-coded badges and labels on folders for quick visual navigation
 - **Default files** — Right-click folders to open pre-configured files side by side
 - **Folder/file visibility toggling** — Hide/show folders and files (like `.memoria/` or `.gitignore`) with one command
+- **Scheduled backup** — Automatically zip selected files to a target folder (e.g. OneDrive) on a recurring schedule
 - **Blueprint updates** — Get notified when a newer version of your blueprint is available
 
 ![Initialize workspace](src/resources/docs/media/initialize-workspace.gif)
@@ -20,6 +21,9 @@ Scaffold a personal knowledge base in a workspace — organize notes, meetings, 
 | `Memoria: Toggle folders/files visibility` | Hide/show folders and files in the Explorer | After initialization |
 | `Memoria: Manage features` | Enable/disable optional blueprint features | After initialization |
 | `Memoria: Open default file(s)` | Open pre-configured files for a folder side by side | Folder context menu |
+| `Memoria: Create Backup Profile` | Define a new scheduled backup profile | After initialization |
+| `Memoria: Run Backup` | Run one or all backup profiles immediately | Scheduled Backup active |
+| `Memoria: Backup History` | Browse, reveal, or delete existing backup archives | Scheduled Backup active |
 | `Memoria: Open User Guide` | Browse the built-in documentation | Always |
 
 ## Getting Started
@@ -40,5 +44,6 @@ Topics covered:
 - [Explorer Decorations](src/resources/docs/features/decorations.md) — Color-coded badges and labels
 - [Default Files](src/resources/docs/features/default-files.md) — Quick-open pre-configured files
 - [Folder/File Visibility](src/resources/docs/features/dot-folder-hiding.md) — Hide folders and files from the Explorer
+- [Scheduled Backup](src/resources/docs/features/backup.md) — Recurring incremental backups to a target folder
 - [Configuration Reference](src/resources/docs/configuration/index.md) — The `.memoria/` folder and its files
 - [FAQ & Troubleshooting](src/resources/docs/faq.md) — Common questions and fixes

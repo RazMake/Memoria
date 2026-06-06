@@ -1,7 +1,7 @@
 id: "individual-contributor"
 name: "Individual Contributor Notebook"
 description: "A personal knowledge base for developers and PMs."
-version: "1.0.0"
+version: "1.1.0"
 
 workspace:
   - name: ".github/"
@@ -77,6 +77,10 @@ features:
     description: "Text expansion for Markdown files via autocomplete."
     enabledByDefault: true
     snippetsFolder: "05-Autocomplete/Snippets"
+  - id: "backup"
+    name: "Scheduled Backup"
+    description: "Schedule and run zipped backups of workspace files to a target folder."
+    enabledByDefault: true
   - id: "decorations"
     name: "Explorer Decorations"
     description: "Badges and colors in the VS Code Explorer"

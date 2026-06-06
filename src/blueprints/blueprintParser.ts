@@ -206,6 +206,10 @@ const featureParsers: Record<string, (
         ...base,
         snippetsFolder: parseSnippetsFolder(entry["snippetsFolder"], index),
     }),
+    backup: (id, base) => ({
+        id,
+        ...base,
+    }),
 };
 
 const isNonNegativeNumber = (v: unknown): v is number =>

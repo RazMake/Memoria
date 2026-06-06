@@ -14,6 +14,9 @@ Memoria provides the following commands, all accessible from the **Command Palet
 | [Delete Person](contacts.md#delete-person) | Remove a person from the current contact group file | Contacts feature active |
 | [Move Person](contacts.md#move-person) | Move a person between contact group files, preserving dropped report-only fields when needed | Contacts feature active and multiple groups |
 | [Reset snippet to default](../features/snippets.md#reset-snippet-command) | Restore a snippet file to the version bundled with the blueprint | Explorer context menu (`.ts` files) |
+| [Create Backup Profile](../features/backup.md#creating-a-profile) | Define a new scheduled backup profile via a guided wizard | After Initialization |
+| [Run Backup](../features/backup.md#running-on-demand) | Run one or all backup profiles immediately | Scheduled Backup feature active |
+| [Backup History](../features/backup.md#browsing-history) | Browse, reveal, or delete a profile's existing archives | Scheduled Backup feature active |
 | [Open User Guide](open-user-guide.md) | Browse the built-in documentation | Always |
 
 ---

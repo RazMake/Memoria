@@ -86,6 +86,21 @@
                 "command": "memoria.todoEditor.noop",
                 "title": "No-op (todo editor keybinding shadow)",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.createBackupProfile",
+                "title": "Create Backup Profile",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.runBackup",
+                "title": "Run Backup",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.backupHistory",
+                "title": "Backup History",
+                "category": "Memoria"
             }
         ],
         "keybindings": [
@@ -184,6 +199,18 @@
                 {
                     "command": "memoria.openDefaultFile",
                     "when": "false"
+                },
+                {
+                    "command": "memoria.createBackupProfile",
+                    "when": "memoria.workspaceInitialized"
+                },
+                {
+                    "command": "memoria.runBackup",
+                    "when": "memoria.backupActive"
+                },
+                {
+                    "command": "memoria.backupHistory",
+                    "when": "memoria.backupActive"
                 }
             ],
             "explorer/context": [
@@ -210,6 +237,22 @@
                 ],
                 "priority": "default"
             }
+        ],
+        "configuration": {
+            "title": "Memoria",
+            "properties": {
+                "memoria.backup.catchUpOnStart": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run missed backups when VS Code starts."
+                }
+            }
+        },
+        "jsonValidation": [
+            {
+                "fileMatch": "**/.memoria/backup-config.json",
+                "url": "./resources/schemas/backup-config.schema.json"
+            }
         ]
     },
     "scripts": {
@@ -235,7 +278,8 @@
         "markdown-it": "^14.1.1",
         "markdown-it-task-lists": "^2.1.1",
         "minimatch": "^10.2.5",
-        "yaml": "^2.8.3"
+        "yaml": "^2.8.3",
+        "yazl": "^3.3.1"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
@@ -243,6 +287,7 @@
         "@types/mocha": "^10.0.10",
         "@types/node": "^25.6.0",
         "@types/vscode": "^1.116.0",
+        "@types/yazl": "^3.3.1",
         "@typescript-eslint/eslint-plugin": "^8.59.2",
         "@typescript-eslint/parser": "^8.59.2",
         "@vitest/coverage-istanbul": "^4.1.4",

@@ -21,6 +21,12 @@ import { FeatureManager } from "./features/featureManager";
 import { ContactsFeature } from "./features/contacts/contactsFeature";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { SnippetsFeature } from "./features/snippets/snippetsFeature";
+import { BackupFeature } from "./features/backup/backupFeature";
+import {
+    createCreateBackupProfileCommand,
+    createRunBackupCommand,
+    createBackupHistoryCommand,
+} from "./commands/backupCommands";
 
 export interface CommandDependencies {
     engine: BlueprintEngine;
@@ -32,6 +38,7 @@ export interface CommandDependencies {
     taskCollectorFeature: TaskCollectorFeature;
     contactsFeature: ContactsFeature;
     snippetsFeature: SnippetsFeature;
+    backupFeature: BackupFeature;
     extensionUri: vscode.Uri;
     onWorkspaceInitialized: (root: vscode.Uri) => Promise<void>;
 }
@@ -41,7 +48,7 @@ export function registerCommands(
     deps: CommandDependencies,
 ): void {
     const { engine, registry, manifest, telemetry, resolver, featureManager,
-        taskCollectorFeature, contactsFeature, snippetsFeature, extensionUri, onWorkspaceInitialized } = deps;
+        taskCollectorFeature, contactsFeature, snippetsFeature, backupFeature, extensionUri, onWorkspaceInitialized } = deps;
 
     context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -103,5 +110,17 @@ export function registerCommands(
         // the sidebar) when the todo editor webview has focus.  The actual
         // formatting is handled inside the webview's own keydown handler.
         vscode.commands.registerCommand("memoria.todoEditor.noop", () => {}),
+        vscode.commands.registerCommand(
+            "memoria.createBackupProfile",
+            createCreateBackupProfileCommand(backupFeature, telemetry),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.runBackup",
+            createRunBackupCommand(backupFeature),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.backupHistory",
+            createBackupHistoryCommand(backupFeature),
+        ),
     );
 }

@@ -47,6 +47,7 @@ describe("package.json command declarations", () => {
             "memoria.defaultFileAvailable",
             "memoria.contactsActive",
             "memoria.contactsMultiGroup",
+            "memoria.backupActive",
         ];
 
         const unguarded = paletteEntries

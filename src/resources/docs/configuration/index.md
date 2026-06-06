@@ -14,6 +14,7 @@ When you initialize a workspace, Memoria creates a `.memoria/` folder at the wor
 | [decorations.json](decorations-json.md) | Defines Explorer decoration rules (_setting colors and badges for folders/files_) |
 | [dotfolders.json](dotfolders-json.md) | Tracks managed `files.exclude` entries for folders and files |
 | [task-collector.json](task-collector-json.md) | Runtime configuration for the Task Collector feature (_retention, scan patterns, debounce_) |
+| [backup-config.json](backup-config-json.md) | Scheduled Backup profiles (_sources, target folder, schedule, retention_) |
 
 ---
 

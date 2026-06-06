@@ -21,6 +21,7 @@ import { registerFileWatchers, refreshWorkspaceState } from "./fileWatchers";
 import { registerCommands } from "./commandRegistration";
 import { registerFeatureHandlers } from "./featureSetup";
 import { registerLinkReferenceWatcher } from "./linkReferenceWatcher";
+import { BackupFeature } from "./features/backup/backupFeature";
 
 export { isNewerVersion } from "./blueprintUpdateCheck";
 
@@ -66,16 +67,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const snippetsFeature = new SnippetsFeature(manifest, contactsFeature);
     const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri, snippetsFeature, snippetsFeature);
     const featureManager = new FeatureManager(manifest);
+    const backupFeature = new BackupFeature(telemetry);
 
     context.subscriptions.push(
         contactsFeature,
         snippetsFeature,
+        backupFeature,
         snippetsFeature.onDidUpdateExpansionMap(() => {
             todoEditorProvider.refreshContactTooltips();
         }),
     );
 
-    registerFeatureHandlers(context, featureManager, decorationProvider, taskCollectorFeature, contactsFeature, snippetsFeature);
+    registerFeatureHandlers(context, featureManager, decorationProvider, taskCollectorFeature, contactsFeature, snippetsFeature, backupFeature);
 
     // Register language providers and custom editors eagerly — they don't conflict with
     // other extensions' decoration providers and must be available before any file is opened.
@@ -136,6 +139,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             taskCollectorFeature,
             contactsFeature,
             snippetsFeature,
+            backupFeature,
             extensionUri: context.extensionUri,
             onWorkspaceInitialized,
         },

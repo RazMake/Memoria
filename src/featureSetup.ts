@@ -8,6 +8,7 @@ import { SnippetsFeature } from "./features/snippets/snippetsFeature";
 import { SnippetCompletionProvider } from "./features/snippets/snippetCompletionProvider";
 import { SnippetHoverProvider } from "./features/snippets/snippetHoverProvider";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
+import { BackupFeature } from "./features/backup/backupFeature";
 
 /**
  * Manages a disposable resource that is created on enable and disposed on disable.
@@ -43,6 +44,7 @@ export function registerFeatureHandlers(
     taskCollectorFeature: TaskCollectorFeature,
     contactsFeature: ContactsFeature,
     snippetsFeature: SnippetsFeature,
+    backupFeature: BackupFeature,
 ): void {
     const contactsToggle = createToggle();
     const snippetsToggle = createToggle();
@@ -99,5 +101,9 @@ export function registerFeatureHandlers(
         } else {
             snippetsToggle.disable();
         }
+    });
+
+    featureManager.register("backup", async (root, enabled) => {
+        await backupFeature.refresh(root, enabled);
     });
 }

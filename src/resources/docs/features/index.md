@@ -12,6 +12,7 @@ Use the **Manage features** command to enable or disable these. Which features a
 | [Contacts](contacts.md) | Adds a sidebar for browsing, searching, and managing contacts stored in the blueprint-owned people folder |
 | [Task Collector](task-collector.md) | Aggregates all Markdown tasks across workspace files into a single collector file and keeps them in two-way sync |
 | [Snippets](snippets.md) | Text expansion via autocomplete — type `{trigger}` or `@id` in Markdown files to insert dynamic or static text |
+| [Scheduled Backup](backup.md) | Automatically zips selected workspace files to a target folder (e.g. OneDrive) on a recurring schedule |
 
 ## Built-in (Always On)
 
