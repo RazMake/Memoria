@@ -36,6 +36,9 @@ describe("contactParser", () => {
                 "- CareerPathKey: sde",
                 "- LevelId: l3",
                 "- LevelStartDate: 2025-06-01",
+                "- EmployeeId: 100200",
+                "- BandRank: 1",
+                "- OverallRank: 2",
                 "- PronounsKey: she/her",
             ].join("\n");
 
@@ -51,6 +54,9 @@ describe("contactParser", () => {
                     careerPathKey: "sde",
                     levelId: "l3",
                     levelStartDate: "2025-06-01",
+                    employeeId: "100200",
+                    bandRank: "1",
+                    overallRank: "2",
                     pronounsKey: "she/her",
                     extraFields: {},
                     droppedFields: {},

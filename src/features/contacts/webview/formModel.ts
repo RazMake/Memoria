@@ -302,6 +302,9 @@ export function cloneContact(contact: Contact | ContactsViewContact): Contact {
             careerPathKey: contact.careerPathKey,
             levelId: contact.levelId,
             levelStartDate: contact.levelStartDate,
+            employeeId: contact.employeeId,
+            bandRank: contact.bandRank,
+            overallRank: contact.overallRank,
             pronounsKey: contact.pronounsKey,
             extraFields: { ...contact.extraFields },
             droppedFields: { ...contact.droppedFields },
@@ -404,8 +407,14 @@ function convertContactKind(sourceContact: Contact, targetKind: ContactKind): Co
     const droppedFields = { ...sourceContact.droppedFields };
     const levelId = droppedFields.LevelId ?? "";
     const levelStartDate = droppedFields.LevelStartDate ?? "";
+    const employeeId = droppedFields.EmployeeId ?? "";
+    const bandRank = droppedFields.BandRank ?? "";
+    const overallRank = droppedFields.OverallRank ?? "";
     delete droppedFields.LevelId;
     delete droppedFields.LevelStartDate;
+    delete droppedFields.EmployeeId;
+    delete droppedFields.BandRank;
+    delete droppedFields.OverallRank;
 
     return {
         kind: "report",
@@ -416,6 +425,9 @@ function convertContactKind(sourceContact: Contact, targetKind: ContactKind): Co
         careerPathKey: sourceContact.careerPathKey,
         levelId,
         levelStartDate,
+        employeeId,
+        bandRank,
+        overallRank,
         pronounsKey: sourceContact.pronounsKey,
         extraFields: { ...sourceContact.extraFields },
         droppedFields,
@@ -433,6 +445,9 @@ function createEmptyContact(kind: ContactKind): Contact {
             careerPathKey: "",
             levelId: "",
             levelStartDate: "",
+            employeeId: "",
+            bandRank: "",
+            overallRank: "",
             pronounsKey: "",
             extraFields: {},
             droppedFields: {},

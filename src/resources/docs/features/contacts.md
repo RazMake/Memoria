@@ -13,9 +13,37 @@ Each contact group is a single Markdown file such as `Team.md`, `Peers.md`, or `
 
 ## Person types
 
-- **Report**: Available only in the People Manager blueprint. Reports track `CareerPathKey`, `LevelId`, `LevelStartDate`, and an auto-generated title.
+- **Report**: Available only in the People Manager blueprint. Reports track the shared profile fields plus career level tracking (`LevelId`, `LevelStartDate`), team-member details (`EmployeeId`, `BandRank`, `OverallRank`), and an auto-generated title.
 - **Colleague**: Available in both bundled blueprints. Colleagues track the shared profile fields and choose a title from the generated title list.
 - **Custom groups**: You can create additional groups from the sidebar form. Custom groups always use the colleague field set.
+
+## Contact fields
+
+Every contact is a Markdown dictionary whose heading (H1) is the person's **id** (typically their alias / email prefix).
+
+### Shared fields (all person types)
+
+| Field | Description |
+| --- | --- |
+| `Nickname` | Short, friendly name (for example, `Alice`). |
+| `FullName` | The person's full name. |
+| `Title` | Job title. For reports this is auto-generated from the career path and level (a custom title can be stored instead). |
+| `CareerPathKey` | References a career path defined in `CareerPaths.md`. |
+| `PronounsKey` | References a pronouns profile defined in `Pronouns.md`. |
+
+### Report-only fields (Team members)
+
+These fields exist only on **Report** records in the People Manager blueprint:
+
+| Field | Description |
+| --- | --- |
+| `LevelId` | References a career level defined in `CareerLevels.md`. |
+| `LevelStartDate` | ISO date (`YYYY-MM-DD`) when the person started at the current level. |
+| `EmployeeId` | The personnel number of the team member, used to look up their Connect, perspectives, Connect history, and similar records. |
+| `BandRank` | The team member's rank within their band. Used during people discussions. |
+| `OverallRank` | The team member's overall rank within the team, representing the developer's capability. Used when balancing work across the team. |
+
+`EmployeeId`, `BandRank`, and `OverallRank` are private and are not populated automatically during contact initialization — fill them in yourself (in the sidebar form or by editing `Team.md` directly).
 
 ## Sidebar workflow
 
@@ -44,7 +72,7 @@ The sidebar reloads when these files change. If a contact or career level points
 
 Moving a person physically moves the record between group files.
 
-- **Report -> Colleague** keeps `LevelId` and `LevelStartDate` under `_droppedFields`
+- **Report -> Colleague** keeps the report-only fields (`LevelId`, `LevelStartDate`, `EmployeeId`, `BandRank`, `OverallRank`) under `_droppedFields`
 - **Colleague -> Report** restores those dropped fields when available and asks for any missing report-only data before saving
 
 ## Commands

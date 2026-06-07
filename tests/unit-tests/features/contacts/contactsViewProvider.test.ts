@@ -670,6 +670,9 @@ describe("ContactsViewProvider", () => {
                 pronounsKey: "he",
                 levelId: "L5",
                 levelStartDate: "2026-01-01",
+                employeeId: "",
+                bandRank: "",
+                overallRank: "",
                 extraFields: {},
                 droppedFields: {},
             };

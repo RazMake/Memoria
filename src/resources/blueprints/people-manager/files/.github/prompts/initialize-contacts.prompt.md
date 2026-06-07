@@ -55,6 +55,7 @@ Use the data type files to find necessary field values:
 - [CareerPaths.md](../../06-Autocomplete/Contacts/DataTypes/CareerPaths.md)
 
 - `LevelId` and `LevelStartDate` (only exists in the `Team.md` file) - cannot be filled automatically as this information is not public. Add them to the file, but leave them empty.
+- `EmployeeId`, `BandRank` and `OverallRank` (only exist in the `Team.md` file) - cannot be filled automatically as this information is not public. Add them to the file, but leave them empty.
 - `CareerPathKey` - the values for this field are all headings (H1) from the `CareerPaths.md`. Use the title of the person's position to map it to a career path. For example, if the title contains "Software Engineer", then the `CareerPathKey` would be `sde`. If the title contains "Engineering Manager", then the `CareerPathKey` would be `em`, and so on. If there is no match, set the field to **unknown**.
 - `Title` - set it to the person's title in the org.
 - `PronounsKey` - infer this information based on the person's name. The user can always fix an incorrect assumption later.

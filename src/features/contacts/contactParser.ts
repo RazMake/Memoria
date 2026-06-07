@@ -30,6 +30,9 @@ const REPORT_FIELD_ORDER = [
     "CareerPathKey",
     "LevelId",
     "LevelStartDate",
+    "EmployeeId",
+    "BandRank",
+    "OverallRank",
     "PronounsKey",
 ] as const;
 
@@ -288,6 +291,9 @@ function toReportContact(record: ParsedMarkdownRecord): ReportContact {
         ...toBaseContactFields(record, REPORT_FIELD_ORDER),
         levelId: record.scalarFields.LevelId ?? "",
         levelStartDate: record.scalarFields.LevelStartDate ?? "",
+        employeeId: record.scalarFields.EmployeeId ?? "",
+        bandRank: record.scalarFields.BandRank ?? "",
+        overallRank: record.scalarFields.OverallRank ?? "",
     };
 }
 
@@ -309,6 +315,9 @@ function serializeContact(contact: Contact): string {
             CareerPathKey: contact.careerPathKey,
             LevelId: contact.levelId,
             LevelStartDate: contact.levelStartDate,
+            EmployeeId: contact.employeeId,
+            BandRank: contact.bandRank,
+            OverallRank: contact.overallRank,
             PronounsKey: contact.pronounsKey,
         }
         : {

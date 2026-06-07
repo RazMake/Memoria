@@ -65,6 +65,9 @@ export function mapContact(contact: ResolvedContact): ContactsViewContact {
             kind: "report",
             levelId: contact.levelId,
             levelStartDate: contact.levelStartDate,
+            employeeId: contact.employeeId,
+            bandRank: contact.bandRank,
+            overallRank: contact.overallRank,
         };
     }
 
@@ -98,6 +101,9 @@ export function buildWritableContact(draft: Contact, sourceContact: ContactsView
             ...base,
             levelId: draft.levelId.trim(),
             levelStartDate: draft.levelStartDate.trim(),
+            employeeId: draft.employeeId.trim(),
+            bandRank: draft.bandRank.trim(),
+            overallRank: draft.overallRank.trim(),
         };
     }
 
@@ -117,6 +123,9 @@ export function buildDroppedFields(
     if (sourceContact.kind === "colleague" && targetKind === "report") {
         delete droppedFields.LevelId;
         delete droppedFields.LevelStartDate;
+        delete droppedFields.EmployeeId;
+        delete droppedFields.BandRank;
+        delete droppedFields.OverallRank;
     }
 
     return droppedFields;
@@ -170,7 +179,11 @@ function isContact(value: unknown): value is Contact {
     }
 
     if (value.kind === "report") {
-        return typeof value.levelId === "string" && typeof value.levelStartDate === "string";
+        return typeof value.levelId === "string"
+            && typeof value.levelStartDate === "string"
+            && typeof value.employeeId === "string"
+            && typeof value.bandRank === "string"
+            && typeof value.overallRank === "string";
     }
 
     return true;

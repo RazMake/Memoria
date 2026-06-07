@@ -5,4 +5,7 @@
 - CareerPathKey: pm
 - LevelId: l3
 - LevelStartDate: 2025-06-01
+- EmployeeId: 
+- BandRank: 
+- OverallRank: 
 - PronounsKey: he/him

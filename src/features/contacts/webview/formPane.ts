@@ -266,6 +266,50 @@ function appendReportFields(
             }
         }, renderAll, { clearErrors: ["levelStartDate"], render: commit }),
     }));
+
+    roleSection.appendChild(createInputField({
+        field: "employeeId",
+        label: "Employee id",
+        value: formState.draft.employeeId,
+        placeholder: "Personnel number",
+        tooltip: "Personnel number used to look up Connect, perspectives, and Connect history.",
+        error: formState.errors.employeeId,
+        onInput: (value) => mutateForm((formDraft) => {
+            if (formDraft.draft.kind === "report") {
+                formDraft.draft.employeeId = value;
+            }
+        }, renderAll, { clearErrors: ["employeeId"] }),
+    }));
+
+    roleSection.appendChild(createInputField({
+        field: "bandRank",
+        label: "Band rank",
+        value: formState.draft.bandRank,
+        type: "number",
+        placeholder: "Rank within band",
+        tooltip: "Rank of this team member within their band. Used during people discussions.",
+        error: formState.errors.bandRank,
+        onInput: (value) => mutateForm((formDraft) => {
+            if (formDraft.draft.kind === "report") {
+                formDraft.draft.bandRank = value;
+            }
+        }, renderAll, { clearErrors: ["bandRank"] }),
+    }));
+
+    roleSection.appendChild(createInputField({
+        field: "overallRank",
+        label: "Overall rank",
+        value: formState.draft.overallRank,
+        type: "number",
+        placeholder: "Rank within team",
+        tooltip: "Overall capability rank within the team. Used when balancing work across the team.",
+        error: formState.errors.overallRank,
+        onInput: (value) => mutateForm((formDraft) => {
+            if (formDraft.draft.kind === "report") {
+                formDraft.draft.overallRank = value;
+            }
+        }, renderAll, { clearErrors: ["overallRank"] }),
+    }));
 }
 
 function renderFooter(

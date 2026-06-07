@@ -25,6 +25,9 @@ export interface ReportContact extends ContactBase {
     kind: "report";
     levelId: string;
     levelStartDate: string;
+    employeeId: string;
+    bandRank: string;
+    overallRank: string;
 }
 
 export interface ColleagueContact extends ContactBase {
@@ -114,6 +117,9 @@ export interface ContactsViewReportContact extends ContactsViewContactBase {
     kind: "report";
     levelId: string;
     levelStartDate: string;
+    employeeId: string;
+    bandRank: string;
+    overallRank: string;
 }
 
 export interface ContactsViewColleagueContact extends ContactsViewContactBase {

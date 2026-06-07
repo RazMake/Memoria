@@ -149,6 +149,9 @@ export function buildAutoMovedContact(
                 ...structuredClone(sourceContact.droppedFields),
                 LevelId: sourceContact.levelId,
                 LevelStartDate: sourceContact.levelStartDate,
+                ...(sourceContact.employeeId ? { EmployeeId: sourceContact.employeeId } : {}),
+                ...(sourceContact.bandRank ? { BandRank: sourceContact.bandRank } : {}),
+                ...(sourceContact.overallRank ? { OverallRank: sourceContact.overallRank } : {}),
             },
         };
         return movedContact;
@@ -163,6 +166,12 @@ export function buildAutoMovedContact(
     const nextDroppedFields = structuredClone(sourceContact.droppedFields);
     delete nextDroppedFields.LevelId;
     delete nextDroppedFields.LevelStartDate;
+    const employeeId = sourceContact.droppedFields.EmployeeId ?? "";
+    const bandRank = sourceContact.droppedFields.BandRank ?? "";
+    const overallRank = sourceContact.droppedFields.OverallRank ?? "";
+    delete nextDroppedFields.EmployeeId;
+    delete nextDroppedFields.BandRank;
+    delete nextDroppedFields.OverallRank;
 
     const resolvedCareerPath = resolveCareerPath(sourceContact.careerPathKey, referenceData.careerPaths);
     const resolvedCareerLevel = resolveCareerLevel(levelId, referenceData.careerLevels);
@@ -176,6 +185,9 @@ export function buildAutoMovedContact(
         careerPathKey: sourceContact.careerPathKey,
         levelId,
         levelStartDate,
+        employeeId,
+        bandRank,
+        overallRank,
         pronounsKey: sourceContact.pronounsKey,
         extraFields: structuredClone(sourceContact.extraFields),
         droppedFields: nextDroppedFields,

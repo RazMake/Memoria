@@ -25,6 +25,9 @@ function makeResolvedContact(overrides: Partial<ResolvedContact> = {}): Resolved
         droppedFields: {},
         levelId: "l3",
         levelStartDate: "2025-06-01",
+        employeeId: "100200",
+        bandRank: "1",
+        overallRank: "2",
         groupFile: "reports.md",
         groupName: "Reports",
         groupType: "report",
@@ -110,6 +113,9 @@ describe("contactsViewMapping", () => {
                 droppedFields: {},
                 levelId: "l3",
                 levelStartDate: "2025-06-01",
+                employeeId: "100200",
+                bandRank: "1",
+                overallRank: "2",
                 groupFile: "reports.md",
                 groupName: "Reports",
                 isCustomGroup: false,
@@ -186,6 +192,9 @@ describe("contactsViewMapping", () => {
                 careerPathKey: " sde ",
                 levelId: " l3 ",
                 levelStartDate: " 2025-06-01 ",
+                employeeId: " 100200 ",
+                bandRank: " 1 ",
+                overallRank: " 2 ",
                 pronounsKey: " she/her ",
                 extraFields: { Custom: "val" },
                 droppedFields: {},
@@ -200,6 +209,9 @@ describe("contactsViewMapping", () => {
             expect(result.kind).toBe("report");
             expect((result as any).levelId).toBe("l3");
             expect((result as any).levelStartDate).toBe("2025-06-01");
+            expect((result as any).employeeId).toBe("100200");
+            expect((result as any).bandRank).toBe("1");
+            expect((result as any).overallRank).toBe("2");
         });
 
         it("should build a colleague Contact and trim values", () => {
@@ -232,6 +244,9 @@ describe("contactsViewMapping", () => {
                 careerPathKey: "sde",
                 levelId: "l3",
                 levelStartDate: "2025-06-01",
+                employeeId: "100200",
+                bandRank: "1",
+                overallRank: "2",
                 pronounsKey: "she/her",
                 extraFields: { FromDraft: "draft" },
                 droppedFields: {},
@@ -246,6 +261,9 @@ describe("contactsViewMapping", () => {
                 careerPathKey: "sde",
                 levelId: "l3",
                 levelStartDate: "2025-06-01",
+                employeeId: "100200",
+                bandRank: "1",
+                overallRank: "2",
                 pronounsKey: "she/her",
                 extraFields: { FromSource: "source" },
                 droppedFields: {},
@@ -305,6 +323,9 @@ describe("contactsViewMapping", () => {
                 careerPathKey: "sde",
                 levelId: "l3",
                 levelStartDate: "2025-06-01",
+                employeeId: "100200",
+                bandRank: "1",
+                overallRank: "2",
                 pronounsKey: "she/her",
                 extraFields: {},
                 droppedFields: { Custom: "kept" },
