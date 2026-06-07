@@ -138,6 +138,7 @@ export interface ContactsViewReferenceData {
 
 export interface ContactsViewSnapshot {
     active: boolean;
+    folderMissing: boolean;
     multiGroup: boolean;
     groups: ContactsViewGroup[];
     contacts: ContactsViewContact[];

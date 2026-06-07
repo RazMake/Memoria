@@ -93,4 +93,72 @@ describe("pathRewriter", () => {
         const result = forward(body, "README.md", "tasks/tasks.md");
         expect(result).toBe("[link](../notes.md)");
     });
+
+    it("should rewrite angle-bracket inline destinations and preserve the brackets", () => {
+        const body = "[a](<./my file.md>)";
+        const result = forward(body, "docs/notes.md", "tasks/tasks.md");
+        expect(result).toBe("[a](<../docs/my file.md>)");
+    });
+
+    it("should rewrite angle-bracket reference definitions and preserve the brackets", () => {
+        const body = "[id]: <./rel.md> \"title\"";
+        const result = forward(body, "docs/notes.md", "tasks/tasks.md");
+        expect(result).toBe("[id]: <../docs/rel.md> \"title\"");
+    });
+
+    it("should preserve query strings and fragments while rewriting the path part", () => {
+        const body = "[a](./page.md?x=1#frag)";
+        const result = forward(body, "docs/notes.md", "tasks/tasks.md");
+        expect(result).toBe("[a](../docs/page.md?x=1#frag)");
+    });
+
+    it("should ignore link labels with escaped brackets and parens in the destination", () => {
+        const body = "[lab\\]el](./a\\(b\\).md)";
+        const result = forward(body, "docs/notes.md", "tasks/tasks.md");
+        expect(result).toBe("[lab\\]el](../docs/a\\(b\\).md)");
+    });
+
+    it("should leave a bracket that is not followed by a parenthesis unchanged", () => {
+        const body = "[just a label] then text";
+        expect(forward(body, "docs/notes.md", "tasks/tasks.md")).toBe(body);
+    });
+
+    it("should leave a link with an unclosed parenthesis unchanged", () => {
+        const body = "[a](./unclosed.md";
+        expect(forward(body, "docs/notes.md", "tasks/tasks.md")).toBe(body);
+    });
+
+    it("should leave a link with an empty destination unchanged", () => {
+        const body = "[a]( )";
+        expect(forward(body, "docs/notes.md", "tasks/tasks.md")).toBe(body);
+    });
+
+    it("should leave an angle-bracket destination with no closing bracket unchanged", () => {
+        const body = "[a](<./unclosed.md)";
+        expect(forward(body, "docs/notes.md", "tasks/tasks.md")).toBe(body);
+    });
+
+    it("should rewrite a destination that contains balanced nested parentheses", () => {
+        const body = "[a](./foo(bar).md)";
+        const result = forward(body, "docs/notes.md", "tasks/tasks.md");
+        expect(result).toBe("[a](../docs/foo(bar).md)");
+    });
+
+    it("should leave a label that never closes its bracket unchanged", () => {
+        const body = "[abc (def)";
+        expect(forward(body, "docs/notes.md", "tasks/tasks.md")).toBe(body);
+    });
+
+    it("should fall back to the basename when source and collector share a directory", () => {
+        const body = "[a](./sibling.md)";
+        const result = forward(body, "docs/notes.md", "docs/tasks.md");
+        expect(result).toBe("[a](./sibling.md)");
+    });
+
+    it("should not reverse a rewritten link that is absent from the template body", () => {
+        const collectorBody = "[a](../docs/a.md)";
+        // Template has no rewritable links, so the ordinal allowlist is empty.
+        const restored = reverse(collectorBody, "tasks/tasks.md", "docs/notes.md", "no links here");
+        expect(restored).toBe(collectorBody);
+    });
 });

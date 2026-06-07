@@ -5,6 +5,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
     test: {
         include: ["../tests/unit-tests/**/*.test.ts"],
+        // The default 5s timeout is too tight under coverage: Istanbul instruments the entire
+        // module graph on the first dynamic import (e.g. extension.test.ts importing src/extension),
+        // which can exceed 5s on slower machines even though the same test passes in ~2s without
+        // instrumentation. A higher ceiling keeps coverage runs reliable without masking real hangs.
+        testTimeout: 20000,
         coverage: {
             provider: "istanbul",
             // Only instrument TypeScript source files — avoids Istanbul trying to transform
@@ -22,6 +27,15 @@ export default defineConfig({
                 "**/vitest.config.ts",
                 "**/esbuild.config.mjs",
                 "**/*.test.ts",
+                // webview/** files are browser-only: they import DOM globals (document,
+                // window, etc.) and execute inside the VS Code webview, so they cannot run
+                // under Node/Vitest. Their behaviour is covered by E2E tests instead — the
+                // same rationale used for extension.ts above.
+                "**/webview/**",
+                // resources/** contains seed template files (e.g. _shared/snippets/*.ts)
+                // that are copied verbatim into the user's workspace by blueprints. They are
+                // not part of the extension's runtime code path and are never imported here.
+                "**/resources/**",
                 "node_modules/**",
                 "dist/**",
                 ".vscode-test/**",

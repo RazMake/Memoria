@@ -47,7 +47,24 @@ const mockReadDirectory = vi.fn(async (uri: MockUri) => listDirectoryEntries(nor
 const mockCreateDirectory = vi.fn(async (uri: MockUri) => {
     ensureDirectory(normalizeTestPath(uri.path));
 });
+const mockStat = vi.fn(async (uri: MockUri) => {
+    const path = normalizeTestPath(uri.path);
+    if (fileContents.has(path)) {
+        return { type: 1 };
+    }
+    if (directories.has(path)) {
+        return { type: 2 };
+    }
+    throw new Error("not found");
+});
 const mockCreateFileSystemWatcher = vi.fn((pattern: unknown) => createWatcher(pattern));
+
+const renameListeners: Array<(event: { files: ReadonlyArray<{ oldUri: MockUri; newUri: MockUri }> }) => void> = [];
+function fireRename(files: ReadonlyArray<{ oldUri: MockUri; newUri: MockUri }>): void {
+    for (const listener of [...renameListeners]) {
+        listener({ files });
+    }
+}
 
 vi.mock("vscode", () => {
     class RelativePattern {
@@ -91,8 +108,13 @@ vi.mock("vscode", () => {
                 writeFile: (...args: [MockUri, Uint8Array]) => mockWriteFile(...args),
                 readDirectory: (...args: [MockUri]) => mockReadDirectory(...args),
                 createDirectory: (...args: [MockUri]) => mockCreateDirectory(...args),
+                stat: (...args: [MockUri]) => mockStat(...args),
             },
             createFileSystemWatcher: (...args: [unknown]) => mockCreateFileSystemWatcher(...args),
+            onDidRenameFiles: (listener: (event: { files: ReadonlyArray<{ oldUri: MockUri; newUri: MockUri }> }) => void) => {
+                renameListeners.push(listener);
+                return { dispose: () => { const i = renameListeners.indexOf(listener); if (i >= 0) renameListeners.splice(i, 1); } };
+            },
         },
         commands: {
             executeCommand: (...args: [string, string, boolean]) => mockExecuteCommand(...args),
@@ -122,6 +144,7 @@ describe("ContactsFeature", () => {
         fileContents.clear();
         directories.clear();
         createdWatchers.length = 0;
+        renameListeners.length = 0;
         ensureDirectory("/");
         ensureDirectory("/workspace");
     });
@@ -268,18 +291,143 @@ describe("ContactsFeature", () => {
         expect(onDidUpdate).toHaveBeenCalledOnce();
         expect(feature.getAllContacts()).toHaveLength(2);
     });
+
+    it("should surface a missing-folder state when the people folder does not exist", async () => {
+        const feature = new ContactsFeature(createManifest("05-Contacts/", [
+            { file: "Colleagues.md", type: "colleague" },
+        ]));
+
+        await feature.start(workspaceRoot as any);
+
+        expect(feature.isActive()).toBe(true);
+        expect(feature.getSnapshot().folderMissing).toBe(true);
+        expect(feature.getAllContacts()).toEqual([]);
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(expect.stringContaining("was not found"));
+    });
+
+    it("should skip integrity correction when the DataTypes folder is absent", async () => {
+        setFile("/workspace/05-Contacts/Colleagues.md", colleagueDocument([
+            makeColleagueContact("alias1", "Alice Anderson", "Senior Software Engineer", "sde", "xe/xem"),
+        ]));
+
+        const feature = new ContactsFeature(createManifest("05-Contacts/", [
+            { file: "Colleagues.md", type: "colleague" },
+        ]));
+
+        await feature.start(workspaceRoot as any);
+
+        // With no reference data on disk, the invalid pronounsKey must be left intact rather than
+        // overwritten to "unknown" — the absence of DataTypes is a relocation, not invalid data.
+        expect(feature.getSnapshot().folderMissing).toBe(false);
+        expect(fileContents.get("/workspace/05-Contacts/Colleagues.md")).toContain("PronounsKey: xe/xem");
+        expect(feature.getContactById("alias1")?.pronounsKey).toBe("xe/xem");
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(expect.stringContaining("DataTypes"));
+    });
+
+    it("should follow a people-folder rename and persist the new path", async () => {
+        seedReferenceData("/workspace/05-Contacts");
+        setFile("/workspace/05-Contacts/Colleagues.md", colleagueDocument([
+            makeColleagueContact("alias1", "Alice Anderson", "Senior Software Engineer"),
+        ]));
+
+        const manifest = createManifest("05-Contacts/", [
+            { file: "Colleagues.md", type: "colleague" },
+        ]);
+        const feature = new ContactsFeature(manifest as any);
+
+        await feature.start(workspaceRoot as any);
+
+        moveTree("/workspace/05-Contacts", "/workspace/Contacts");
+        fireRename([{ oldUri: createUri("/workspace/05-Contacts"), newUri: createUri("/workspace/Contacts") }]);
+        await flushReconcile();
+
+        expect(feature.getSnapshot().folderMissing).toBe(false);
+        expect(feature.getContactById("alias1")).not.toBeNull();
+        expect(manifest.writeManifest).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ contacts: expect.objectContaining({ peopleFolder: "Contacts" }) }),
+        );
+    });
+
+    it("should preserve a blueprint group's type when its file is renamed", async () => {
+        seedReferenceData("/workspace/05-Contacts");
+        setFile("/workspace/05-Contacts/Team.md", reportDocument([
+            makeReportContact("alias1", "Alice Anderson", "Senior Software Engineer"),
+        ]));
+
+        const manifest = createManifest("05-Contacts/", [
+            { file: "Team.md", type: "report" },
+        ]);
+        const feature = new ContactsFeature(manifest as any);
+
+        await feature.start(workspaceRoot as any);
+
+        moveFile("/workspace/05-Contacts/Team.md", "/workspace/05-Contacts/Squad.md");
+        fireRename([{ oldUri: createUri("/workspace/05-Contacts/Team.md"), newUri: createUri("/workspace/05-Contacts/Squad.md") }]);
+        await flushReconcile();
+
+        expect(feature.getGroupSummaries()).toEqual([
+            { file: "Squad.md", name: "Squad", type: "report", isCustom: false, contactCount: 1 },
+        ]);
+        expect(manifest.writeManifest).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                contacts: expect.objectContaining({ groups: [{ file: "Squad.md", type: "report" }] }),
+            }),
+        );
+    });
+
+    it("should re-point to a relocated folder via repairLocation", async () => {
+        seedReferenceData("/workspace/05-Contacts");
+        setFile("/workspace/05-Contacts/Colleagues.md", colleagueDocument([
+            makeColleagueContact("alias1", "Alice Anderson", "Senior Software Engineer"),
+        ]));
+
+        const manifest = createManifest("05-Contacts/", [
+            { file: "Colleagues.md", type: "colleague" },
+        ]);
+        const feature = new ContactsFeature(manifest as any);
+
+        await feature.start(workspaceRoot as any);
+
+        // Out-of-band move (e.g. terminal) — no rename event is fired.
+        moveTree("/workspace/05-Contacts", "/workspace/people/Contacts");
+
+        await feature.repairLocation(createUri("/workspace/people/Contacts") as any);
+
+        expect(feature.getSnapshot().folderMissing).toBe(false);
+        expect(feature.getContactById("alias1")).not.toBeNull();
+        expect(manifest.writeManifest).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ contacts: expect.objectContaining({ peopleFolder: "people/Contacts" }) }),
+        );
+    });
+
+    it("should reject repairLocation for a folder outside the workspace", async () => {
+        setFile("/workspace/05-Contacts/Colleagues.md", "");
+
+        const feature = new ContactsFeature(createManifest("05-Contacts/", [
+            { file: "Colleagues.md", type: "colleague" },
+        ]));
+
+        await feature.start(workspaceRoot as any);
+
+        await expect(feature.repairLocation(createUri("/other/Contacts") as any))
+            .rejects.toThrow("inside the current workspace");
+    });
 });
 
 function createManifest(
     peopleFolder: string,
     groups: Array<{ file: string; type: "report" | "colleague" }>,
-): { readManifest: ReturnType<typeof vi.fn> } {
+): { readManifest: ReturnType<typeof vi.fn>; writeManifest: ReturnType<typeof vi.fn> } {
+    let stored: { contacts: { peopleFolder: string; groups: Array<{ file: string; type: "report" | "colleague" }> } } = {
+        contacts: { peopleFolder, groups },
+    };
     return {
-        readManifest: vi.fn().mockResolvedValue({
-            contacts: {
-                peopleFolder,
-                groups,
-            },
+        readManifest: vi.fn(async () => structuredClone(stored)),
+        writeManifest: vi.fn(async (_root: unknown, manifest: typeof stored) => {
+            stored = structuredClone(manifest);
         }),
     };
 }
@@ -418,6 +566,49 @@ function setFile(path: string, content: string): void {
     const normalizedPath = normalizeTestPath(path);
     ensureParentDirectories(normalizedPath);
     fileContents.set(normalizedPath, content);
+}
+
+/** Relocates every file and directory under `oldRoot` to `newRoot` in the mock filesystem. */
+function moveTree(oldRoot: string, newRoot: string): void {
+    const from = normalizeTestPath(oldRoot);
+    const to = normalizeTestPath(newRoot);
+
+    for (const [path, content] of [...fileContents]) {
+        if (path === from || path.startsWith(`${from}/`)) {
+            fileContents.delete(path);
+            const next = to + path.slice(from.length);
+            ensureParentDirectories(next);
+            fileContents.set(next, content);
+        }
+    }
+    for (const directory of [...directories]) {
+        if (directory === from || directory.startsWith(`${from}/`)) {
+            directories.delete(directory);
+            directories.add(to + directory.slice(from.length));
+        }
+    }
+    ensureDirectory(to);
+}
+
+/** Relocates a single file in the mock filesystem. */
+function moveFile(oldPath: string, newPath: string): void {
+    const from = normalizeTestPath(oldPath);
+    const to = normalizeTestPath(newPath);
+    const content = fileContents.get(from);
+    if (content !== undefined) {
+        fileContents.delete(from);
+        ensureParentDirectories(to);
+        fileContents.set(to, content);
+    }
+}
+
+/**
+ * Settles the fire-and-forget reconciliation promise. A single macrotask tick runs only after the
+ * microtask queue has fully drained, so the entire await chain settles regardless of its depth —
+ * unlike a fixed-count microtask drain, which silently under-waits if the chain grows.
+ */
+function flushReconcile(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function createWatcher(pattern: unknown): MockWatcher {

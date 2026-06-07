@@ -96,6 +96,45 @@ describe("taskParser", () => {
                 "      | p50    | 45ms  |",
             ]);
         });
+
+        it("should measure tab indentation and dedent tab-indented continuation lines", () => {
+            const content = [
+                "\t- [ ] tabbed task",
+                "\t  continuation under tab",
+                "not part of the task",
+            ].join("\n");
+
+            const tasks = parseTaskBlocks(content);
+
+            expect(tasks).toHaveLength(1);
+            // A tab counts as 4 columns, so the hanging indent is 6 columns.
+            expect(tasks[0].indent).toBe(4);
+            expect(tasks[0].continuationLines).toEqual(["  continuation under tab"]);
+        });
+
+        it("should preserve blank lines that appear inside a fenced code block", () => {
+            const content = [
+                "- [ ] code sample",
+                "      ```ts",
+                "const a = 1;",
+                "",
+                "const b = 2;",
+                "      ```",
+                "- [ ] next",
+            ].join("\n");
+
+            const tasks = parseTaskBlocks(content);
+
+            expect(tasks).toHaveLength(2);
+            expect(tasks[0].body).toBe([
+                "code sample",
+                "      ```ts",
+                "const a = 1;",
+                "",
+                "const b = 2;",
+                "      ```",
+            ].join("\n"));
+        });
     });
 
     describe("parseCollectorSuffixLine", () => {
@@ -152,6 +191,21 @@ describe("taskParser", () => {
             expect(parsed.completed).toHaveLength(1);
             expect(parsed.completed[0].checked).toBe(false);
             expect(parsed.completed[0].section).toBe("completed");
+        });
+
+        it("should keep continuation lines for a completed task that has no suffix line", () => {
+            const content = [
+                "# Completed",
+                "",
+                "- [x] shipped",
+                "      lingering note",
+            ].join("\n");
+
+            const parsed = parseCollectorDocument(content);
+
+            expect(parsed.completed).toHaveLength(1);
+            expect(parsed.completed[0].suffix).toBeNull();
+            expect(parsed.completed[0].body).toBe(["shipped", "      lingering note"].join("\n"));
         });
     });
 

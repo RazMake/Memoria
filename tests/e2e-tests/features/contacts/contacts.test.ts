@@ -159,6 +159,35 @@ suite("Contacts feature (E2E)", () => {
             );
         }, 8_000);
     });
+
+    test("follows a people-folder rename and persists the new path to the manifest", async () => {
+        await activateExtension();
+        await initializeWorkspaceWithBlueprint("individual-contributor");
+
+        await waitFor(async () => {
+            assert.strictEqual(await uriExists(contactsRoot), true, "The contacts folder should exist before the rename.");
+        });
+
+        const renamedRoot = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "People");
+        const edit = new vscode.WorkspaceEdit();
+        edit.renameFile(contactsRoot, renamedRoot, { overwrite: false });
+        const applied = await vscode.workspace.applyEdit(edit);
+        assert.strictEqual(applied, true, "The folder rename edit should apply successfully.");
+
+        await waitFor(async () => {
+            const manifest = await readJsonFile<BlueprintManifest>(blueprintUri);
+            assert.strictEqual(
+                manifest?.contacts?.peopleFolder,
+                "05-Autocomplete/People",
+                "The manifest peopleFolder should be updated to the relocated folder.",
+            );
+            assert.strictEqual(
+                await uriExists(vscode.Uri.joinPath(renamedRoot, "Peers.md")),
+                true,
+                "The Peers.md group file should live under the relocated folder.",
+            );
+        }, 8_000);
+    });
 });
 
 async function activateExtension(): Promise<void> {

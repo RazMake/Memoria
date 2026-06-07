@@ -634,3 +634,157 @@ features: []
         });
     });
 });
+
+describe("parseFeatures — snippets and backup", () => {
+    it("should parse a snippets feature and normalize the snippets folder path", () => {
+        const features = parseFeatures([
+            {
+                id: "snippets",
+                name: "Snippets",
+                description: "Reusable snippets.",
+                enabledByDefault: true,
+                snippetsFolder: "06-Snippets\\",
+            },
+        ]);
+        expect(features[0]).toEqual({
+            id: "snippets",
+            name: "Snippets",
+            description: "Reusable snippets.",
+            enabledByDefault: true,
+            snippetsFolder: "06-Snippets/",
+        });
+    });
+
+    it("should throw when snippets snippetsFolder is missing", () => {
+        expect(() => parseFeatures([
+            {
+                id: "snippets",
+                name: "Snippets",
+                description: "Reusable snippets.",
+                enabledByDefault: true,
+            },
+        ])).toThrow('"snippetsFolder"');
+    });
+
+    it("should parse a backup feature with no extra fields", () => {
+        const features = parseFeatures([
+            {
+                id: "backup",
+                name: "Backup",
+                description: "Periodic backups.",
+                enabledByDefault: false,
+            },
+        ]);
+        expect(features[0]).toEqual({
+            id: "backup",
+            name: "Backup",
+            description: "Periodic backups.",
+            enabledByDefault: false,
+        });
+    });
+});
+
+describe("parseFeatures — taskCollector config overrides", () => {
+    const baseFeature = (extra: Record<string, unknown>) => ({
+        id: "taskCollector",
+        name: "Task Collector",
+        description: "Sync tasks",
+        enabledByDefault: true,
+        collectorPath: "00-Tasks/All-Tasks.md",
+        ...extra,
+    });
+
+    it("should apply valid config overrides", () => {
+        const features = parseFeatures([baseFeature({
+            completedRetentionDays: 30,
+            syncOnStartup: false,
+            include: ["docs/**/*.md"],
+            exclude: ["**/tmp/**"],
+            debounceMs: 500,
+        })]);
+        expect(features[0]).toEqual(expect.objectContaining({
+            config: {
+                completedRetentionDays: 30,
+                syncOnStartup: false,
+                include: ["docs/**/*.md"],
+                exclude: ["**/tmp/**"],
+                debounceMs: 500,
+            },
+        }));
+    });
+
+    it("should throw when completedRetentionDays is not a non-negative number", () => {
+        expect(() => parseFeatures([baseFeature({ completedRetentionDays: -1 })]))
+            .toThrow('"completedRetentionDays"');
+    });
+
+    it("should throw when syncOnStartup is not a boolean", () => {
+        expect(() => parseFeatures([baseFeature({ syncOnStartup: "yes" })]))
+            .toThrow('"syncOnStartup"');
+    });
+
+    it("should throw when include is not an array of non-empty strings", () => {
+        expect(() => parseFeatures([baseFeature({ include: ["", "ok"] })]))
+            .toThrow('"include"');
+    });
+
+    it("should throw when exclude is not an array of non-empty strings", () => {
+        expect(() => parseFeatures([baseFeature({ exclude: "not-an-array" })]))
+            .toThrow('"exclude"');
+    });
+
+    it("should throw when debounceMs is negative", () => {
+        expect(() => parseFeatures([baseFeature({ debounceMs: -5 })]))
+            .toThrow('"debounceMs"');
+    });
+
+    it("should throw when collectorPath is a folder path ending in a slash", () => {
+        expect(() => parseFeatures([baseFeature({ collectorPath: "00-Tasks/" })]))
+            .toThrow('"collectorPath"');
+    });
+
+    it("should throw when collectorPath contains traversal segments", () => {
+        expect(() => parseFeatures([baseFeature({ collectorPath: "../escape.md" })]))
+            .toThrow('"collectorPath"');
+    });
+});
+
+describe("parseWorkspaceTree — default scope validation", () => {
+    it("should throw when default scope value is invalid", () => {
+        expect(() => parseWorkspaceTree([{ name: "file.md", default: "nope" }]))
+            .toThrow('"default" must be "relative" or "includingRoot"');
+    });
+
+    it("should throw when a folder is marked as default", () => {
+        expect(() => parseWorkspaceTree([{ name: "Folder/", default: "relative" }]))
+            .toThrow("folders cannot be marked as default");
+    });
+});
+
+describe("parseContactGroups — file validation", () => {
+    it("should throw when a contacts group file is not a markdown file", () => {
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts/",
+                groups: [{ file: "Team.txt", type: "colleague" }],
+            },
+        ])).toThrow('must end with ".md"');
+    });
+
+    it("should throw when contacts groups is not an array", () => {
+        expect(() => parseFeatures([
+            {
+                id: "contacts",
+                name: "Contacts",
+                description: "Browse colleagues.",
+                enabledByDefault: true,
+                peopleFolder: "05-Contacts/",
+                groups: "not-an-array",
+            },
+        ])).toThrow('"groups" must be an array');
+    });
+});

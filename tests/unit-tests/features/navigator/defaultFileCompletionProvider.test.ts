@@ -777,7 +777,84 @@ describe("DefaultFileCompletionProvider", () => {
         });
     });
 
-    // ── Edge cases ──────────────────────────────────────────────────────
+    // ── Workspace-absolute file value completions ───────────────────────
+
+    describe("workspace-absolute file value completions", () => {
+        it("lists files relative to a root when the value starts with a root name", async () => {
+            setWorkspaceFolders("/workspace/ProjectA", "/workspace/ProjectB");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/ProjectA") {
+                    return [["notes.md", 1], ["src", 2], [".hidden", 1]];
+                }
+                return [];
+            });
+
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": ["ProjectA/"]\n  }\n}';
+            const offset = text.indexOf("ProjectA/") + "ProjectA/".length;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(document as any, position as any);
+
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("notes.md");
+            expect(labels).toContain("src/");
+            expect(labels).not.toContain(".hidden");
+            const fileItem = items!.find((i) => i.label === "notes.md");
+            expect(fileItem!.insertText).toBe("ProjectA/notes.md");
+        });
+
+        it("drills into a nested subfolder under the root", async () => {
+            setWorkspaceFolders("/workspace/ProjectA");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/ProjectA/src") {
+                    return [["deep.md", 1]];
+                }
+                return [];
+            });
+
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": ["ProjectA/src/"]\n  }\n}';
+            const offset = text.indexOf("ProjectA/src/") + "ProjectA/src/".length;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(document as any, position as any);
+
+            const labels = items!.map((i) => i.label);
+            expect(labels).toContain("deep.md");
+            expect(items!.find((i) => i.label === "deep.md")!.insertText).toBe("ProjectA/src/deep.md");
+        });
+
+        it("returns empty when the root directory cannot be read", async () => {
+            setWorkspaceFolders("/workspace/ProjectA");
+            _readDir.mockRejectedValue(new Error("nope"));
+
+            const text = '{\n  "defaultFiles": {\n    "00-ToDo/": ["ProjectA/"]\n  }\n}';
+            const offset = text.indexOf("ProjectA/") + "ProjectA/".length;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(document as any, position as any);
+            expect(items).toHaveLength(0);
+        });
+
+        it("excludes a workspace-absolute file already present in the array", async () => {
+            setWorkspaceFolders("/workspace/ProjectA");
+            _readDir.mockImplementation(async (uri: any) => {
+                if (uri.path === "/workspace/ProjectA") {
+                    return [["notes.md", 1], ["todo.md", 1]];
+                }
+                return [];
+            });
+
+            const text =
+                '{\n  "defaultFiles": {\n    "00-ToDo/": ["ProjectA/notes.md", "ProjectA/"]\n  }\n}';
+            const offset = text.lastIndexOf("ProjectA/") + "ProjectA/".length;
+            const { document, position } = makeDocAndPosition(text, offset);
+
+            const items = await provider.provideCompletionItems(document as any, position as any);
+            const labels = items!.map((i) => i.label);
+            expect(labels).not.toContain("notes.md");
+            expect(labels).toContain("todo.md");
+        });
+    });
 
     describe("edge cases", () => {
         it("should return undefined for unrecognized positions", async () => {

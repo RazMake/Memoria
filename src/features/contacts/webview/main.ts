@@ -171,7 +171,7 @@ function renderList(): void {
     const searchQuery = state.search.trim().toLowerCase();
 
     searchInput.value = state.search;
-    addButton.disabled = !snapshot?.active;
+    addButton.disabled = !snapshot?.active || Boolean(snapshot?.folderMissing);
 
     renderBanner(listBannerHost, state.activeForm ? null : state.banner);
     clearElement(groupsHost);
@@ -188,6 +188,16 @@ function renderList(): void {
         listHeaderTitle.textContent = "";
         listHeaderSubtitle.textContent = "Contacts is not enabled for this workspace.";
         groupsHost.appendChild(createEmptyState("Contacts is unavailable", "Enable the contacts feature to browse or edit people from the sidebar."));
+        return;
+    }
+
+    if (snapshot.folderMissing) {
+        listHeaderTitle.textContent = "";
+        listHeaderSubtitle.textContent = "Contacts folder not found.";
+        groupsHost.appendChild(createEmptyState(
+            "Contacts folder not found",
+            "The contacts folder may have been moved or deleted. Run \"Memoria: Repair Contacts Location\" from the Command Palette to reconnect it.",
+        ));
         return;
     }
 

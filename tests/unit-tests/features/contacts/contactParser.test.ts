@@ -200,6 +200,85 @@ describe("contactParser", () => {
 
             expect(findDuplicateContactIds([team, colleagues])).toEqual(["alias1"]);
         });
+
+        it("upsert adds a new contact when the id is not present", () => {
+            const original = parseContactGroupDocument([
+                "# alias1",
+                "- Nickname: Alice",
+            ].join("\n"), "report");
+            const upserted = upsertContact(original, {
+                kind: "report",
+                id: "alias2",
+                nickname: "Bob",
+                fullName: "Bob Baker",
+                title: "SDE",
+                careerPathKey: "sde",
+                levelId: "l3",
+                levelStartDate: "2025-01-01",
+                employeeId: "1",
+                bandRank: "1",
+                overallRank: "1",
+                pronounsKey: "he/him",
+                extraFields: { Extra: "x" },
+                droppedFields: { Foo: "bar" },
+            });
+            expect(upserted.contacts.map((c) => c.id)).toEqual(["alias1", "alias2"]);
+            // The clone must be a deep copy of the report contact's field maps.
+            expect(upserted.contacts[1].extraFields).toEqual({ Extra: "x" });
+            expect(upserted.contacts[1].droppedFields).toEqual({ Foo: "bar" });
+        });
+    });
+
+    describe("parsing edge cases", () => {
+        it("defaults non-numeric reference numbers to zero", () => {
+            const careerLevels = parseCareerLevelsDocument([
+                "# bad",
+                "- Id: notanumber",
+                "- InterviewType: x",
+                "- TitlePattern: y",
+            ].join("\n"));
+            expect(careerLevels[0].id).toBe(0);
+
+            const careerPaths = parseCareerPathsDocument([
+                "# bad",
+                "- Name: n",
+                "- Short: s",
+                "- MinimumCareerLevel: oops",
+            ].join("\n"));
+            expect(careerPaths[0].minimumCareerLevel).toBe(0);
+        });
+
+        it("parses a _droppedFields block that is interrupted by a blank line and a following record", () => {
+            const text = [
+                "# alias1",
+                "- Nickname: Alice",
+                "- _droppedFields:",
+                "  - LevelId: l3",
+                "",
+                "  - LevelStartDate: 2025-06-01",
+                "# alias2",
+                "- Nickname: Bob",
+            ].join("\n");
+            const document = parseContactGroupDocument(text, "colleague");
+            expect(document.contacts).toHaveLength(2);
+            expect(document.contacts[0].droppedFields).toEqual({
+                LevelId: "l3",
+                LevelStartDate: "2025-06-01",
+            });
+            expect(document.contacts[1].id).toBe("alias2");
+        });
+
+        it("ends a _droppedFields block when a non-nested field follows", () => {
+            const text = [
+                "# alias1",
+                "- _droppedFields:",
+                "  - LevelId: l3",
+                "- Nickname: Alice",
+            ].join("\n");
+            const document = parseContactGroupDocument(text, "colleague");
+            expect(document.contacts[0].droppedFields).toEqual({ LevelId: "l3" });
+            expect(document.contacts[0].nickname).toBe("Alice");
+        });
     });
 
     describe("reference documents", () => {

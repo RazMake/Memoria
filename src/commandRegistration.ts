@@ -14,6 +14,7 @@ import {
     createDeletePersonCommand,
     createEditPersonCommand,
     createMovePersonCommand,
+    createRepairContactsLocationCommand,
 } from "./commands/contactCommands";
 import { createExpandSnippetCommand, createResetSnippetCommand } from "./commands/snippetCommands";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
@@ -93,6 +94,10 @@ export function registerCommands(
         vscode.commands.registerCommand(
             "memoria.movePerson",
             createMovePersonCommand(contactsFeature)
+        ),
+        vscode.commands.registerCommand(
+            "memoria.repairContactsLocation",
+            createRepairContactsLocationCommand(contactsFeature)
         ),
         vscode.commands.registerCommand(
             "memoria.expandSnippet",

@@ -160,4 +160,58 @@ describe("generateContactSnippets", () => {
         expect(result[0].description).toContain("SDE 2");
         expect(result[0].label).toContain("johnsmith");
     });
+
+    function expand(contact: ResolvedContact, format: string): string {
+        return generateContactSnippets([contact])[0].expand!({
+            document: null,
+            position: null,
+            params: { format },
+            contacts: [],
+        } as any);
+    }
+
+    it("should expand nickname (title) format", () => {
+        expect(expand(makeContact(), "Nickname (title)")).toBe("John (SDE 2)");
+    });
+
+    it("should expand nickname (id) format", () => {
+        expect(expand(makeContact(), "Nickname (id)")).toBe("John (johnsmith)");
+    });
+
+    it("should expand full name (id) format", () => {
+        expect(expand(makeContact(), "Full Name (id)")).toBe("John Smith (johnsmith)");
+    });
+
+    it("should expand nickname (level) format for report contacts", () => {
+        expect(expand(makeContact(), "Nickname (level)")).toBe("John (L2)");
+    });
+
+    it("should fall back to fullName for nickname (level) on colleague contacts", () => {
+        expect(expand(makeContact({ kind: "colleague" } as any), "Nickname (level)")).toBe("John Smith");
+    });
+
+    it("should use '?' when a report has no resolved career level", () => {
+        expect(expand(makeContact({ resolvedCareerLevel: undefined } as any), "Full Name (level)")).toBe(
+            "John Smith (?)",
+        );
+    });
+
+    it("should expand the level-tenure format with elapsed time for report contacts", () => {
+        const expanded = expand(makeContact(), "Full Name (level, for X months - since MM-dd-YYYY)");
+        expect(expanded).toContain("John Smith (L2");
+        expect(expanded).toContain("from: 2025-07-20");
+    });
+
+    it("should fall back to fullName for the level-tenure format on colleague contacts", () => {
+        expect(
+            expand(
+                makeContact({ kind: "colleague" } as any),
+                "Full Name (level, for X months - since MM-dd-YYYY)",
+            ),
+        ).toBe("John Smith");
+    });
+
+    it("should fall back to fullName for an unknown format", () => {
+        expect(expand(makeContact(), "Totally Unknown Format")).toBe("John Smith");
+    });
 });

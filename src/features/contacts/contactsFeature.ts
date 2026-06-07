@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "../../blueprints/manifestManager";
 import type { ContactGroup as BlueprintContactGroup } from "../../blueprints/types";
-import { normalizePath } from "../../utils/path";
+import { normalizePath, stripTrailingSlash } from "../../utils/path";
 import { DebouncedFileWatcher } from "../../utils/debouncedFileWatcher";
 import {
     addContact as addContactToDocument,
@@ -66,6 +66,8 @@ export interface ContactGroupSummary {
 
 export interface ContactsSnapshot {
     active: boolean;
+    /** True when the feature is enabled but its people folder cannot be found on disk. */
+    folderMissing: boolean;
     multiGroup: boolean;
     groups: ContactGroupSummary[];
     contacts: ResolvedContact[];
@@ -86,7 +88,9 @@ export class ContactsFeature implements vscode.Disposable {
     private groups: LoadedGroupState[] = [];
     private referenceData: ContactsReferenceData = createEmptyReferenceData();
     private fileWatcher: DebouncedFileWatcher | null = null;
+    private renameSubscription: vscode.Disposable | null = null;
     private active = false;
+    private folderMissing = false;
     private readonly _onDidUpdate = new vscode.EventEmitter<ContactsSnapshot>();
     readonly onDidUpdate = this._onDidUpdate.event;
     private readonly _onDidRequestFormOpen = new vscode.EventEmitter<ContactsFormOpenRequest>();
@@ -127,6 +131,7 @@ export class ContactsFeature implements vscode.Disposable {
         try {
             await this.reloadFromDisk(true);
             this.installWatcher();
+            this.installRenameListener();
         } catch (error) {
             await this.stop();
             throw error;
@@ -136,10 +141,13 @@ export class ContactsFeature implements vscode.Disposable {
     async stop(): Promise<void> {
         this.fileWatcher?.dispose();
         this.fileWatcher = null;
+        this.renameSubscription?.dispose();
+        this.renameSubscription = null;
 
         const hadState = this.active || this.groups.length > 0 || this.referenceData.pronouns.length > 0;
 
         this.active = false;
+        this.folderMissing = false;
         this.workspaceRoot = null;
         this.peopleFolder = null;
         this.blueprintGroups = [];
@@ -199,11 +207,33 @@ export class ContactsFeature implements vscode.Disposable {
     getSnapshot(): ContactsSnapshot {
         return {
             active: this.active,
+            folderMissing: this.folderMissing,
             multiGroup: this.hasMultipleGroups(),
             groups: this.getGroupSummaries(),
             contacts: this.getAllContacts(),
             referenceData: this.getResolvedReferenceData(),
         };
+    }
+
+    /**
+     * Re-points the feature at a relocated people folder, persists the new path to the
+     * manifest, and reloads. Used by the "Repair Contacts Location" command when an
+     * out-of-band move (terminal, git) could not be tracked via onDidRenameFiles.
+     */
+    async repairLocation(newPeopleRoot: vscode.Uri): Promise<void> {
+        if (!this.active || !this.workspaceRoot) {
+            throw new Error(CONTACTS_INACTIVE_MESSAGE);
+        }
+
+        const relative = this.workspaceRelativePath(stripTrailingSlash(newPeopleRoot.path));
+        if (relative === null) {
+            throw new Error("The selected folder must be inside the current workspace.");
+        }
+
+        this.peopleFolder = normalizePath(relative);
+        await this.persistManifestConfig();
+        this.installWatcher();
+        await this.reloadFromDisk(true);
     }
 
     requestAddContactForm(preferredGroupFile?: string): void {
@@ -323,6 +353,7 @@ export class ContactsFeature implements vscode.Disposable {
     // Uses a scoped FileSystemWatcher rather than workspace-level save events because contacts
     // are confined to a single folder tree (the blueprint's people folder).
     private installWatcher(): void {
+        this.fileWatcher?.dispose();
         const { peopleRoot } = this.requireRuntimeContext();
         this.fileWatcher = new DebouncedFileWatcher(this.debounceMs, () => {
             if (this.active) {
@@ -332,15 +363,172 @@ export class ContactsFeature implements vscode.Disposable {
         this.fileWatcher.watch(new vscode.RelativePattern(peopleRoot, "**/*.md"));
     }
 
+    // Workspace-level rename events let the feature follow folder/group-file moves made via the
+    // VS Code Explorer, keeping the persisted manifest path in sync so the feature does not break
+    // when the user reorganizes the workspace.
+    private installRenameListener(): void {
+        this.renameSubscription?.dispose();
+        this.renameSubscription = vscode.workspace.onDidRenameFiles((event) => {
+            void this.reconcileRename(event);
+        });
+    }
+
+    /**
+     * Reconciles the persisted people-folder path and blueprint group filenames against rename
+     * events. When the people folder (or one of its ancestors) moves, the new relative path is
+     * persisted; when a blueprint group file is renamed in place, its manifest entry is updated so
+     * its semantic type is preserved instead of being demoted to a custom group.
+     */
+    private async reconcileRename(event: vscode.FileRenameEvent): Promise<void> {
+        if (!this.active || !this.workspaceRoot || !this.peopleFolder) {
+            return;
+        }
+
+        // Resolve the people-folder path once: it is invariant across the event's files (a single
+        // rename event never relocates the people folder more than once), so recomputing it per
+        // iteration would only rebuild the same URI repeatedly.
+        const peopleRootPath = stripTrailingSlash(this.requireRuntimeContext().peopleRoot.path);
+        let folderMoved = false;
+        let groupRenamed = false;
+
+        for (const { oldUri, newUri } of event.files) {
+            const movedFolder = this.computeMovedPeopleFolder(peopleRootPath, oldUri, newUri);
+            if (movedFolder !== null) {
+                this.peopleFolder = normalizePath(movedFolder);
+                folderMoved = true;
+                continue;
+            }
+            if (!folderMoved && this.tryReconcileGroupFileRename(peopleRootPath, oldUri, newUri)) {
+                groupRenamed = true;
+            }
+        }
+
+        if (!folderMoved && !groupRenamed) {
+            return;
+        }
+
+        try {
+            await this.persistManifestConfig();
+            if (folderMoved) {
+                this.installWatcher();
+            }
+            await this.reloadFromDisk(false);
+        } catch {
+            // Reconciliation is best-effort — a failed reload leaves the feature in its prior state.
+        }
+    }
+
+    /**
+     * Returns the new workspace-relative people-folder path when `oldUri` is the people folder or
+     * one of its ancestors, otherwise null. Returns null when the destination falls outside the
+     * workspace (the move is then surfaced as a missing folder on the next reload).
+     */
+    private computeMovedPeopleFolder(peopleRootPath: string, oldUri: vscode.Uri, newUri: vscode.Uri): string | null {
+        const oldPath = stripTrailingSlash(oldUri.path);
+
+        if (peopleRootPath === oldPath) {
+            return this.workspaceRelativePath(stripTrailingSlash(newUri.path));
+        }
+        if (peopleRootPath.startsWith(oldPath + "/")) {
+            const suffix = peopleRootPath.slice(oldPath.length);
+            return this.workspaceRelativePath(stripTrailingSlash(newUri.path) + suffix);
+        }
+        return null;
+    }
+
+    /** Updates the matching blueprint group entry when a group file is renamed within the people folder. */
+    private tryReconcileGroupFileRename(peopleRootPath: string, oldUri: vscode.Uri, newUri: vscode.Uri): boolean {
+        const oldGroupRel = relativeUnder(peopleRootPath, stripTrailingSlash(oldUri.path));
+        const newGroupRel = relativeUnder(peopleRootPath, stripTrailingSlash(newUri.path));
+        if (oldGroupRel === null || newGroupRel === null) {
+            return false;
+        }
+
+        const index = this.blueprintGroups.findIndex(
+            (group) => normalizePath(group.file).toLowerCase() === oldGroupRel.toLowerCase()
+        );
+        if (index < 0) {
+            return false;
+        }
+
+        this.blueprintGroups[index] = { ...this.blueprintGroups[index], file: normalizePath(newGroupRel) };
+        return true;
+    }
+
+    /** Converts an absolute POSIX path into a workspace-relative path, or null when outside the workspace. */
+    private workspaceRelativePath(absPosixPath: string): string | null {
+        if (!this.workspaceRoot) {
+            return null;
+        }
+        const rootPath = stripTrailingSlash(this.workspaceRoot.path);
+        if (absPosixPath === rootPath) {
+            return "";
+        }
+        if (!absPosixPath.startsWith(rootPath + "/")) {
+            return null;
+        }
+        return absPosixPath.slice(rootPath.length + 1);
+    }
+
+    /** Persists the current in-memory people folder and blueprint group config back to the manifest. */
+    private async persistManifestConfig(): Promise<void> {
+        if (!this.workspaceRoot || !this.peopleFolder) {
+            return;
+        }
+        const manifest = await this.manifest.readManifest(this.workspaceRoot);
+        if (!manifest?.contacts) {
+            return;
+        }
+        manifest.contacts.peopleFolder = this.peopleFolder;
+        manifest.contacts.groups = this.blueprintGroups.map((group) => ({ file: group.file, type: group.type }));
+        await this.manifest.writeManifest(this.workspaceRoot, manifest);
+    }
+
+    private async uriExists(uri: vscode.Uri): Promise<boolean> {
+        try {
+            await this.fs.stat(uri);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     private async reloadFromDisk(showWarnings: boolean): Promise<void> {
         const { peopleRoot } = this.requireRuntimeContext();
+
+        // Fail loud instead of silently rendering an empty view when the folder has moved/been deleted.
+        if (!(await this.uriExists(peopleRoot))) {
+            this.folderMissing = true;
+            this.groups = [];
+            this.referenceData = createEmptyReferenceData();
+            await this.updateContextKeys();
+            this.emitUpdate();
+            if (showWarnings) {
+                vscode.window.showWarningMessage(
+                    `Memoria: The contacts people folder "${this.peopleFolder}" was not found. It may have been moved or deleted. Run "Memoria: Repair Contacts Location" to reconnect it.`
+                );
+            }
+            return;
+        }
+        this.folderMissing = false;
+
+        // When the DataTypes folder itself is absent, every contact would appear to reference missing
+        // data types — skip integrity correction so a relocated folder is not mistaken for invalid data.
+        const dataTypesRoot = vscode.Uri.joinPath(peopleRoot, DATA_TYPES_FOLDER);
+        const referenceDataAvailable = await this.uriExists(dataTypesRoot);
+
         const [groups, loadedReferenceData] = await Promise.all([
             loadGroups(this.fs, peopleRoot, this.blueprintGroups),
             loadReferenceData(this.fs, peopleRoot),
         ]);
 
-        const { referenceData, correctedGroups, warnings } =
-            await this.enforceIntegrity(peopleRoot, groups, loadedReferenceData);
+        const { referenceData, correctedGroups, warnings } = referenceDataAvailable
+            ? await this.enforceIntegrity(peopleRoot, groups, loadedReferenceData)
+            : {
+                referenceData: loadedReferenceData,
+                correctedGroups: groups.map((group) => ({ group, correctedContacts: 0 })),
+                warnings: [] as string[],
+            };
 
         this.referenceData = referenceData;
         this.groups = correctedGroups.map((entry) => entry.group);
@@ -349,6 +537,11 @@ export class ContactsFeature implements vscode.Disposable {
         this.emitUpdate();
 
         if (showWarnings) {
+            if (!referenceDataAvailable) {
+                warnings.push(
+                    `Memoria: The contacts reference data folder "${DATA_TYPES_FOLDER}" was not found. Data-type validation was skipped to avoid overwriting contacts.`
+                );
+            }
             for (const message of warnings) {
                 vscode.window.showWarningMessage(message);
             }
@@ -451,4 +644,12 @@ function toGroupSummary(group: LoadedGroupState): ContactGroupSummary {
         isCustom: group.isCustom,
         contactCount: group.document.contacts.length,
     };
+}
+
+/** Returns `targetAbs` relative to `baseAbs` when nested directly within it, otherwise null. */
+function relativeUnder(baseAbs: string, targetAbs: string): string | null {
+    if (!targetAbs.startsWith(baseAbs + "/")) {
+        return null;
+    }
+    return targetAbs.slice(baseAbs.length + 1);
 }

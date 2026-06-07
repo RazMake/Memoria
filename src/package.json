@@ -68,6 +68,11 @@
                 "category": "Memoria"
             },
             {
+                "command": "memoria.repairContactsLocation",
+                "title": "Repair Contacts Location",
+                "category": "Memoria"
+            },
+            {
                 "command": "memoria.openUserGuide",
                 "title": "Open User Guide",
                 "category": "Memoria"
@@ -180,6 +185,10 @@
                 {
                     "command": "memoria.movePerson",
                     "when": "memoria.contactsActive && memoria.contactsMultiGroup"
+                },
+                {
+                    "command": "memoria.repairContactsLocation",
+                    "when": "memoria.contactsActive"
                 },
                 {
                     "command": "memoria.openUserGuide"

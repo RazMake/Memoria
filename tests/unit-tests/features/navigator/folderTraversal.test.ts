@@ -213,4 +213,56 @@ describe("buildFileValueCompletions", () => {
         expect(labels).not.toContain("notes.md");
         expect(labels).toContain("tasks.md");
     });
+
+    it("should list relative to the matching root in workspace-absolute mode", async () => {
+        setWorkspaceFolders("/workspace/ProjectA", "/workspace/ProjectB");
+        _readDir.mockResolvedValue([
+            ["readme.md", 1],
+            ["src", 2],
+        ]);
+
+        const items = await buildFileValueCompletions(json, "00-ToDo/", "ProjectA/", makeRange());
+
+        const labels = items.map((i) => i.label);
+        expect(labels).toContain("readme.md");
+        expect(labels).toContain("src/");
+        // Only ProjectA should have been read (one matching root).
+        expect(_readDir).toHaveBeenCalledTimes(1);
+    });
+
+    it("should offer root names when the partial value is empty in workspace-absolute discovery", async () => {
+        setWorkspaceFolders("/workspace/ProjectA", "/workspace/ProjectB");
+        _readDir.mockResolvedValue([]);
+
+        // A partial value of "ProjectA" (no trailing slash) keeps prefix empty,
+        // so root-name suggestions are appended.
+        const items = await buildFileValueCompletions(json, "ProjectA/sub/", "ProjectA", makeRange());
+
+        const labels = items.map((i) => i.label);
+        expect(labels).toContain("ProjectA/");
+        expect(labels).toContain("ProjectB/");
+    });
+
+    it("should offer root names for folder-relative mode in multi-root workspaces", async () => {
+        setWorkspaceFolders("/workspace/ProjectA", "/workspace/ProjectB");
+        _readDir.mockResolvedValue([["tasks.md", 1]]);
+
+        const items = await buildFileValueCompletions(json, "00-ToDo/", "", makeRange());
+
+        const labels = items.map((i) => i.label);
+        expect(labels).toContain("ProjectA/");
+        expect(labels).toContain("ProjectB/");
+        expect(labels).toContain("tasks.md");
+    });
+
+    it("should drill into a subfolder prefix in folder-relative mode", async () => {
+        _readDir.mockResolvedValue([["deep.md", 1]]);
+
+        const items = await buildFileValueCompletions(json, "00-ToDo/", "sub/", makeRange());
+
+        const labels = items.map((i) => i.label);
+        expect(labels).toContain("deep.md");
+        // insertText should carry the full prefixed path.
+        expect(items[0].insertText).toBe("sub/deep.md");
+    });
 });

@@ -17,6 +17,7 @@ import type {
 export function mapSnapshot(snapshot: ContactsSnapshot): ContactsViewSnapshot {
     return {
         active: snapshot.active,
+        folderMissing: snapshot.folderMissing,
         multiGroup: snapshot.multiGroup,
         groups: snapshot.groups.map((group) => ({ ...group })),
         contacts: snapshot.contacts.map(mapContact),

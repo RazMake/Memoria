@@ -111,6 +111,34 @@ export function createMovePersonCommand(feature: ContactsFeature): (target?: Con
     };
 }
 
+export function createRepairContactsLocationCommand(feature: ContactsFeature): () => Promise<void> {
+    return async () => {
+        if (!ensureFeatureActive(feature)) {
+            return;
+        }
+
+        const selection = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: "Use as contacts folder",
+            title: "Memoria: Select the contacts people folder",
+        });
+        if (!selection || selection.length === 0) {
+            return;
+        }
+
+        try {
+            await feature.repairLocation(selection[0]);
+            vscode.window.showInformationMessage("Memoria: Contacts location updated.");
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                `Memoria: Could not repair contacts location — ${formatError(error)}`
+            );
+        }
+    };
+}
+
 function ensureFeatureActive(feature: ContactsFeature): boolean {
     if (feature.isActive()) {
         return true;

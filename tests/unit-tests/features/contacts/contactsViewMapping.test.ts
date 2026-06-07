@@ -43,6 +43,7 @@ function makeResolvedContact(overrides: Partial<ResolvedContact> = {}): Resolved
 function makeSnapshot(overrides: Partial<ContactsSnapshot> = {}): ContactsSnapshot {
     return {
         active: true,
+        folderMissing: false,
         multiGroup: false,
         groups: [{ file: "reports.md", name: "Reports", type: "report", isCustom: false, contactCount: 1 }],
         contacts: [makeResolvedContact()],
