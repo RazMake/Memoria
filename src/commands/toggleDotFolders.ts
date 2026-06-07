@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../telemetry";
 import { requireInitializedRoot } from "./commandHelpers";
+import { showInfo } from "../utils/uiMessages";
 
 /** Persists the exclusion state to workspace config, managed-entries manifest, and telemetry. */
 async function applyExclusions(
@@ -37,7 +38,7 @@ async function hideAllDotEntries(
 ): Promise<void> {
     const dotEntries = await scanDotEntries(workspaceRoot);
     if (dotEntries.length === 0) {
-        vscode.window.showInformationMessage("Memoria: No items starting with '.' found at the workspace root.");
+        showInfo("No items starting with '.' found at the workspace root.");
         return;
     }
 
@@ -50,8 +51,8 @@ async function hideAllDotEntries(
         action: "hide",
         count: dotEntries.length,
     });
-    vscode.window.showInformationMessage(
-        `Memoria: ${dotEntries.length} item(s) hidden.`
+    showInfo(
+        `${dotEntries.length} item(s) hidden.`
     );
 }
 

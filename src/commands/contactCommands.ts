@@ -6,6 +6,7 @@ import {
     type ResolvedContact,
 } from "../features/contacts/contactsFeature";
 import { formatError } from "../utils/error";
+import { showError, showInfo } from "../utils/uiMessages";
 
 export type ContactCommandTarget = string | { contactId: string };
 
@@ -66,8 +67,8 @@ export function createDeletePersonCommand(feature: ContactsFeature): (target?: C
         try {
             await feature.deleteContact(contact.id);
         } catch (error) {
-            vscode.window.showErrorMessage(
-                `Memoria: Could not delete person — ${formatError(error)}`
+            showError(
+                `Could not delete person — ${formatError(error)}`
             );
         }
     };
@@ -81,7 +82,7 @@ export function createMovePersonCommand(feature: ContactsFeature): (target?: Con
 
         const groups = feature.getGroupSummaries();
         if (groups.length < 2) {
-            vscode.window.showInformationMessage("Memoria: Moving a person requires at least two contact groups.");
+            showInfo("Moving a person requires at least two contact groups.");
             return;
         }
 
@@ -104,8 +105,8 @@ export function createMovePersonCommand(feature: ContactsFeature): (target?: Con
         try {
             await feature.moveContact(contact.id, targetGroup.groupFile);
         } catch (error) {
-            vscode.window.showErrorMessage(
-                `Memoria: Could not move person — ${formatError(error)}`
+            showError(
+                `Could not move person — ${formatError(error)}`
             );
         }
     };
@@ -130,10 +131,10 @@ export function createRepairContactsLocationCommand(feature: ContactsFeature): (
 
         try {
             await feature.repairLocation(selection[0]);
-            vscode.window.showInformationMessage("Memoria: Contacts location updated.");
+            showInfo("Contacts location updated.");
         } catch (error) {
-            vscode.window.showErrorMessage(
-                `Memoria: Could not repair contacts location — ${formatError(error)}`
+            showError(
+                `Could not repair contacts location — ${formatError(error)}`
             );
         }
     };
@@ -157,7 +158,7 @@ async function resolveContactSelection(
     if (targetContactId) {
         const contact = feature.getContactById(targetContactId);
         if (!contact) {
-            vscode.window.showErrorMessage(`Memoria: Contact "${targetContactId}" was not found.`);
+            showError(`Contact "${targetContactId}" was not found.`);
             return null;
         }
 
@@ -168,7 +169,7 @@ async function resolveContactSelection(
         .sort((left, right) => left.fullName.localeCompare(right.fullName, undefined, { sensitivity: "base" }));
 
     if (contacts.length === 0) {
-        vscode.window.showInformationMessage("Memoria: No contacts are available.");
+        showInfo("No contacts are available.");
         return null;
     }
 

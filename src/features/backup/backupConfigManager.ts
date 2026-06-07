@@ -1,7 +1,9 @@
 /** Reads and writes .memoria/backup-config.json. */
 
 import * as vscode from "vscode";
-import { textDecoder, textEncoder } from "../../utils/encoding";
+import { ensureDirectory } from "../../utils/filesystem";
+import { readJsonFile, writeJsonFile } from "../../utils/jsonFile";
+import { getMemoriaConfigUri, getMemoriaDirUri } from "../../utils/memoriaPaths";
 import type { BackupConfig, BackupProfile, BackupProfileState } from "./types";
 
 const BACKUP_CONFIG_FILE = "backup-config.json";
@@ -18,31 +20,19 @@ export class BackupConfigManager {
 
     /** Returns the URI of the backup config file for the given workspace root. */
     configUri(workspaceRoot: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(workspaceRoot, ".memoria", BACKUP_CONFIG_FILE);
+        return getMemoriaConfigUri(workspaceRoot, BACKUP_CONFIG_FILE);
     }
 
     /** Reads and parses the backup config. Returns null if the file does not exist or is corrupt. */
     async read(workspaceRoot: vscode.Uri): Promise<BackupConfig | null> {
-        try {
-            const bytes = await this.fs.readFile(this.configUri(workspaceRoot));
-            const text = textDecoder.decode(bytes);
-            const parsed = JSON.parse(text) as unknown;
-            return this.normalize(parsed);
-        } catch {
-            return null;
-        }
+        const parsed = await readJsonFile<unknown>(this.fs, this.configUri(workspaceRoot));
+        return parsed === null ? null : this.normalize(parsed);
     }
 
     /** Writes the given config back to disk. Creates .memoria/ if absent. */
     async write(workspaceRoot: vscode.Uri, config: BackupConfig): Promise<void> {
-        const memoriaDir = vscode.Uri.joinPath(workspaceRoot, ".memoria");
-        try {
-            await this.fs.createDirectory(memoriaDir);
-        } catch {
-            // Already exists — ignore
-        }
-        const bytes = textEncoder.encode(JSON.stringify(config, null, 2));
-        await this.fs.writeFile(this.configUri(workspaceRoot), bytes);
+        await ensureDirectory(this.fs, getMemoriaDirUri(workspaceRoot));
+        await writeJsonFile(this.fs, this.configUri(workspaceRoot), config);
     }
 
     /**

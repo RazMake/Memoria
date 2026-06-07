@@ -7,6 +7,7 @@ import type { ManifestManager } from "../blueprints/manifestManager";
 import type { TelemetryEmitter } from "../telemetry";
 import type { FeatureManager } from "../features/featureManager";
 import { requireInitializedRoot } from "./commandHelpers";
+import { showError } from "../utils/uiMessages";
 
 export function createManageFeaturesCommand(
     manifest: ManifestManager,
@@ -24,8 +25,8 @@ export function createManageFeaturesCommand(
         // features are already on or off rather than an unchecked list every time.
         const config = await manifest.readFeatures(workspaceRoot);
         if (!config) {
-            vscode.window.showErrorMessage(
-                "Memoria: No features configured. Re-initialize the workspace."
+            showError(
+                "No features configured. Re-initialize the workspace."
             );
             return;
         }

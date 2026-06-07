@@ -9,6 +9,7 @@ import type { ManifestManager } from "../blueprints/manifestManager";
 import type { WorkspaceInitConflictResolver } from "../blueprints/workspaceInitConflictResolver";
 import type { TelemetryEmitter } from "../telemetry";
 import { formatError } from "../utils/error";
+import { showError, showInfo } from "../utils/uiMessages";
 
 async function selectWorkspaceRoot(
     folders: readonly vscode.WorkspaceFolder[],
@@ -34,7 +35,7 @@ async function selectBlueprint(
 ): Promise<{ id: string; label: string } | undefined> {
     const blueprints = await registry.listBlueprints();
     if (blueprints.length === 0) {
-        vscode.window.showErrorMessage("Memoria: No bundled blueprints found.");
+        showError("No bundled blueprints found.");
         return undefined;
     }
 
@@ -85,7 +86,7 @@ export function createInitializeWorkspaceCommand(
     return async () => {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) {
-            vscode.window.showErrorMessage("Memoria: No workspace is open. Open a folder first.");
+            showError("No workspace is open. Open a folder first.");
             return;
         }
 
@@ -117,12 +118,12 @@ export function createInitializeWorkspaceCommand(
 
             await onWorkspaceInitialized(workspaceRoot);
             const verb = isInitialized ? "re-initialized" : "initialized";
-            vscode.window.showInformationMessage(
-                `Memoria: Workspace ${verb} with "${blueprint.label}".`
+            showInfo(
+                `Workspace ${verb} with "${blueprint.label}".`
             );
         } catch (err) {
-            vscode.window.showErrorMessage(
-                `Memoria: Initialization failed — ${formatError(err)}`
+            showError(
+                `Initialization failed — ${formatError(err)}`
             );
         }
     };

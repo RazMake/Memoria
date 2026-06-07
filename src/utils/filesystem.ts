@@ -35,3 +35,17 @@ export async function readDirectorySafe(
         return [];
     }
 }
+
+/**
+ * Creates a directory (and any missing parents) via the VS Code filesystem API.
+ * Silently succeeds when the directory already exists — `createDirectory` throws
+ * on some filesystems when the target is already present, so callers that don't
+ * track creation state can use this to stay idempotent.
+ */
+export async function ensureDirectory(fs: typeof vscode.workspace.fs, uri: vscode.Uri): Promise<void> {
+    try {
+        await fs.createDirectory(uri);
+    } catch {
+        // Already exists (or a benign race) — ignore.
+    }
+}

@@ -12,6 +12,7 @@ import type { BackupFeature } from "../features/backup/backupFeature";
 import type { BackupProfile, DayOfWeek, BackupSchedule } from "../features/backup/types";
 import { listProfileZips } from "../features/backup/zipCreator";
 import type { TelemetryEmitter } from "../telemetry";
+import { showError, showInfo } from "../utils/uiMessages";
 
 /** A workspace folder entry in the source tree selector. */
 type FolderPick = vscode.QuickPickItem & {
@@ -66,8 +67,8 @@ export function createCreateBackupProfileCommand(
     return async () => {
         const root = backupFeature.getWorkspaceRoot();
         if (!root) {
-            vscode.window.showErrorMessage(
-                "Memoria: No initialized workspace found. Initialize the workspace first.",
+            showError(
+                "No initialized workspace found. Initialize the workspace first.",
             );
             return;
         }
@@ -228,8 +229,8 @@ export function createRunBackupCommand(
         const profiles = backupFeature.getProfileNames();
 
         if (profiles.length === 0) {
-            vscode.window.showInformationMessage(
-                "Memoria: No backup profiles configured. Use 'Create Backup Profile' first.",
+            showInfo(
+                "No backup profiles configured. Use 'Create Backup Profile' first.",
             );
             return;
         }
@@ -268,7 +269,7 @@ export function createBackupHistoryCommand(
         const profiles = backupFeature.getProfileNames();
         const root = backupFeature.getWorkspaceRoot();
         if (!root || profiles.length === 0) {
-            vscode.window.showInformationMessage("Memoria: No backup profiles configured.");
+            showInfo("No backup profiles configured.");
             return;
         }
 

@@ -11,10 +11,8 @@ import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, Decorati
 import { BACKUP_FOLDER_NAME } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 import type { TelemetryEmitter } from "../telemetry";
-import { textDecoder, textEncoder } from "../utils/encoding";
-
-const decoder = textDecoder;
-const encoder = textEncoder;
+import { readJsonFile, writeJsonFile } from "../utils/jsonFile";
+import { getMemoriaConfigUri, getMemoriaDirUri } from "../utils/memoriaPaths";
 
 export class ManifestManager {
     // Injectable for testability — unit tests pass a mock fs, E2E uses vscode.workspace.fs.
@@ -183,11 +181,11 @@ export class ManifestManager {
     }
 
     private configUri(root: vscode.Uri, filename: string): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria", filename);
+        return getMemoriaConfigUri(root, filename);
     }
 
     private memoriaDir(root: vscode.Uri): vscode.Uri {
-        return vscode.Uri.joinPath(root, ".memoria");
+        return getMemoriaDirUri(root);
     }
 
     private async ensureMemoriaDir(root: vscode.Uri): Promise<void> {
@@ -205,27 +203,15 @@ export class ManifestManager {
     }
 
     private async readJson<T>(uri: vscode.Uri): Promise<T | null> {
-        let bytes: Uint8Array;
-        try {
-            bytes = await this.fs.readFile(uri);
-        } catch {
-            // File not found — expected when .memoria/ configs don't exist yet.
-            return null;
-        }
-
-        try {
-            return JSON.parse(decoder.decode(bytes)) as T;
-        } catch {
+        return readJsonFile<T>(this.fs, uri, (failed) => {
             // JSON parse error — unexpected; the file exists but has invalid content.
             this.telemetry?.logError("manifest.parseFailed", {
-                file: uri.path.split("/").pop() ?? "unknown",
+                file: failed.path.split("/").pop() ?? "unknown",
             });
-            return null;
-        }
+        });
     }
 
     private async writeJson(uri: vscode.Uri, value: unknown): Promise<void> {
-        const bytes = encoder.encode(JSON.stringify(value, null, 2));
-        await this.fs.writeFile(uri, bytes);
+        await writeJsonFile(this.fs, uri, value);
     }
 }

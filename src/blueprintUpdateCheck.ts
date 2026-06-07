@@ -4,6 +4,7 @@ import { ManifestManager } from "./blueprints/manifestManager";
 import { BlueprintEngine } from "./blueprints/blueprintEngine";
 import { WorkspaceInitConflictResolver } from "./blueprints/workspaceInitConflictResolver";
 import { formatError } from "./utils/error";
+import { showError, showInfo } from "./utils/uiMessages";
 
 /**
  * Sets the VS Code context key `memoria.workspaceInitialized`.
@@ -61,8 +62,8 @@ export async function checkForBlueprintUpdates(
         return;
     }
 
-    const answer = await vscode.window.showInformationMessage(
-        `Memoria: A newer version of blueprint "${bundledDefinition.name}" is available (${bundledDefinition.version}). Re-initialize to apply updates?`,
+    const answer = await showInfo(
+        `A newer version of blueprint "${bundledDefinition.name}" is available (${bundledDefinition.version}). Re-initialize to apply updates?`,
         "Re-initialize",
         "Later"
     );
@@ -74,12 +75,12 @@ export async function checkForBlueprintUpdates(
     try {
         await engine.reinitialize(initializedRoot, storedManifest.blueprintId, resolver);
         await onWorkspaceReinitialized(initializedRoot);
-        vscode.window.showInformationMessage(
-            `Memoria: Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
+        showInfo(
+            `Workspace re-initialized with "${bundledDefinition.name}" ${bundledDefinition.version}.`
         );
     } catch (err) {
-        vscode.window.showErrorMessage(
-            `Memoria: Re-initialization failed — ${formatError(err)}`
+        showError(
+            `Re-initialization failed — ${formatError(err)}`
         );
     }
 }

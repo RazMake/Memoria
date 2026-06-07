@@ -18,9 +18,10 @@ import * as vscode from "vscode";
 import { walkWorkspaceTree } from "./blueprintBuilders";
 import { computeFileHash } from "./hashUtils";
 import { stripTrailingSlash } from "../utils/path";
-import { getNonce, getConflictDiffHtml } from "./conflictDiffHtml";
+import { getConflictDiffHtml } from "./conflictDiffHtml";
 import { textDecoder, textEncoder } from "../utils/encoding";
 import { waitForWebviewReady } from "../utils/webview";
+import { prepareWebview } from "../utils/webviewSetup";
 import type {
     BlueprintDefinition,
     BlueprintManifest,
@@ -186,10 +187,11 @@ export class WorkspaceInitConflictResolver {
             },
         );
 
-        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
-        const nonce = getNonce();
-        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "conflict-diff.js"));
-        const cssUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "conflict-diff.css"));
+        const { nonce, uris: [scriptUri, cssUri] } = prepareWebview(
+            panel.webview,
+            this.extensionUri,
+            ["conflict-diff.js", "conflict-diff.css"],
+        );
         panel.webview.html = getConflictDiffHtml(panel.webview, nonce, scriptUri, cssUri);
 
         // Wait for webview ready, then send init data.

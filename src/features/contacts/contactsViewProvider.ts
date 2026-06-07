@@ -16,7 +16,8 @@ import type {
 import { formatError } from "../../utils/error";
 import { mapSnapshot, mapFormRequest, buildWritableContact, isToExtensionMessage } from "./contactsViewMapping";
 import { disposeAll } from "./contactUtils";
-import { getHtmlForWebview, getNonce } from "./contactsViewHtml";
+import { getHtmlForWebview } from "./contactsViewHtml";
+import { prepareWebview } from "../../utils/webviewSetup";
 
 const CONTACTS_WEBVIEW_BUNDLE = "contacts-webview.js";
 
@@ -78,14 +79,7 @@ export class ContactsViewProvider implements vscode.WebviewViewProvider, vscode.
         this.view = view;
         this.ready = false;
 
-        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
-        view.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [distUri],
-        };
-
-        const nonce = getNonce();
-        const scriptUri = view.webview.asWebviewUri(vscode.Uri.joinPath(distUri, CONTACTS_WEBVIEW_BUNDLE));
+        const { nonce, uris: [scriptUri] } = prepareWebview(view.webview, this.extensionUri, [CONTACTS_WEBVIEW_BUNDLE]);
         view.webview.html = getHtmlForWebview(view.webview, nonce, scriptUri);
 
         this.viewSubscriptions = [

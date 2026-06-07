@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { TelemetryEmitter } from "./telemetry";
+import { textDecoder, textEncoder } from "./utils/encoding";
 import { updateMarkdownLinks, updateMarkdownLinkPrefixes, computeRelativePosixPath } from "./utils/linkReferenceUpdater";
 import { normalizePath } from "./utils/path";
 
@@ -27,12 +28,18 @@ async function handleRenameFiles(
     let totalFileCount = 0;
     let totalLinkCount = 0;
 
+    // The candidate markdown set is identical for every entry in the event, so scan the
+    // workspace once (lazily, on the first entry that resolves) rather than repeating the
+    // full-workspace glob per renamed file/folder — a multi-file rename would otherwise
+    // multiply this I/O by the number of renamed paths.
+    let mdFiles: vscode.Uri[] | null = null;
+
     for (const { oldUri, newUri } of event.files) {
         try {
             const stat = await vscode.workspace.fs.stat(newUri);
             const isDirectory = (stat.type & vscode.FileType.Directory) !== 0;
 
-            const mdFiles = await vscode.workspace.findFiles("**/*.md", EXCLUDE_PATTERN);
+            mdFiles ??= await vscode.workspace.findFiles("**/*.md", EXCLUDE_PATTERN);
             const { fileCount, linkCount } = isDirectory
                 ? await handleFolderRename(mdFiles, oldUri, newUri)
                 : await handleFileRename(mdFiles, oldUri, newUri);
@@ -71,11 +78,11 @@ async function handleFileRename(
             const newRelPath = computeRelativePosixPath(mdDir, normalizePath(newUri.path));
 
             const bytes = await vscode.workspace.fs.readFile(mdFile);
-            const content = new TextDecoder().decode(bytes);
+            const content = textDecoder.decode(bytes);
             const updated = updateMarkdownLinks(content, oldRelPath, newRelPath);
 
             if (updated !== null) {
-                await vscode.workspace.fs.writeFile(mdFile, new TextEncoder().encode(updated));
+                await vscode.workspace.fs.writeFile(mdFile, textEncoder.encode(updated));
                 fileCount++;
                 linkCount += countOccurrences(updated, newRelPath) - countOccurrences(content, newRelPath);
             }
@@ -102,11 +109,11 @@ async function handleFolderRename(
             const newDirRel = computeRelativePosixPath(mdDir, normalizePath(newUri.path));
 
             const bytes = await vscode.workspace.fs.readFile(mdFile);
-            const content = new TextDecoder().decode(bytes);
+            const content = textDecoder.decode(bytes);
             const updated = updateMarkdownLinkPrefixes(content, oldDirRel, newDirRel);
 
             if (updated !== null) {
-                await vscode.workspace.fs.writeFile(mdFile, new TextEncoder().encode(updated));
+                await vscode.workspace.fs.writeFile(mdFile, textEncoder.encode(updated));
                 fileCount++;
                 linkCount += countOccurrences(updated, newDirRel + "/") - countOccurrences(content, newDirRel + "/");
             }

@@ -16,6 +16,7 @@ import { nextOccurrence, mostRecentOccurrence } from "./backupScheduler";
 import { executeBackup, type SuccessBackupStatus } from "./backupExecutor";
 import type { TelemetryEmitter } from "../../telemetry";
 import { formatSize } from "./backupUtils";
+import { showError } from "../../utils/uiMessages";
 
 /** Lockfile name written to targetFolder to prevent duplicate backups from multiple windows. */
 const LOCKFILE_NAME = ".memoria-backup.lock";
@@ -92,21 +93,21 @@ export class BackupFeature implements vscode.Disposable {
     async runProfile(profileName: string): Promise<void> {
         const root = this.workspaceRoot;
         if (!root) {
-            vscode.window.showErrorMessage("Memoria: No initialized workspace found.");
+            showError("No initialized workspace found.");
             return;
         }
 
         const config = await this.configManager.read(root);
         if (!config) {
-            vscode.window.showErrorMessage(
-                "Memoria: Backup config not found. Use 'Create Backup Profile' first.",
+            showError(
+                "Backup config not found. Use 'Create Backup Profile' first.",
             );
             return;
         }
 
         const profile = config.profiles[profileName];
         if (!profile) {
-            vscode.window.showErrorMessage(`Memoria: Profile '${profileName}' not found.`);
+            showError(`Profile '${profileName}' not found.`);
             return;
         }
 

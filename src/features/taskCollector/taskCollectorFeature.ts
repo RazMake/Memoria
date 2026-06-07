@@ -5,6 +5,7 @@ import type { TelemetryEmitter } from "../../telemetry";
 import { normalizePath } from "../../utils/path";
 import { isMarkdownPath } from "../../utils/markdown";
 import { formatError } from "../../utils/error";
+import { showError } from "../../utils/uiMessages";
 import { PendingWrites } from "./pendingWrites";
 import { applySourceRenames, type SourceRename } from "./renameHandler";
 import { SyncQueue } from "./syncQueue";
@@ -63,7 +64,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
 
     async syncNow(): Promise<boolean> {
         if (!this.queue) {
-            vscode.window.showErrorMessage("Memoria: Task Collector is not enabled for this workspace.");
+            showError("Task Collector is not enabled for this workspace.");
             return false;
         }
 
@@ -344,7 +345,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
         const message = formatError(error);
         this.telemetry.logError(eventName, { message });
         if (toast) {
-            vscode.window.showErrorMessage(`Memoria: Task sync failed — ${message}`);
+            showError(`Task sync failed — ${message}`);
         }
     }
 }

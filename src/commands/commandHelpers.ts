@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { ManifestManager } from "../blueprints/manifestManager";
+import { showError } from "../utils/uiMessages";
 
 /**
  * Resolves the initialized workspace root, showing standardized error messages
@@ -13,10 +14,10 @@ export async function requireInitializedRoot(
     const root = await findInitializedRootSilently(manifest);
     if (!root) {
         const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
-        vscode.window.showErrorMessage(
+        showError(
             hasWorkspace
-                ? "Memoria: Workspace is not initialized. Run 'Memoria: Initialize workspace' first."
-                : "Memoria: No workspace is open.",
+                ? "Workspace is not initialized. Run 'Memoria: Initialize workspace' first."
+                : "No workspace is open.",
         );
     }
     return root;

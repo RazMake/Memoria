@@ -10,8 +10,15 @@ import { forward } from "../taskCollector/pathRewriter";
 import type { ContactExpansionMap } from "../snippets/snippetHoverProvider";
 import type { SnippetProvider } from "../snippets/snippetCompletionProvider";
 import { buildContactTooltipMarkdown } from "../contacts/contactTooltip";
-import { getHtmlForWebview, getNonce } from "./todoEditorHtml";
+import { getHtmlForWebview } from "./todoEditorHtml";
 import { handleTodoEditorMessage, type TodoEditorMessageContext } from "./todoEditorMessageHandler";
+import { prepareWebview } from "../../utils/webviewSetup";
+
+/**
+ * Upper bound on cached rendered task bodies. Keeps memory flat over long-lived sessions
+ * that churn through many distinct task texts; the oldest entry is evicted past this size.
+ */
+const MD_CACHE_MAX_ENTRIES = 2000;
 
 // A CustomTextEditor is used instead of a plain WebviewPanel so that VS Code's
 // built-in file save/dirty tracking, undo/redo stack, and tab management work
@@ -87,6 +94,11 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
         let bodyHtml = this.mdCache.get(cleanBody);
         if (!bodyHtml) {
             bodyHtml = this.md.render(cleanBody);
+            if (this.mdCache.size >= MD_CACHE_MAX_ENTRIES) {
+                // Evict the oldest entry (Map preserves insertion order) to keep the cache bounded.
+                const oldest = this.mdCache.keys().next().value;
+                if (oldest !== undefined) this.mdCache.delete(oldest);
+            }
             this.mdCache.set(cleanBody, bodyHtml);
         }
 
@@ -230,15 +242,11 @@ export class TodoEditorProvider implements vscode.CustomTextEditorProvider {
 
     /** Configures the webview panel with scripts and sets initial HTML. */
     private configureWebviewPanel(webviewPanel: vscode.WebviewPanel): void {
-        const distUri = vscode.Uri.joinPath(this.extensionUri, "dist");
-        webviewPanel.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [distUri],
-        };
-
-        const nonce = getNonce();
-        const webviewJs = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.js"));
-        const webviewCss = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(distUri, "webview.css"));
+        const { nonce, uris: [webviewJs, webviewCss] } = prepareWebview(
+            webviewPanel.webview,
+            this.extensionUri,
+            ["webview.js", "webview.css"],
+        );
         webviewPanel.webview.html = getHtmlForWebview(webviewPanel.webview, nonce, webviewJs, webviewCss);
     }
 

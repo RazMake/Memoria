@@ -3,6 +3,7 @@ import type { BlueprintRegistry } from "../blueprints/blueprintRegistry";
 import type { ManifestManager } from "../blueprints/manifestManager";
 import { findInitializedRootSilently } from "./commandHelpers";
 import type { SnippetsFeature } from "../features/snippets/snippetsFeature";
+import { showInfo, showWarning } from "../utils/uiMessages";
 
 export function createExpandSnippetCommand(
     snippetsFeature: SnippetsFeature,
@@ -51,7 +52,7 @@ export function createResetSnippetCommand(
 ): (uri: vscode.Uri) => Promise<void> {
     return async (uri: vscode.Uri) => {
         if (!uri) {
-            vscode.window.showInformationMessage("Memoria: No file selected.");
+            showInfo("No file selected.");
             return;
         }
 
@@ -78,9 +79,9 @@ export function createResetSnippetCommand(
                 throw new Error("original not found");
             }
             await vscode.workspace.fs.writeFile(uri, originalBytes);
-            vscode.window.showInformationMessage(`Memoria: Snippet reset to default.`);
+            showInfo(`Snippet reset to default.`);
         } catch {
-            vscode.window.showWarningMessage("Memoria: Could not reset snippet — original not found.");
+            showWarning("Could not reset snippet — original not found.");
         }
     };
 }

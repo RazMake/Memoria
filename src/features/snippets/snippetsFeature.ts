@@ -7,6 +7,7 @@ import type { ContactExpansionMap } from "./snippetHoverProvider";
 import { compileSnippetFile } from "./snippetCompiler";
 import { generateContactSnippets } from "./contactSnippets";
 import { DebouncedFileWatcher } from "../../utils/debouncedFileWatcher";
+import { showWarning } from "../../utils/uiMessages";
 
 /** Minimal interface for the contact data needed by SnippetsFeature (DIP). */
 export interface ContactDataSource {
@@ -170,8 +171,8 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
                 return definition.expand(ctx);
             } catch (err) {
                 const message = (err as Error).message ?? "Unknown error";
-                vscode.window.showWarningMessage(
-                    `Memoria: Snippet '${definition.trigger}' failed: ${message}`,
+                showWarning(
+                    `Snippet '${definition.trigger}' failed: ${message}`,
                 );
                 return `⚠️ Snippet error (${definition.trigger}): ${message}`;
             }
@@ -247,8 +248,8 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
             } catch (err) {
                 const message = (err as Error).message ?? "Unknown error";
                 if (!silent) {
-                    vscode.window.showWarningMessage(
-                        `Memoria: Failed to load snippet file '${fileName}': ${message}`,
+                    showWarning(
+                        `Failed to load snippet file '${fileName}': ${message}`,
                     );
                 }
                 results.push({ fileName, snippets: [], error: message });
