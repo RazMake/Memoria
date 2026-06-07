@@ -14,8 +14,6 @@ workspace:
       children:
         - name: "initialize-career-data-types.prompt.md"
         - name: "initialize-contacts.prompt.md"
-        - name: "install-workiq-mcp.prompt.md"
-          seedSource: "ai-instruction-files/prompts/install-workiq-mcp.prompt.md"
   - name: "00-Workstreams/"
     children:
       - name: "Dev-Designs/"

@@ -9,7 +9,6 @@ This template is meant to help developers and PMs (_individual contributors_) or
    📁 agents/
       📄 WorkIQ.agent.md  ← WorkIQ AI agent
    📁 prompts/
-      📄 install-workiq-mcp.prompt.md
       📄 initialize-contacts.prompt.md
       📄 initialize-career-data-types.prompt.md
 📁 00-Workstreams/        ← All active workstreams

@@ -2,7 +2,7 @@
 
 Both blueprints deploy a set of AI instruction files into your workspace under `.github/`. These include a custom **agent** and several **prompt files** that work together to help you initialize and maintain your notebook using the [WorkIQ MCP server](https://github.com/microsoft/workiq).
 
-> **Note:** The prompts require the **WorkIQ MCP server** to be installed and running. Use the [Install WorkIQ MCP Server](#prompt-install-workiq-mcp-server) prompt to set it up.
+> **Note:** The prompts require the **WorkIQ MCP server** to be installed and running.
 
 ---
 
@@ -17,16 +17,6 @@ A custom AI agent specialized in querying the WorkIQ MCP server. It can answer o
 - What are the career levels for a given discipline?
 
 To use it, open the GitHub Copilot Chat panel and select **WorkIQ** from the agent picker (the `@` menu).
-
----
-
-## Prompt: Install WorkIQ MCP Server
-
-**File:** `.github/prompts/install-workiq-mcp.prompt.md`
-
-Sets up the WorkIQ MCP server at workspace level by creating or updating `.vscode/mcp.json`. Run this prompt once when setting up a new workspace, or when the WorkIQ server is missing.
-
-To run it, open the GitHub Copilot Chat panel and use `/install-workiq-mcp` (or find it in the prompt picker).
 
 ---
 

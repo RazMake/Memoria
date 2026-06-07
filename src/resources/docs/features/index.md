@@ -30,7 +30,6 @@ Both blueprints deploy a set of AI instruction files (an agent and several promp
 | File | Type | Description |
 |------|------|-------------|
 | [WorkIQ agent](ai-instructions.md#agent-workiq) | Agent | Custom AI agent for querying organization data via WorkIQ |
-| [Install WorkIQ MCP Server](ai-instructions.md#prompt-install-workiq-mcp-server) | Prompt | Sets up the WorkIQ MCP server at workspace level |
 | [Initialize Contacts](ai-instructions.md#prompt-initialize-contacts) | Prompt | Populates contact files with real org members |
 | [Initialize Career Data Types](ai-instructions.md#prompt-initialize-career-data-types) | Prompt | Syncs career levels and paths from org data |
 
