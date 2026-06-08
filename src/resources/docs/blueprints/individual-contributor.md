@@ -8,22 +8,24 @@ This template is meant to help developers and PMs (_individual contributors_) or
 📁 .github/               ← AI instruction files (agent + prompts)
    📁 agents/
       📄 WorkIQ.agent.md  ← WorkIQ AI agent
+   📁 instructions/
    📁 prompts/
-      📄 initialize-contacts.prompt.md
-      📄 initialize-career-data-types.prompt.md
+      📄 contacts-update.prompt.md
+   📁 skills/
 📁 00-Workstreams/        ← All active workstreams
-   📁 Dev-Designs/        ← Dev design documents
+   📁 My-Evaluation/      ← Self-evaluation tracking
    📄 All.todo.md         ← The collection of things to do
-📁 01-ToRemember/         ← The personal wiki/knowledge base
+📁 01-MeetingNotes/       ← All meeting notes to be preserved
+   📁 1-1/                ← 1:1 meeting notes
+📁 02-Inbox/              ← Default location for new notes
+📁 03-ToRemember/         ← The personal wiki/knowledge base
    📁 Trainings/          ← Notes captured from trainings
-📁 02-MeetingNotes/       ← All meeting notes to be preserved
-📁 03-Inbox/              ← Default location for new notes
 📁 04-Archive/            ← Old, unused files are preserved here
-📁 05-Autocomplete/       ← Contacts, snippets, and autocomplete data
+📁 10-Autocomplete/       ← Contacts, snippets, and autocomplete data
    📁 Contacts/           ← Contact records and reference data
       📄 Peers.md         ← Peers managed by the Contacts sidebar
       📄 Colleagues.md    ← Colleagues managed by the Contacts sidebar
-      📁 InterviewTemplates/ ← Interview problems and notes
+      📄 Management.md    ← Management chain
       📁 DataTypes/       ← Reference data used by contacts
          📄 CareerLevels.md
          📄 CareerPaths.md
@@ -32,6 +34,13 @@ This template is meant to help developers and PMs (_individual contributors_) or
    📁 Snippets/           ← TypeScript snippet files for text expansion
       📄 date-time.ts     ← Date, time, and now snippets
       📄 heading-children.ts ← Copy sub-heading content
+📁 11-Templates/          ← Templates for interviews and notes
+   📁 Interview/
+   📁 Notes/
+📁 12-Settings/           ← Settings and configuration
+   📁 Setup/
+📁 13-Scripts/            ← Automation scripts
+   📁 Utils/
 ```
 
 ## Features

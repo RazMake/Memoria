@@ -31,11 +31,14 @@ suite("TodoEditor (E2E)", () => {
     let collectorUri: vscode.Uri;
     const managedFolders = [
         "00-Workstreams",
-        "01-ToRemember",
-        "02-MeetingNotes",
-        "03-Inbox",
+        "01-MeetingNotes",
+        "02-Inbox",
+        "03-ToRemember",
         "04-Archive",
-        "05-Autocomplete",
+        "10-Autocomplete",
+        "11-Templates",
+        "12-Settings",
+        "13-Scripts",
         "WorkspaceInitializationBackups",
     ];
 
@@ -128,7 +131,7 @@ suite("TodoEditor (E2E)", () => {
         await waitForTaskCollectorReady();
 
         // Use a plain .md file (not .todo.md) to avoid custom editor intercepting edits
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "edit-test.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "edit-test.md");
         await writeTextFile(sourceUri, "# Notes\n\n- [ ] Existing task\n");
 
         const doc = await vscode.workspace.openTextDocument(sourceUri);
@@ -163,7 +166,7 @@ suite("TodoEditor (E2E)", () => {
         await waitForTaskCollectorReady();
 
         // Write a source file with a task
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "project-notes.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "project-notes.md");
         await writeTextFile(sourceUri, "# Notes\n\n- [ ] Implement feature X\n");
 
         // Run sync
@@ -193,7 +196,7 @@ suite("TodoEditor (E2E)", () => {
         await waitForTaskCollectorReady();
 
         // Write a plain markdown file with a task, then delete it to simulate missing source
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "will-delete.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "will-delete.md");
         await writeTextFile(sourceUri, "- [ ] Task from file that will be deleted\n");
 
         // Sync so the task gets indexed
@@ -224,7 +227,7 @@ suite("TodoEditor (E2E)", () => {
         await waitForTaskCollectorReady();
 
         // Create a target file and a .md file that references it
-        const inboxDir = vscode.Uri.joinPath(workspaceRoot, "03-Inbox");
+        const inboxDir = vscode.Uri.joinPath(workspaceRoot, "02-Inbox");
         const detailsUri = vscode.Uri.joinPath(inboxDir, "details.md");
         const notesUri = vscode.Uri.joinPath(inboxDir, "notes.md");
 

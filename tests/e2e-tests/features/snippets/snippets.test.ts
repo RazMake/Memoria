@@ -29,11 +29,14 @@ suite("Snippets feature (E2E)", () => {
     let snippetsFolder: vscode.Uri;
     const managedFolders = [
         "00-Workstreams",
-        "01-ToRemember",
-        "02-MeetingNotes",
-        "03-Inbox",
+        "01-MeetingNotes",
+        "02-Inbox",
+        "03-ToRemember",
         "04-Archive",
-        "05-Autocomplete",
+        "10-Autocomplete",
+        "11-Templates",
+        "12-Settings",
+        "13-Scripts",
         "WorkspaceInitializationBackups",
     ];
 
@@ -42,7 +45,7 @@ suite("Snippets feature (E2E)", () => {
         memoriaDir = vscode.Uri.joinPath(workspaceRoot, ".memoria");
         featuresUri = vscode.Uri.joinPath(memoriaDir, "features.json");
         blueprintUri = vscode.Uri.joinPath(memoriaDir, "blueprint.json");
-        snippetsFolder = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "Snippets");
+        snippetsFolder = vscode.Uri.joinPath(workspaceRoot, "10-Autocomplete", "Snippets");
     });
 
     teardown(async () => {
@@ -102,7 +105,7 @@ suite("Snippets feature (E2E)", () => {
             assert.ok(manifest?.snippets, "The blueprint manifest should contain a snippets config.");
             assert.strictEqual(
                 manifest?.snippets?.snippetsFolder,
-                "05-Autocomplete/Snippets/",
+                "10-Autocomplete/Snippets/",
                 "The snippets folder path should match the IC blueprint definition.",
             );
         });

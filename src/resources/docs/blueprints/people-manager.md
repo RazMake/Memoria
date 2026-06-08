@@ -8,34 +8,48 @@ This template is meant to help managers organize their meeting notes and create 
 📁 .github/               ← AI instruction files (agent + prompts)
    📁 agents/
       📄 WorkIQ.agent.md  ← WorkIQ AI agent
+   📁 instructions/
    📁 prompts/
-      📄 initialize-contacts.prompt.md
-      📄 initialize-career-data-types.prompt.md
+      📄 contacts-update.prompt.md
+   📁 skills/
 📁 00-Workstreams/        ← All active workstreams
-   📁 Planning/           ← Planning notes, grouped by quarter
-   📁 Team-Evaluations/   ← Individual team members' evaluations
+   📁 My-Evaluation/      ← Self-evaluation tracking
    📄 All.todo.md         ← The collection of things to do
-📁 01-ToRemember/         ← The personal wiki/knowledge base
+📁 01-Planning/           ← Planning notes, grouped by quarter
+📁 02-Team-Evaluations/   ← Individual team members' evaluations
+📁 03-MeetingNotes/       ← All meeting notes to be preserved
+📁 04-Inbox/              ← Default location for new notes
+📁 05-ToRemember/         ← The personal wiki/knowledge base
    📁 Trainings/          ← Notes captured from trainings
    📁 Hiring/             ← The process for hiring
    📁 Evaluation/         ← Notes about evaluating people
-📁 02-MeetingNotes/       ← All meeting notes to be preserved
-📁 03-Inbox/              ← Default location for new notes
-📁 05-Archive/            ← Old, unused files are preserved here
-📁 06-Autocomplete/       ← Contacts, snippets, and autocomplete data
+      📁 Expectations/    ← Career level expectations
+📁 06-Archive/            ← Old, unused files are preserved here
+📁 10-Autocomplete/       ← Contacts, snippets, and autocomplete data
    📁 Contacts/           ← Contact records and reference data
       📄 Team.md          ← Direct reports managed by the Contacts sidebar
       📄 Peers.md         ← Peers managed by the Contacts sidebar
       📄 Colleagues.md    ← Colleagues managed by the Contacts sidebar
-      📁 InterviewTemplates/ ← Interview problems and notes
+      📄 Management.md    ← Management chain
       📁 DataTypes/       ← Reference data used by contacts
          📄 CareerLevels.md
          📄 CareerPaths.md
+         📄 ImpactLevels.md
          📄 InterviewTypes.md
          📄 Pronouns.md
    📁 Snippets/           ← TypeScript snippet files for text expansion
       📄 date-time.ts     ← Date, time, and now snippets
       📄 heading-children.ts ← Copy sub-heading content
+📁 11-Templates/          ← Templates for interviews, notes, and people-related
+   📁 Interview/
+   📁 Notes/
+   📁 People-Related/
+📁 12-Settings/           ← Settings and configuration
+   📁 Setup/
+📁 13-Scripts/            ← Automation scripts
+   📁 Communication/
+   📁 People-Management/
+   📁 Utils/
 ```
 
 ## Features

@@ -23,11 +23,14 @@ suite("Navigator / Default Files (E2E)", () => {
     let collectorUri: vscode.Uri;
     const managedFolders = [
         "00-Workstreams",
-        "01-ToRemember",
-        "02-MeetingNotes",
-        "03-Inbox",
+        "01-MeetingNotes",
+        "02-Inbox",
+        "03-ToRemember",
         "04-Archive",
-        "05-Autocomplete",
+        "10-Autocomplete",
+        "11-Templates",
+        "12-Settings",
+        "13-Scripts",
         "WorkspaceInitializationBackups",
     ];
 

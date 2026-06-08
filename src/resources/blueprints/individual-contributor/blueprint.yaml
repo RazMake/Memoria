@@ -1,7 +1,7 @@
 id: "individual-contributor"
 name: "Individual Contributor Notebook"
 description: "A personal knowledge base for developers and PMs."
-version: "1.1.0"
+version: "1.2.0"
 
 workspace:
   - name: ".github/"
@@ -10,25 +10,26 @@ workspace:
       children:
         - name: "WorkIQ.agent.md"
           seedSource: "ai-instruction-files/agents/WorkIQ.agent.md"
+    - name: "instructions/"
     - name: "prompts/"
       children:
-        - name: "initialize-career-data-types.prompt.md"
-        - name: "initialize-contacts.prompt.md"
+        - name: "contacts-update.prompt.md"
+    - name: "skills/"
   - name: "00-Workstreams/"
     children:
-      - name: "Dev-Designs/"
+      - name: "My-Evaluation/"
       - name: "All.todo.md"
         default: "relative"
         seedSource: "workstreams/All.todo.md"
-  - name: "01-ToRemember/"
+  - name: "01-MeetingNotes/"
+    children:
+      - name: "1-1/"
+  - name: "02-Inbox/"
+  - name: "03-ToRemember/"
     children:
       - name: "Trainings/"
-  - name: "02-MeetingNotes/"
-    children:
-      - name: "1-1"
-  - name: "03-Inbox/"
   - name: "04-Archive/"
-  - name: "05-Autocomplete/"
+  - name: "10-Autocomplete/"
     children:
       - name: "Contacts/"
         children:
@@ -36,7 +37,7 @@ workspace:
             seedSource: "contacts/Peers.md"
           - name: "Colleagues.md"
             seedSource: "contacts/Colleagues.md"
-          - name: "InterviewTemplates/"
+          - name: "Management.md"
           - name: "DataTypes/"
             children:
               - name: "CareerLevels.md"
@@ -53,6 +54,16 @@ workspace:
             seedSource: "snippets/date-time.ts"
           - name: "heading-children.ts"
             seedSource: "snippets/heading-children.ts"
+  - name: "11-Templates/"
+    children:
+      - name: "Interview/"
+      - name: "Notes/"
+  - name: "12-Settings/"
+    children:
+      - name: "Setup/"
+  - name: "13-Scripts/"
+    children:
+      - name: "Utils/"
 
 features:
   - id: "taskCollector"
@@ -64,17 +75,19 @@ features:
     name: "Contacts"
     description: "Browse, search, and manage colleagues."
     enabledByDefault: true
-    peopleFolder: "05-Autocomplete/Contacts/"
+    peopleFolder: "10-Autocomplete/Contacts/"
     groups:
       - file: "Peers.md"
         type: "colleague"
       - file: "Colleagues.md"
         type: "colleague"
+      - file: "Management.md"
+        type: "colleague"
   - id: "snippets"
     name: "Snippets"
     description: "Text expansion for Markdown files via autocomplete."
     enabledByDefault: true
-    snippetsFolder: "05-Autocomplete/Snippets"
+    snippetsFolder: "10-Autocomplete/Snippets"
   - id: "backup"
     name: "Scheduled Backup"
     description: "Schedule and run zipped backups of workspace files to a target folder."
@@ -86,59 +99,58 @@ features:
     rules:
       - filter: ".*/"
         color: "terminal.ansiBrightBlack"
-      - filter: "05-Autocomplete/Snippets/"
-        color: "terminal.ansiCyan"
-        badge: "✂️"
-        tooltip: "User-defined text expansion snippets."
-        propagate: true
-      - filter: "Dev-Designs/"
-        color: "charts.purple"
-        badge: "🪛"
-        tooltip: "Dev design documents, grouped by quarter."
-        propagate: true
       - filter: "00-Workstreams/"
         color: "terminal.ansiMagenta"
         badge: "📋"
         tooltip: "Information about current workstreams, todos, etc."
         propagate: true
-      - filter: "01-ToRemember/"
-        color: "terminal.ansiBrightYellow"
-        badge: "🧠"
-        tooltip: "Personal knowledge base."
-        propagate: true
-      - filter: "02-MeetingNotes/"
+      - filter: "01-MeetingNotes/"
         color: "charts.green"
         tooltip: "Meeting notes to be preserved for later references."
         propagate: true
-      - filter: "03-Inbox/"
+      - filter: "02-Inbox/"
         color: "charts.red"
         badge: "📭"
         tooltip: "New, unprocessed notes."
         propagate: true
+      - filter: "03-ToRemember/"
+        color: "terminal.ansiBrightYellow"
+        badge: "🧠"
+        tooltip: "Personal knowledge base."
+        propagate: true
       - filter: "04-Archive/"
         color: "terminal.ansiBrightBlack"
-        badge: "⌛"
-        tooltip: "Notes/information that is considered obsolete, but the user decided to keep it around for a bit longer."
+        tooltip: "Notes from previous years."
         propagate: true
-      - filter: "05-Autocomplete/Contacts/DataTypes/"
+      - filter: "10-Autocomplete/Contacts/DataTypes/"
         color: "terminal.ansiBlue"
         badge: "🔨"
         tooltip: "Data types used in contact definitions."
         propagate: true
-      - filter: "05-Autocomplete/Contacts/InterviewTemplates/"
-        color: "terminal.ansiRed"
-        badge: "📋"
-        tooltip: "Problems that can be used in an interview."
+      - filter: "10-Autocomplete/Snippets/"
+        color: "terminal.ansiCyan"
+        badge: "✂️"
+        tooltip: "User-defined text expansion snippets."
         propagate: true
-      - filter: "05-Autocomplete/Contacts/"
-        color: "terminal.ansiGreen"
-        badge: "👤"
-        tooltip: "Known contacts information, available in this workspace."
-        propagate: true
-      - filter: "05-Autocomplete/"
+      - filter: "10-Autocomplete/"
         color: "terminal.ansiBrightBlack"
         badge: "🤖"
         tooltip: "Autocomplete features: contacts, snippets, and more."
+        propagate: true
+      - filter: "11-Templates/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Autocomplete features: contacts, snippets, and more."
+        propagate: true
+      - filter: "12-Settings/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Various settings files."
+        propagate: true
+      - filter: "13-Scripts/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Script files used in the workspace, even by skills."
         propagate: true
       - filter: "WorkspaceInitializationBackups/"
         color: "terminal.ansiBrightBlack"

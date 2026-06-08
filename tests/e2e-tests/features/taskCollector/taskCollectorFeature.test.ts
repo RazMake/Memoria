@@ -29,11 +29,14 @@ suite("TaskCollectorFeature (E2E)", () => {
     let indexUri: vscode.Uri;
     const managedFolders = [
         "00-Workstreams",
-        "01-ToRemember",
-        "02-MeetingNotes",
-        "03-Inbox",
+        "01-MeetingNotes",
+        "02-Inbox",
+        "03-ToRemember",
         "04-Archive",
-        "05-Autocomplete",
+        "10-Autocomplete",
+        "11-Templates",
+        "12-Settings",
+        "13-Scripts",
         "WorkspaceInitializationBackups",
     ];
 
@@ -98,7 +101,7 @@ suite("TaskCollectorFeature (E2E)", () => {
         await initializeWorkspaceWithBlueprint("individual-contributor");
         await waitForTaskCollectorReady();
 
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "notes.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "notes.md");
         await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [ ] Buy milk\n");
 
@@ -118,7 +121,7 @@ suite("TaskCollectorFeature (E2E)", () => {
         await initializeWorkspaceWithBlueprint("individual-contributor");
         await waitForTaskCollectorReady();
 
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "notes.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "notes.md");
         await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [ ] Buy milk\n");
         await vscode.commands.executeCommand("memoria.syncTasks");
@@ -157,7 +160,7 @@ suite("TaskCollectorFeature (E2E)", () => {
         await waitForTaskCollectorReady();
 
         // Create a checked task in a source file and sync it into the collector
-        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "03-Inbox", "done.md");
+        const sourceUri = vscode.Uri.joinPath(workspaceRoot, "02-Inbox", "done.md");
         await createEmptyFile(sourceUri);
         await saveDocumentWithContent(sourceUri, "- [x] Finished task\n");
         await vscode.commands.executeCommand("memoria.syncTasks");

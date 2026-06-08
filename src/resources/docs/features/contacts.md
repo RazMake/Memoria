@@ -6,8 +6,8 @@ The Contacts feature adds a dedicated **Contacts** sidebar to Memoria for browsi
 
 Contacts are stored as Markdown dictionaries in the blueprint-owned people folder:
 
-- **People Manager** workspaces use `06-Autocomplete/Contacts/`
-- **Individual Contributor** workspaces use `05-Autocomplete/Contacts/`
+- **People Manager** workspaces use `10-Autocomplete/Contacts/`
+- **Individual Contributor** workspaces use `10-Autocomplete/Contacts/`
 
 Each contact group is a single Markdown file such as `Team.md`, `Peers.md`, or `Colleagues.md`. Reference data lives under `DataTypes/` in the same folder.
 

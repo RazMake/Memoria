@@ -6,8 +6,8 @@ Text expansion for Markdown files via autocomplete. Type a trigger pattern and s
 
 Snippet files are TypeScript files (`.ts`) stored in the blueprint's Snippets folder:
 
-- **Individual Contributor** workspaces use `05-Autocomplete/Snippets/`
-- **People Manager** workspaces use `06-Autocomplete/Snippets/`
+- **Individual Contributor** workspaces use `10-Autocomplete/Snippets/`
+- **People Manager** workspaces use `10-Autocomplete/Snippets/`
 
 When the snippets feature is active, Memoria compiles each `.ts` file in the snippets folder using an in-memory TypeScript transpiler, extracts the exported `SnippetDefinition` array, and registers them as completion items. Changes to snippet files are picked up automatically via a file watcher — no restart required.
 

@@ -37,11 +37,14 @@ suite("Contacts feature (E2E)", () => {
     let pronounsUri: vscode.Uri;
     const managedFolders = [
         "00-Workstreams",
-        "01-ToRemember",
-        "02-MeetingNotes",
-        "03-Inbox",
+        "01-MeetingNotes",
+        "02-Inbox",
+        "03-ToRemember",
         "04-Archive",
-        "05-Autocomplete",
+        "10-Autocomplete",
+        "11-Templates",
+        "12-Settings",
+        "13-Scripts",
         "WorkspaceInitializationBackups",
     ];
 
@@ -50,7 +53,7 @@ suite("Contacts feature (E2E)", () => {
         memoriaDir = vscode.Uri.joinPath(workspaceRoot, ".memoria");
         blueprintUri = vscode.Uri.joinPath(memoriaDir, "blueprint.json");
         featuresUri = vscode.Uri.joinPath(memoriaDir, "features.json");
-        contactsRoot = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "Contacts");
+        contactsRoot = vscode.Uri.joinPath(workspaceRoot, "10-Autocomplete", "Contacts");
         peersUri = vscode.Uri.joinPath(contactsRoot, "Peers.md");
         colleaguesUri = vscode.Uri.joinPath(contactsRoot, "Colleagues.md");
         pronounsUri = vscode.Uri.joinPath(contactsRoot, "DataTypes", "Pronouns.md");
@@ -76,10 +79,10 @@ suite("Contacts feature (E2E)", () => {
 
             const manifest = await readJsonFile<BlueprintManifest>(blueprintUri);
             assert.ok(manifest?.contacts, "The blueprint manifest should persist the contacts config.");
-            assert.strictEqual(manifest?.contacts?.peopleFolder, "05-Autocomplete/Contacts/", "The contacts peopleFolder should match the blueprint.");
+            assert.strictEqual(manifest?.contacts?.peopleFolder, "10-Autocomplete/Contacts/", "The contacts peopleFolder should match the blueprint.");
             assert.deepStrictEqual(
                 manifest?.contacts?.groups,
-                [{ file: "Peers.md", type: "colleague" }, { file: "Colleagues.md", type: "colleague" }],
+                [{ file: "Peers.md", type: "colleague" }, { file: "Colleagues.md", type: "colleague" }, { file: "Management.md", type: "colleague" }],
                 "The bundled individual-contributor blueprint should declare the expected colleague groups.",
             );
 
@@ -168,7 +171,7 @@ suite("Contacts feature (E2E)", () => {
             assert.strictEqual(await uriExists(contactsRoot), true, "The contacts folder should exist before the rename.");
         });
 
-        const renamedRoot = vscode.Uri.joinPath(workspaceRoot, "05-Autocomplete", "People");
+        const renamedRoot = vscode.Uri.joinPath(workspaceRoot, "10-Autocomplete", "People");
         const edit = new vscode.WorkspaceEdit();
         edit.renameFile(contactsRoot, renamedRoot, { overwrite: false });
         const applied = await vscode.workspace.applyEdit(edit);
@@ -178,7 +181,7 @@ suite("Contacts feature (E2E)", () => {
             const manifest = await readJsonFile<BlueprintManifest>(blueprintUri);
             assert.strictEqual(
                 manifest?.contacts?.peopleFolder,
-                "05-Autocomplete/People",
+                "10-Autocomplete/People",
                 "The manifest peopleFolder should be updated to the relocated folder.",
             );
             assert.strictEqual(

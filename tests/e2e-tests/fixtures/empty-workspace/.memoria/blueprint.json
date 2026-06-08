@@ -1,29 +1,29 @@
 {
   "blueprintId": "individual-contributor",
-  "blueprintVersion": "1.0.0",
+  "blueprintVersion": "1.2.0",
   "initializedAt": "2026-05-10T02:56:47.299Z",
   "lastReinitAt": null,
   "fileManifest": {
     ".github/agents/WorkIQ.agent.md": "sha256:5cf7021f24d693be4cf33e9e944da7b3cd7bd435bc39c51cc0859c2f6f0a59f1",
-    ".github/prompts/initialize-career-data-types.prompt.md": "sha256:cf4be124e69000dcb8c307172d5ecf6099fc41bb7a3d201baf7eb118d3135ff0",
-    ".github/prompts/initialize-contacts.prompt.md": "sha256:88b28f884b0b02c3b7ef929c10331be3b481d83a914f5833e2d2c3ef95683490",
+    ".github/prompts/contacts-update.prompt.md": "sha256:dfade537aa26f874d6469a5561c70ef14c1697c1aacdf395d72969ad5e6793bb",
     ".github/prompts/install-workiq-mcp.prompt.md": "sha256:c35f56dc302b5064cf171dbf1e5881c3fb63cb878ba1e9b2c59d7c783a272665",
     "00-Workstreams/All.todo.md": "sha256:5841b12f01cbd2c416ee26930dc7051ec4fb8905cac074a6cc3cb84b5d29ce5d",
-    "02-MeetingNotes/1-1": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "05-Autocomplete/Contacts/Peers.md": "sha256:4eb64d91bcd5ebeba655b3348b94f41d9740e936268abd731146c734fde8dd95",
-    "05-Autocomplete/Contacts/Colleagues.md": "sha256:db26dadd02796a6a638c02fe6805169682a22465ec3b58caa1f575f57f2adea8",
-    "05-Autocomplete/Contacts/DataTypes/CareerLevels.md": "sha256:24c91aa5b89f56b755f74deea6fc3449987965fe96ec3388c41e823b3759c8b3",
-    "05-Autocomplete/Contacts/DataTypes/CareerPaths.md": "sha256:b9609628ce0fca31651e1267c318170ac5b6ac272670b7b7db63575be5ef1592",
-    "05-Autocomplete/Contacts/DataTypes/InterviewTypes.md": "sha256:0cb8a01aa1da3fe20088ddc307ab30743fa6ad4223208017568d836fb8607ccb",
-    "05-Autocomplete/Contacts/DataTypes/Pronouns.md": "sha256:a665db8d6e1fde5d726812f76d9c85e78f3fe174be3f494ebd078bfabd06db71",
-    "05-Autocomplete/Snippets/date-time.ts": "sha256:5ec7a2484fc538302470acdb365b2e4e376441528fd4cd93163cd68c9167fa2e",
-    "05-Autocomplete/Snippets/heading-children.ts": "sha256:668b8c955100e0a22cdb74effe98ddef24739484a1e94e4799ff210f52f65565"
+    "01-MeetingNotes/1-1/": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "10-Autocomplete/Contacts/Peers.md": "sha256:4eb64d91bcd5ebeba655b3348b94f41d9740e936268abd731146c734fde8dd95",
+    "10-Autocomplete/Contacts/Colleagues.md": "sha256:db26dadd02796a6a638c02fe6805169682a22465ec3b58caa1f575f57f2adea8",
+    "10-Autocomplete/Contacts/Management.md": "sha256:d433380056928d835c5b86582f4d9f3f3e59c1f65cee60720300266c465a3c3c",
+    "10-Autocomplete/Contacts/DataTypes/CareerLevels.md": "sha256:24c91aa5b89f56b755f74deea6fc3449987965fe96ec3388c41e823b3759c8b3",
+    "10-Autocomplete/Contacts/DataTypes/CareerPaths.md": "sha256:b9609628ce0fca31651e1267c318170ac5b6ac272670b7b7db63575be5ef1592",
+    "10-Autocomplete/Contacts/DataTypes/InterviewTypes.md": "sha256:0cb8a01aa1da3fe20088ddc307ab30743fa6ad4223208017568d836fb8607ccb",
+    "10-Autocomplete/Contacts/DataTypes/Pronouns.md": "sha256:a665db8d6e1fde5d726812f76d9c85e78f3fe174be3f494ebd078bfabd06db71",
+    "10-Autocomplete/Snippets/date-time.ts": "sha256:5ec7a2484fc538302470acdb365b2e4e376441528fd4cd93163cd68c9167fa2e",
+    "10-Autocomplete/Snippets/heading-children.ts": "sha256:668b8c955100e0a22cdb74effe98ddef24739484a1e94e4799ff210f52f65565"
   },
   "taskCollector": {
     "collectorPath": "00-Workstreams/All.todo.md"
   },
   "contacts": {
-    "peopleFolder": "05-Autocomplete/Contacts/",
+    "peopleFolder": "10-Autocomplete/Contacts/",
     "groups": [
       {
         "file": "Peers.md",
@@ -32,10 +32,14 @@
       {
         "file": "Colleagues.md",
         "type": "colleague"
+      },
+      {
+        "file": "Management.md",
+        "type": "colleague"
       }
     ]
   },
   "snippets": {
-    "snippetsFolder": "05-Autocomplete/Snippets/"
+    "snippetsFolder": "10-Autocomplete/Snippets/"
   }
 }

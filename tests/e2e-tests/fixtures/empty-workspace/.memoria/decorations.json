@@ -5,20 +5,6 @@
       "color": "terminal.ansiBrightBlack"
     },
     {
-      "filter": "05-Autocomplete/Snippets/",
-      "color": "terminal.ansiCyan",
-      "badge": "✂️",
-      "tooltip": "User-defined text expansion snippets.",
-      "propagate": true
-    },
-    {
-      "filter": "Dev-Designs/",
-      "color": "charts.purple",
-      "badge": "🪛",
-      "tooltip": "Dev design documents, grouped by quarter.",
-      "propagate": true
-    },
-    {
       "filter": "00-Workstreams/",
       "color": "terminal.ansiMagenta",
       "badge": "📋",
@@ -26,58 +12,71 @@
       "propagate": true
     },
     {
-      "filter": "01-ToRemember/",
-      "color": "terminal.ansiBrightYellow",
-      "badge": "🧠",
-      "tooltip": "Personal knowledge base.",
-      "propagate": true
-    },
-    {
-      "filter": "02-MeetingNotes/",
+      "filter": "01-MeetingNotes/",
       "color": "charts.green",
       "tooltip": "Meeting notes to be preserved for later references.",
       "propagate": true
     },
     {
-      "filter": "03-Inbox/",
+      "filter": "02-Inbox/",
       "color": "charts.red",
       "badge": "📭",
       "tooltip": "New, unprocessed notes.",
       "propagate": true
     },
     {
-      "filter": "04-Archive/",
-      "color": "terminal.ansiBrightBlack",
-      "badge": "⌛",
-      "tooltip": "Notes/information that is considered obsolete, but the user decided to keep it around for a bit longer.",
+      "filter": "03-ToRemember/",
+      "color": "terminal.ansiBrightYellow",
+      "badge": "🧠",
+      "tooltip": "Personal knowledge base.",
       "propagate": true
     },
     {
-      "filter": "05-Autocomplete/Contacts/DataTypes/",
+      "filter": "04-Archive/",
+      "color": "terminal.ansiBrightBlack",
+      "tooltip": "Notes from previous years.",
+      "propagate": true
+    },
+    {
+      "filter": "10-Autocomplete/Contacts/DataTypes/",
       "color": "terminal.ansiBlue",
       "badge": "🔨",
       "tooltip": "Data types used in contact definitions.",
       "propagate": true
     },
     {
-      "filter": "05-Autocomplete/Contacts/InterviewTemplates/",
-      "color": "terminal.ansiRed",
-      "badge": "📋",
-      "tooltip": "Problems that can be used in an interview.",
+      "filter": "10-Autocomplete/Snippets/",
+      "color": "terminal.ansiCyan",
+      "badge": "✂️",
+      "tooltip": "User-defined text expansion snippets.",
       "propagate": true
     },
     {
-      "filter": "05-Autocomplete/Contacts/",
-      "color": "terminal.ansiGreen",
-      "badge": "👤",
-      "tooltip": "Known contacts information, available in this workspace.",
-      "propagate": true
-    },
-    {
-      "filter": "05-Autocomplete/",
+      "filter": "10-Autocomplete/",
       "color": "terminal.ansiBrightBlack",
       "badge": "🤖",
       "tooltip": "Autocomplete features: contacts, snippets, and more.",
+      "propagate": true
+    },
+    {
+      "filter": "11-Templates/",
+      "color": "terminal.ansiBrightBlack",
+      "badge": "🤖",
+      "tooltip": "Autocomplete features: contacts, snippets, and more.",
+      "propagate": true
+    },
+    {
+      "filter": "12-Settings/",
+      "color": "terminal.ansiBrightBlack",
+      "badge": "🤖",
+      "tooltip": "Various settings files.",
+      "propagate": true
+    },
+    {
+      "filter": "13-Scripts/",
+      "color": "terminal.ansiBrightBlack",
+      "badge": "🤖",
+      "tooltip": "Script files used in the workspace, even by skills.",
       "propagate": true
     },
     {

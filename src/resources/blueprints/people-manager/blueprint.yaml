@@ -1,7 +1,7 @@
 id: "people-manager"
 name: "People Manager Notebook"
 description: "For managers: meeting notes, 1:1s, team contacts, and project status."
-version: "1.1.0"
+version: "1.2.0"
 
 workspace:
   - name: ".github/"
@@ -10,26 +10,30 @@ workspace:
       children:
         - name: "WorkIQ.agent.md"
           seedSource: "ai-instruction-files/agents/WorkIQ.agent.md"
+    - name: "instructions/"
     - name: "prompts/"
       children:
-        - name: "initialize-career-data-types.prompt.md"
-        - name: "initialize-contacts.prompt.md"
+        - name: "contacts-update.prompt.md"
+    - name: "skills/"
   - name: "00-Workstreams/"
     children:
-      - name: "Planning/"
-      - name: "Team-Evaluations/"
+      - name: "My-Evaluation/"
       - name: "All.todo.md"
         default: "includingRoot"
         seedSource: "workstreams/All.todo.md"
-  - name: "01-ToRemember/"
+  - name: "01-Planning/"
+  - name: "02-Team-Evaluations/"
+  - name: "03-MeetingNotes/"
+  - name: "04-Inbox/"
+  - name: "05-ToRemember/"
     children:
       - name: "Trainings/"
       - name: "Hiring/"
       - name: "Evaluation/"
-  - name: "02-MeetingNotes/"
-  - name: "03-Inbox/"
-  - name: "05-Archive/"
-  - name: "06-Autocomplete/"
+        children:
+          - name: "Expectations/"
+  - name: "06-Archive/"
+  - name: "10-Autocomplete/"
     children:
       - name: "Contacts/"
         children:
@@ -39,13 +43,14 @@ workspace:
             seedSource: "contacts/Colleagues.md"
           - name: "Peers.md"
             seedSource: "contacts/Peers.md"
-          - name: "InterviewTemplates/"
+          - name: "Management.md"
           - name: "DataTypes/"
             children:
               - name: "CareerLevels.md"
                 seedSource: "contacts/DataTypes/CareerLevels.md"
               - name: "CareerPaths.md"
                 seedSource: "contacts/DataTypes/CareerPaths.md"
+              - name: "ImpactLevels.md"
               - name: "InterviewTypes.md"
                 seedSource: "contacts/DataTypes/InterviewTypes.md"
               - name: "Pronouns.md"
@@ -56,6 +61,19 @@ workspace:
             seedSource: "snippets/date-time.ts"
           - name: "heading-children.ts"
             seedSource: "snippets/heading-children.ts"
+  - name: "11-Templates/"
+    children:
+      - name: "Interview/"
+      - name: "Notes/"
+      - name: "People-Related/"
+  - name: "12-Settings/"
+    children:
+      - name: "Setup/"
+  - name: "13-Scripts/"
+    children:
+      - name: "Communication/"
+      - name: "People-Management/"
+      - name: "Utils/"
 
 features:
   - id: "taskCollector"
@@ -67,7 +85,7 @@ features:
     name: "Contacts"
     description: "Browse, search, and manage reports and colleagues."
     enabledByDefault: true
-    peopleFolder: "06-Autocomplete/Contacts/"
+    peopleFolder: "10-Autocomplete/Contacts/"
     groups:
       - file: "Team.md"
         type: "report"
@@ -75,11 +93,13 @@ features:
         type: "colleague"
       - file: "Colleagues.md"
         type: "colleague"
+      - file: "Management.md"
+        type: "colleague"
   - id: "snippets"
     name: "Snippets"
     description: "Text expansion for Markdown files via autocomplete."
     enabledByDefault: true
-    snippetsFolder: "06-Autocomplete/Snippets"
+    snippetsFolder: "10-Autocomplete/Snippets"
   - id: "backup"
     name: "Scheduled Backup"
     description: "Schedule and run zipped backups of workspace files to a target folder."
@@ -91,72 +111,73 @@ features:
     rules:
       - filter: ".*/"
         color: "terminal.ansiBrightBlack"
-      - filter: "06-Autocomplete/Snippets/"
-        color: "terminal.ansiCyan"
-        badge: "✂️"
-        tooltip: "User-defined text expansion snippets."
-        propagate: true
-      - filter: "Planning/"
-        color: "charts.purple"
-        badge: "📅"
-        tooltip: "Planning notes, by quarter."
-        propagate: true
-      - filter: "Team-Evaluations/"
-        color: "terminal.ansiBrightCyan"
-        badge: "✏️"
-        tooltip: "Team continuous evaluation notes."
-        propagate: true
       - filter: "00-Workstreams/"
         color: "terminal.ansiMagenta"
         badge: "📋"
         tooltip: "Information about current workstreams, todos, etc."
         propagate: true
-      - filter: "Hiring/"
-        color: "charts.yellow"
-        tooltip: "Notes on the hiring process, with examples."
+      - filter: "01-Planning/"
+        color: "charts.purple"
+        badge: "📅"
+        tooltip: "Planning notes, by quarter."
         propagate: true
-      - filter: "Evaluation/"
-        color: "gitDecoration.modifiedResourceForeground"
-        tooltip: "Details and templates used for team members' evaluation."
+      - filter: "02-Team-Evaluations/"
+        color: "terminal.ansiBrightCyan"
+        badge: "✏️"
+        tooltip: "Team continuous evaluation notes."
         propagate: true
-      - filter: "01-ToRemember/"
-        color: "terminal.ansiBrightYellow"
-        badge: "🧠"
-        tooltip: "Personal knowledge base."
-        propagate: true
-      - filter: "02-MeetingNotes/"
+      - filter: "03-MeetingNotes/"
         color: "charts.green"
         tooltip: "Meeting notes to be preserved for later references."
         propagate: true
-      - filter: "03-Inbox/"
+      - filter: "04-Inbox/"
         color: "charts.red"
         badge: "📭"
         tooltip: "New, unprocessed notes."
         propagate: true
-      - filter: "05-Archive/"
-        color: "terminal.ansiBrightBlack"
-        badge: "⌛"
-        tooltip: "Notes/information that is considered obsolete, but the user decided to keep it around for a bit longer."
+      - filter: "05-ToRemember/"
+        color: "terminal.ansiBrightYellow"
+        badge: "🧠"
+        tooltip: "Personal knowledge base."
         propagate: true
-      - filter: "06-Autocomplete/Contacts/DataTypes/"
+      - filter: "06-Archive/"
+        color: "terminal.ansiBrightBlack"
+        tooltip: "Notes from previous years."
+        propagate: true
+      - filter: "10-Autocomplete/Contacts/DataTypes/"
         color: "terminal.ansiBlue"
         badge: "🔨"
         tooltip: "Data types used in contact definitions."
         propagate: true
-      - filter: "06-Autocomplete/Contacts/InterviewTemplates/"
-        color: "terminal.ansiRed"
-        badge: "📋"
-        tooltip: "Problems that can be used in an interview."
-        propagate: true
-      - filter: "06-Autocomplete/Contacts/"
+      - filter: "10-Autocomplete/Contacts/Team.md"
         color: "terminal.ansiGreen"
         badge: "👤"
         tooltip: "Known contacts information, available in this workspace."
         propagate: true
-      - filter: "06-Autocomplete/"
+      - filter: "10-Autocomplete/Snippets/"
+        color: "terminal.ansiCyan"
+        badge: "✂️"
+        tooltip: "User-defined text expansion snippets."
+        propagate: true
+      - filter: "10-Autocomplete/"
         color: "terminal.ansiBrightBlack"
         badge: "🤖"
         tooltip: "Autocomplete features: contacts, snippets, and more."
+        propagate: true
+      - filter: "11-Templates/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Autocomplete features: contacts, snippets, and more."
+        propagate: true
+      - filter: "12-Settings/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Various settings files."
+        propagate: true
+      - filter: "13-Scripts/"
+        color: "terminal.ansiBrightBlack"
+        badge: "🤖"
+        tooltip: "Script files used in the workspace, even by skills."
         propagate: true
       - filter: "WorkspaceInitializationBackups/"
         color: "terminal.ansiBrightBlack"
