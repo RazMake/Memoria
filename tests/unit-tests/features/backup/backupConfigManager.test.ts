@@ -92,4 +92,50 @@ describe("BackupConfigManager.upsertProfile", () => {
         ) as BackupConfig;
         expect(written.profiles["test"]).toBeDefined();
     });
+
+    it("updates an existing profile when config already exists", async () => {
+        const existing: BackupConfig = {
+            profiles: { "weekly": { sources: ["Notes/"], exclude: [], targetFolder: "D:\\", schedule: { time: "12:00", days: ["sat"] }, retention: 2 } },
+            _state: {},
+        };
+        const mockFs = makeFs(existing);
+        const mgr = new BackupConfigManager(mockFs);
+        await mgr.upsertProfile(ROOT, "weekly", {
+            sources: ["Docs/"],
+            exclude: [],
+            targetFolder: "D:\\",
+            schedule: { time: "09:00", days: ["sun"] },
+            retention: 5,
+        });
+        const written = JSON.parse(
+            new TextDecoder().decode(mockFs.writeFile.mock.calls[0]![1] as Uint8Array)
+        ) as BackupConfig;
+        expect(written.profiles["weekly"]!.retention).toBe(5);
+    });
+});
+
+describe("BackupConfigManager.normalize edge cases", () => {
+    it("returns default-shape config when stored value is not an object", async () => {
+        const mockFs = {
+            readFile: vi.fn().mockResolvedValue(new TextEncoder().encode(JSON.stringify(42))),
+        } as any;
+        const mgr = new BackupConfigManager(mockFs);
+        const result = await mgr.read(ROOT);
+        // Non-object raw → normalize returns a config object with empty-or-preset profiles/_state
+        expect(result).not.toBeNull();
+        expect(typeof result!.profiles).toBe("object");
+        expect(typeof result!._state).toBe("object");
+    });
+
+    it("uses empty objects when profiles or _state are not objects in stored config", async () => {
+        const badConfig = { profiles: "not-an-object", _state: null };
+        const mockFs = {
+            readFile: vi.fn().mockResolvedValue(new TextEncoder().encode(JSON.stringify(badConfig))),
+        } as any;
+        const mgr = new BackupConfigManager(mockFs);
+        const result = await mgr.read(ROOT);
+        expect(result).not.toBeNull();
+        expect(result!.profiles).toEqual({});
+        expect(result!._state).toEqual({});
+    });
 });

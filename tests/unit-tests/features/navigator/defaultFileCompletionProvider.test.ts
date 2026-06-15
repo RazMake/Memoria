@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getLocation } from "jsonc-parser";
 import {
     DefaultFileCompletionProvider,
     isTopLevelKey,
@@ -128,14 +129,14 @@ describe("DefaultFileCompletionProvider", () => {
 
     describe("isTopLevelKey", () => {
         it("should return true for an empty object", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = "{ }";
             const loc = getLocation(text, 2);
             expect(isTopLevelKey(loc, "defaultFiles")).toBe(true);
         });
 
         it("should return false when defaultFiles key already exists", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{ "defaultFiles": {} }';
             const loc = getLocation(text, 3);
             // Cursor is at the "d" of "defaultFiles" — isAtPropertyKey is true but
@@ -146,7 +147,7 @@ describe("DefaultFileCompletionProvider", () => {
 
     describe("isDefaultFilesKey", () => {
         it("should return true when cursor is at a key position inside defaultFiles", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    \n  }\n}';
             // Position the cursor after the opening { inside defaultFiles
             const offset = text.indexOf("{\n    \n") + 6; // inside the empty object
@@ -155,7 +156,7 @@ describe("DefaultFileCompletionProvider", () => {
         });
 
         it("should return false when outside defaultFiles", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{ "other": {} }';
             const loc = getLocation(text, 2);
             expect(isDefaultFilesKey(loc)).toBe(false);
@@ -164,7 +165,7 @@ describe("DefaultFileCompletionProvider", () => {
 
     describe("isDefaultFilesValue", () => {
         it("should return true when cursor is inside a legacy array value (depth 3)", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": [""]\n  }\n}';
             const arrayStart = text.indexOf('[""]');
             const offset = arrayStart + 2; // inside the empty string
@@ -173,7 +174,7 @@ describe("DefaultFileCompletionProvider", () => {
         });
 
         it("should return true when cursor is inside a filesToOpen array value (depth 4)", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": { "filesToOpen": [""] }\n  }\n}';
             const arrayStart = text.indexOf('[""]');
             const offset = arrayStart + 2; // inside the empty string
@@ -182,7 +183,7 @@ describe("DefaultFileCompletionProvider", () => {
         });
 
         it("should return false when cursor is at a key position", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": []\n  }\n}';
             const keyStart = text.indexOf('"00-ToDo/"');
             const offset = keyStart + 1;
@@ -193,7 +194,7 @@ describe("DefaultFileCompletionProvider", () => {
 
     describe("isDefaultFilesEntryKey", () => {
         it("should return true when cursor is at a property key inside an entry object", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": {\n      \n    }\n  }\n}';
             // Position cursor inside the empty entry object
             const offset = text.indexOf("{\n      \n") + 9;
@@ -202,7 +203,7 @@ describe("DefaultFileCompletionProvider", () => {
         });
 
         it("should return false when cursor is at a folder key (depth 2)", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             const text = '{\n  "defaultFiles": {\n    \n  }\n}';
             const offset = text.indexOf("{\n    \n") + 6;
             const loc = getLocation(text, offset);
@@ -876,7 +877,7 @@ describe("DefaultFileCompletionProvider", () => {
         });
 
         it("isDefaultFilesValue fallback regex matches when parser resolves to depth 2 inside an array", () => {
-            const { getLocation } = require("jsonc-parser");
+            
             // Partial JSON: the array is opened but the cursor is right after the opening quote of a
             // new string element. In some parser states this resolves to depth 2 instead of depth 3.
             const text = '{\n  "defaultFiles": {\n    "00-ToDo/": ["\n';

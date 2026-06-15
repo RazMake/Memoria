@@ -19,6 +19,12 @@ export interface SnippetDefinition {
     expand?: (ctx: SnippetContext) => string;
     visible?: (ctx: SnippetContext) => boolean;
     pathSafe?: boolean;
+    /**
+     * When set, the completion item dispatches this VS Code command instead of
+     * `memoria.expandSnippet`. Arguments passed to the command are
+     * `[document.uri.toString(), position.line, position.character]`.
+     */
+    commandId?: string;
 }
 
 export interface SnippetContext {

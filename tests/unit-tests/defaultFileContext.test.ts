@@ -295,4 +295,42 @@ describe("registerDefaultFileWatcher", () => {
         expect(holder.current).toBeDefined();
         expect(holder.current!.dispose).toBeDefined();
     });
+
+    it("should create per-file watchers when defaultFiles is non-empty", async () => {
+        const root = makeUri("/workspace");
+        const holder: DefaultFileWatcherHolder = { current: undefined };
+        const manifest = makeManifest({ "docs/": { filesToOpen: ["Index.md"] } });
+        mockReadDirectory.mockRejectedValue(new Error("not found"));
+
+        await registerDefaultFileWatcher(mockContext, root, [root], manifest, holder);
+
+        // At least 2 watchers: 1 for config file + 1 per-file watcher
+        expect(mockCreateFileSystemWatcher).toHaveBeenCalledTimes(2);
+    });
+
+    it("should invoke onConfigChanged when the config watcher fires create", async () => {
+        const root = makeUri("/workspace");
+        const holder: DefaultFileWatcherHolder = { current: undefined };
+        const manifest = makeManifest();
+        mockReadDirectory.mockRejectedValue(new Error("not found"));
+
+        await registerDefaultFileWatcher(mockContext, root, [root], manifest, holder);
+
+        // The first onDidCreate call sets up the config watcher callback
+        const configCreateCallback = mockOnDidCreate.mock.calls[0]?.[0];
+        expect(configCreateCallback).toBeDefined();
+
+        // Clear previous calls then trigger the callback
+        mockExecuteCommand.mockClear();
+        configCreateCallback();
+        // The callback fires onConfigChanged via void; give microtasks a chance to run
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // onConfigChanged calls updateDefaultFileContext which calls executeCommand
+        expect(mockExecuteCommand).toHaveBeenCalledWith(
+            "setContext",
+            "memoria.defaultFileAvailable",
+            expect.any(Boolean),
+        );
+    });
 });

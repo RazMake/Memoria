@@ -293,4 +293,33 @@ describe("taskParser", () => {
             expect(tasks[0].body).toBe("parent\n  - [ ] unchecked child");
         });
     });
+
+    describe("removeIndentPrefix mixed indent fallback", () => {
+        it("should handle continuation lines with tabs when task indented with spaces", () => {
+            // The task starts with spaces indentation; continuation has a tab that doesn't
+            // match the space indentText, triggering the character-by-character fallback
+            // in removeIndentPrefix.
+            const content = [
+                "    - [ ] task",
+                "\t    continuation",
+            ].join("\n");
+            const tasks = parseTaskBlocks(content);
+            // The fallback path should still extract the continuation line
+            expect(tasks).toHaveLength(1);
+        });
+
+        it("should trim trailing blank continuation lines", () => {
+            // trimTrailingBlankLines is called when the while loop pops trailing blank lines
+            const content = [
+                "- [ ] task",
+                "      first",
+                "      ",
+                "",
+                "- [ ] next",
+            ].join("\n");
+            const tasks = parseTaskBlocks(content);
+            // trailing blank should be trimmed from task body
+            expect(tasks[0].body).toBe("task\n      first");
+        });
+    });
 });

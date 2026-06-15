@@ -7,6 +7,8 @@ import {
     addContact as addContactToDocument,
     removeContactById,
     serializeCareerLevelsDocument,
+    parseMeProfileDocument,
+    type MeProfile,
 } from "./contactParser";
 import {
     CAREER_LEVELS_FILE,
@@ -53,6 +55,8 @@ export type {
     ResolvedContact,
     ResolvedContactsReferenceData,
 } from "./contactUtils";
+
+export type { MeProfile } from "./contactParser";
 
 export const CONTACTS_INACTIVE_MESSAGE = "Memoria: Contacts is not enabled for this workspace.";
 
@@ -198,6 +202,36 @@ export class ContactsFeature implements vscode.Disposable {
             this.referenceData,
             buildShortTitleLookup(this.referenceData)
         );
+    }
+
+    /**
+     * Returns all resolved contacts in a named group.
+     * Returns an empty array when the group is unknown or Contacts is unavailable.
+     */
+    getGroupContacts(groupName: string): ResolvedContact[] {
+        if (!this.active) return [];
+        const group = this.groups.find((g) => g.name === groupName);
+        if (!group) return [];
+        const shortTitleLookup = buildShortTitleLookup(this.referenceData);
+        return group.document.contacts.map((contact) =>
+            buildResolvedContact(contact, group, this.referenceData, shortTitleLookup)
+        );
+    }
+
+    /**
+     * Returns the parsed MeProfile from Me.md in the contacts people folder, or null if absent.
+     */
+    async getMe(): Promise<MeProfile | null> {
+        if (!this.active || !this.workspaceRoot || !this.peopleFolder) return null;
+        const peopleRoot = joinRelativePath(this.workspaceRoot, this.peopleFolder);
+        const meUri = vscode.Uri.joinPath(peopleRoot, "Me.md");
+        try {
+            const bytes = await this.fs.readFile(meUri);
+            const { textDecoder } = await import("../../utils/encoding");
+            return parseMeProfileDocument(textDecoder.decode(bytes));
+        } catch {
+            return null;
+        }
     }
 
     getResolvedReferenceData(): ResolvedContactsReferenceData {

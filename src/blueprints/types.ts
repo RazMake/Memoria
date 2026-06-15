@@ -86,6 +86,8 @@ export interface ContactsFeatureEntry extends FeatureEntry {
 export interface SnippetsFeatureEntry extends FeatureEntry {
     id: "snippets";
     snippetsFolder: string;
+    /** Optional folder for Markdown templates. Relative to workspace root. */
+    templatesFolder?: string;
 }
 
 /** A backup feature — schedules and runs workspace file backups. */
@@ -150,6 +152,8 @@ export interface ContactsManifestConfig {
 /** Sub-object within BlueprintManifest that records snippets feature metadata. */
 export interface SnippetsManifestConfig {
     snippetsFolder: string;
+    /** Optional folder for Markdown templates. Relative to workspace root. */
+    templatesFolder?: string;
 }
 
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */

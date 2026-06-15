@@ -67,4 +67,20 @@ describe("titleGenerator", () => {
             short: "?",
         });
     });
+
+    it("should not add CVP twice when a career path already generates it", () => {
+        // If a career path named "CVP" with a pattern "{CareerPath}" would produce "CVP",
+        // the function should NOT append CVP_TITLE_PAIR again.
+        const careerPaths: CareerPathReference[] = [
+            { key: "cvp", name: "CVP", short: "CVP", minimumCareerLevel: 0, extraFields: {} },
+        ];
+        const careerLevels: CareerLevelReference[] = [
+            { key: "l1", id: 1, interviewType: "n/a", titlePattern: "{CareerPath}", extraFields: {} },
+        ];
+
+        const pairs = generateCanonicalTitlePairs(careerPaths, careerLevels);
+        // Should appear exactly once
+        const cvpCount = pairs.filter((p) => p.normal === "CVP").length;
+        expect(cvpCount).toBe(1);
+    });
 });

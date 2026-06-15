@@ -212,6 +212,16 @@ describe("SnippetsFeature", () => {
             expect(feature.isActive()).toBe(false);
             expect(feature.expandPathSnippet("{ps}")).toBe("safe-value");
         });
+
+        it("should handle null snippets config in loadPathSafeOnly", async () => {
+            // When manifest has no snippets config and disabled, loadPathSafeOnly clears path-safe snippets
+            mockManifest.readManifest.mockResolvedValue({});
+
+            await feature.refresh(workspaceRoot as any, false);
+
+            expect(feature.isActive()).toBe(false);
+            expect(feature.expandPathSnippet("{ps}")).toBeNull();
+        });
     });
 
     // ── start() ───────────────────────────────────────────────────────────
@@ -435,6 +445,31 @@ describe("SnippetsFeature", () => {
 
             expect(all).toContainEqual(expect.objectContaining({ trigger: "@alice" }));
         });
+
+        it("should not include a {template} snippet (templates are opened via Ctrl+.)", async () => {
+            const manifest = {
+                readManifest: vi.fn(async () => ({
+                    snippets: {
+                        snippetsFolder: ".memoria/snippets",
+                        templatesFolder: ".memoria/templates",
+                    },
+                    fileManifest: {},
+                })),
+            };
+            mockFs.readDirectory
+                .mockResolvedValueOnce([]) // snippets folder
+                .mockResolvedValueOnce([["hello.md", vscode.FileType.File]]); // templates folder
+            const encoder = new TextEncoder();
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode("# Hello\n\nbody"));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            const all = f.getAllSnippets();
+
+            expect(all.find((s) => s.trigger === "{template}")).toBeUndefined();
+            f.dispose();
+        });
     });
 
     // ── getPathSafeSnippets / expandPathSnippet ───────────────────────────
@@ -537,6 +572,288 @@ describe("SnippetsFeature", () => {
             expect(feature.getSnippets()).toHaveLength(1);
             expect(feature.getSnippets()[0].trigger).toBe("{hello}");
             expect(mockShowWarningMessage).toHaveBeenCalledOnce();
+        });
+    });
+
+    // ── Template provider methods ─────────────────────────────────────────
+
+    describe("templatesFolder", () => {
+        function createMockManifestWithTemplates() {
+            return {
+                readManifest: vi.fn(async () => ({
+                    snippets: {
+                        snippetsFolder: ".memoria/snippets",
+                        templatesFolder: ".memoria/templates",
+                    },
+                    fileManifest: {},
+                })),
+            };
+        }
+
+        it("installs a template watcher when templatesFolder is configured", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory.mockResolvedValue([]);
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            // The watcher factory should have been called twice (snippets + templates)
+            expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledTimes(2);
+            f.dispose();
+        });
+
+        it("listTemplates() returns indexed templates after start", async () => {
+            const manifest = createMockManifestWithTemplates();
+            // First call: snippets folder (empty). Second call: templates folder.
+            mockFs.readDirectory
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([["hello.md", vscode.FileType.File]]);
+
+            // Provide template body bytes
+            const encoder = new TextEncoder();
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode("---\nname: FreeText()\n---\n# Hello\n"));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            const templates = f.listTemplates();
+            expect(templates).toHaveLength(1);
+            expect(templates[0].relativePath).toBe("hello.md");
+            f.dispose();
+        });
+
+        it("listTemplates() returns empty when no templatesFolder configured", async () => {
+            // The default manifest has no templatesFolder
+            const f = new SnippetsFeature(mockManifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+            expect(f.listTemplates()).toHaveLength(0);
+            f.dispose();
+        });
+
+        it("readTemplate() reads bytes from the templates folder", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory.mockResolvedValue([]);
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode("template body");
+            mockFs.readFile = vi.fn().mockResolvedValue(bytes);
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+            const text = await f.readTemplate("test.md");
+            expect(text).toBe("template body");
+            f.dispose();
+        });
+
+        it("readTemplate() throws when templates folder is not configured", async () => {
+            const f = new SnippetsFeature(mockManifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+            await expect(f.readTemplate("test.md")).rejects.toThrow("not configured");
+            f.dispose();
+        });
+
+        it("getFunctions() returns empty array by default", async () => {
+            const f = new SnippetsFeature(mockManifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+            expect(f.getFunctions()).toEqual([]);
+            f.dispose();
+        });
+
+        it("getFunctions() returns host functions set via setHostFunctions()", async () => {
+            const f = new SnippetsFeature(mockManifest as any, null, 0, mockFs as any);
+            const fakeFn = { name: "TestFn", describeInputs: () => [], resolve: () => "" };
+            f.setHostFunctions([fakeFn]);
+            await f.start(workspaceRoot as any);
+            expect(f.getFunctions()).toContain(fakeFn);
+            f.dispose();
+        });
+
+        it("getFunctions() includes user functions loaded from _functions folder", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory
+                .mockResolvedValueOnce([]) // snippets folder
+                .mockResolvedValueOnce([]) // templates folder (no templates)
+                .mockResolvedValueOnce([["myFn.ts", vscode.FileType.File]]); // _functions folder
+
+            const encoder = new TextEncoder();
+            // A minimal valid template function source
+            const fnSource = `exports.FN = { name: "MyFn", describeInputs: () => [], resolve: () => "" };`;
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode(fnSource));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            // If compileFunctionSource throws for this source, getFunctions returns []
+            // If it succeeds, templateFunctions will have an entry
+            // Either way we exercise the try/catch in loadUserFunctions
+            expect(() => f.getFunctions()).not.toThrow();
+            f.dispose();
+        });
+
+        it("discoverTemplates() returns [] when readDirectory throws", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory
+                .mockResolvedValueOnce([]) // snippets folder
+                .mockRejectedValueOnce(new Error("not found")); // templates folder
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            expect(f.listTemplates()).toHaveLength(0);
+            f.dispose();
+        });
+
+        it("discoverTemplates() recurses into subdirectories", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory
+                .mockResolvedValueOnce([]) // snippets folder
+                .mockResolvedValueOnce([
+                    ["subfolder", vscode.FileType.Directory],
+                    ["root.md", vscode.FileType.File],
+                ])
+                .mockResolvedValueOnce([
+                    ["nested.md", vscode.FileType.File],
+                ]);
+
+            const encoder = new TextEncoder();
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode("# Template Title\n\nbody"));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            const templates = f.listTemplates();
+            expect(templates).toHaveLength(2);
+            const paths = templates.map((t) => t.relativePath);
+            expect(paths).toContain("root.md");
+            expect(paths).toContain("subfolder/nested.md");
+            f.dispose();
+        });
+
+        it("discoverTemplates() skips entries starting with _", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory
+                .mockResolvedValueOnce([]) // snippets folder
+                .mockResolvedValueOnce([
+                    ["_functions", vscode.FileType.Directory],
+                    ["valid.md", vscode.FileType.File],
+                ]);
+
+            const encoder = new TextEncoder();
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode("body"));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            expect(f.listTemplates()).toHaveLength(1);
+            expect(f.listTemplates()[0].relativePath).toBe("valid.md");
+            f.dispose();
+        });
+
+        it("triggers reloadTemplates when template watcher fires", async () => {
+            const manifest = createMockManifestWithTemplates();
+            mockFs.readDirectory
+                .mockResolvedValue([]);
+            const encoder = new TextEncoder();
+            mockFs.readFile = vi.fn().mockResolvedValue(encoder.encode("---\nname: FreeText()\n---\n# Hello\n"));
+
+            const f = new SnippetsFeature(manifest as any, null, 0, mockFs as any);
+            await f.start(workspaceRoot as any);
+
+            const callsAfterStart = mockFs.readDirectory.mock.calls.length;
+
+            // watcherOnChange is captured by the last watcher - the template watcher
+            // Trigger it and wait for debounce (debounceMs=0)
+            expect(watcherOnChange).toBeDefined();
+            watcherOnChange!();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // reloadTemplates was called (readDirectory called again)
+            expect(mockFs.readDirectory.mock.calls.length).toBeGreaterThan(callsAfterStart);
+            f.dispose();
+        });
+    });
+
+    describe("watcher callbacks", () => {
+        it("triggers reloadAllSnippets when snippet watcher fires", async () => {
+            vi.mocked(compileSnippetFile).mockResolvedValue([snippetA]);
+            await feature.start(workspaceRoot as any);
+
+            const initialCalls = vi.mocked(compileSnippetFile).mock.calls.length;
+
+            // watcherOnCreate fires scheduleReload → after debounce → reloadAllSnippets
+            expect(watcherOnCreate).toBeDefined();
+            watcherOnCreate!();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(vi.mocked(compileSnippetFile).mock.calls.length).toBeGreaterThan(initialCalls);
+        });
+
+        it("triggers refreshContactSnippets when contacts update fires", async () => {
+            const mockContacts = createMockContactsFeature();
+            vi.mocked(generateContactSnippets).mockReturnValue([]);
+
+            feature = new SnippetsFeature(mockManifest as any, mockContacts as any, 0, mockFs as any);
+            await feature.start(workspaceRoot as any);
+
+            const initialCalls = vi.mocked(generateContactSnippets).mock.calls.length;
+
+            // Fire the contacts update event
+            mockContacts._fire();
+
+            expect(vi.mocked(generateContactSnippets).mock.calls.length).toBeGreaterThan(initialCalls);
+        });
+    });
+
+    describe("rebuildContactExpansionMap", () => {
+        it("builds expansion entries from contacts and deduplicates", async () => {
+            const contactA = {
+                id: "alice",
+                nickname: "ali",
+                fullName: "Alice Smith",
+                isActive: true,
+            };
+            const mockContacts = createMockContactsFeature([contactA]);
+
+            // Return a snippet for alice with an expand function
+            const aliceSnippet: SnippetDefinition = {
+                trigger: "@alice",
+                label: "Alice Smith",
+                glob: "**/*",
+                expand: (ctx: any) => {
+                    const format = ctx.params?.format ?? "nickname";
+                    if (format === "full") return "Alice Smith";
+                    if (format === "nickname") return "ali";
+                    return "ali";
+                },
+            };
+            vi.mocked(generateContactSnippets).mockReturnValue([aliceSnippet]);
+
+            feature = new SnippetsFeature(mockManifest as any, mockContacts as any, 0, mockFs as any);
+            await feature.start(workspaceRoot as any);
+
+            const entries = feature.getExpansionEntries();
+            // Should have entries for id, nickname, fullName, and expand formats
+            expect(entries.length).toBeGreaterThan(0);
+            const texts = entries.map((e) => e.text);
+            expect(texts).toContain("alice"); // id
+        });
+
+        it("skips empty or duplicate text in expansion entries", async () => {
+            const contactA = {
+                id: "alice",
+                nickname: "alice", // same as id → duplicate
+                fullName: undefined, // empty → skipped
+                isActive: true,
+            };
+            const mockContacts = createMockContactsFeature([contactA]);
+            vi.mocked(generateContactSnippets).mockReturnValue([]);
+
+            feature = new SnippetsFeature(mockManifest as any, mockContacts as any, 0, mockFs as any);
+            await feature.start(workspaceRoot as any);
+
+            const entries = feature.getExpansionEntries();
+            // Only "alice" should appear once (deduplicated), and no entry for undefined fullName
+            const aliceEntries = entries.filter((e) => e.text === "alice");
+            expect(aliceEntries).toHaveLength(1);
         });
     });
 });

@@ -100,6 +100,7 @@ features:
     description: "Text expansion for Markdown files via autocomplete."
     enabledByDefault: true
     snippetsFolder: "10-Autocomplete/Snippets"
+    templatesFolder: "11-Templates"
   - id: "backup"
     name: "Scheduled Backup"
     description: "Schedule and run zipped backups of workspace files to a target folder."

@@ -205,6 +205,7 @@ const featureParsers: Record<string, (
         id,
         ...base,
         snippetsFolder: parseSnippetsFolder(entry["snippetsFolder"], index),
+        templatesFolder: parseOptionalFolder(entry["templatesFolder"], index),
     }),
     backup: (id, base) => ({
         id,
@@ -278,6 +279,11 @@ function parsePeopleFolder(raw: unknown, index: number): string {
 
 function parseSnippetsFolder(raw: unknown, index: number): string {
     return parseRelativePathField(raw, index, "snippetsFolder", "folder");
+}
+
+function parseOptionalFolder(raw: unknown, index: number): string | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    return parseRelativePathField(raw, index, "templatesFolder", "folder");
 }
 
 function parseContactGroups(raw: unknown, index: number): ContactGroup[] {

@@ -63,4 +63,16 @@ await Promise.all([
         bundle: true,
         minify: !isDev,
     }),
+    build({
+        entryPoints: ["template-cli.ts"],
+        bundle: true,
+        outfile: "dist/template-cli.cjs",
+        external: ["vscode"],
+        format: "cjs",
+        platform: "node",
+        target: "node20",
+        mainFields: ["module", "main"],
+        sourcemap: isDev,
+        minify: !isDev,
+    }),
 ]);

@@ -427,3 +427,37 @@ function cloneContact<TContact extends Contact>(contact: TContact): TContact {
     };
     return clone as TContact;
 }
+
+// ── Me.md parser ────────────────────────────────────────────────────────────
+
+/**
+ * A flat dictionary of fields parsed from Me.md.
+ * Every `- Label: value` line is included, keyed by its exact Markdown label.
+ * Fields are referenced in templates by their exact label: {{me.TeamName}}, {{me.StartDate}}, etc.
+ */
+export interface MeProfile {
+    [field: string]: string;
+}
+
+/**
+ * Parses a Me.md document into a flat MeProfile dictionary.
+ * Does not require a `#` heading — reads all `- Label: value` lines at any depth.
+ * Every field present in the file is included, even if no template references it.
+ */
+export function parseMeProfileDocument(text: string): MeProfile {
+    const profile: MeProfile = {};
+    const lines = text.split(/\r?\n/);
+
+    for (const line of lines) {
+        const fieldMatch = FIELD_RE.exec(line);
+        if (fieldMatch) {
+            const label = fieldMatch[1].trim();
+            const value = fieldMatch[2].trim();
+            if (label && label !== DROPPED_FIELDS_KEY) {
+                profile[label] = value;
+            }
+        }
+    }
+
+    return profile;
+}

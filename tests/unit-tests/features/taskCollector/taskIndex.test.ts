@@ -278,6 +278,64 @@ describe("taskIndex", () => {
             expect(index.sourceOrders["notes.md"]).toEqual(["a"]);
         });
     });
+
+    it("should keep an entry in sourceOrders when source key matches", () => {
+        const index = createEmptyTaskIndex("path.md");
+        const entry = makeEntry("a", "notes.md");
+        index.tasks["a"] = entry;
+        index.sourceOrders["notes.md"] = ["a"];
+
+        pruneOrderReferences(index);
+
+        expect(index.sourceOrders["notes.md"]).toEqual(["a"]);
+    });
+
+    it("should remove a sourceOrders entry for a task with no source field", () => {
+        const index = createEmptyTaskIndex("path.md");
+        const entry: TaskIndexEntry = { ...makeEntry("a", "notes.md"), source: "" } as any;
+        index.tasks["a"] = entry;
+        index.sourceOrders["notes.md"] = ["a"];
+
+        pruneOrderReferences(index);
+
+        expect(index.sourceOrders["notes.md"]).toBeUndefined();
+    });
+});
+
+describe("getTasksForSource — sorting extras by compareBySourceOrderThenSeenAt", () => {
+    it("appends extras sorted by sourceOrder when multiple unordered tasks exist", () => {
+        const index = createEmptyTaskIndex("path.md");
+        const a = { ...makeEntry("a", "notes.md"), sourceOrder: 2 };
+        const b = { ...makeEntry("b", "notes.md"), sourceOrder: 1 };
+        upsertTask(index, a);
+        upsertTask(index, b);
+        // No sourceOrders entry — all are extras, sorted by sourceOrder
+
+        const tasks = getTasksForSource(index, "notes.md");
+        expect(tasks.map((t) => t.id)).toEqual(["b", "a"]);
+    });
+
+    it("breaks ties on equal sourceOrder by firstSeenAt (earlier first)", () => {
+        const index = createEmptyTaskIndex("path.md");
+        const a = { ...makeEntry("a", "notes.md"), sourceOrder: 1, firstSeenAt: "2026-01-02T00:00:00.000Z" };
+        const b = { ...makeEntry("b", "notes.md"), sourceOrder: 1, firstSeenAt: "2026-01-01T00:00:00.000Z" };
+        upsertTask(index, a);
+        upsertTask(index, b);
+
+        const tasks = getTasksForSource(index, "notes.md");
+        expect(tasks.map((t) => t.id)).toEqual(["b", "a"]);
+    });
+
+    it("breaks ties on equal sourceOrder and equal firstSeenAt by id lexicographic order", () => {
+        const index = createEmptyTaskIndex("path.md");
+        const a = { ...makeEntry("mem-aaa", "notes.md"), sourceOrder: 1, firstSeenAt: "2026-01-01T00:00:00.000Z" };
+        const b = { ...makeEntry("mem-bbb", "notes.md"), sourceOrder: 1, firstSeenAt: "2026-01-01T00:00:00.000Z" };
+        upsertTask(index, a);
+        upsertTask(index, b);
+
+        const tasks = getTasksForSource(index, "notes.md");
+        expect(tasks.map((t) => t.id)).toEqual(["mem-aaa", "mem-bbb"]);
+    });
 });
 
 function makeEntry(id: string, source: string): TaskIndexEntry {

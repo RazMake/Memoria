@@ -302,6 +302,41 @@ describe("contactMutations", () => {
                 "Title is required for colleague contacts.",
             );
         });
+
+        it("should throw when careerPathKey is missing", () => {
+            const refData = makeReferenceData();
+            const contact = makeReport({ careerPathKey: "" });
+
+            expect(() => prepareContactForWrite(contact, "report", refData)).toThrow("Career path is required.");
+        });
+
+        it("should throw when levelId is missing for report contacts", () => {
+            const refData = makeReferenceData();
+            const contact = makeReport({ levelId: "" });
+
+            expect(() => prepareContactForWrite(contact, "report", refData)).toThrow("LevelId is required for report contacts.");
+        });
+
+        it("should throw when levelStartDate is missing for report contacts", () => {
+            const refData = makeReferenceData();
+            const contact = makeReport({ levelStartDate: "" });
+
+            expect(() => prepareContactForWrite(contact, "report", refData)).toThrow("LevelStartDate is required for report contacts.");
+        });
+
+        it("should throw when career level is below minimum for career path", () => {
+            const refData = makeReferenceData({
+                careerLevels: [
+                    { key: "l3", id: 3, interviewType: "technical", titlePattern: "{careerPath} 2", extraFields: {} },
+                ],
+                careerPaths: [
+                    { key: "sde", name: "Software Development Engineer", short: "SDE", minimumCareerLevel: 59, extraFields: {} },
+                ],
+            });
+            const contact = makeReport({ levelId: "l3", careerPathKey: "sde" });
+
+            expect(() => prepareContactForWrite(contact, "report", refData)).toThrow("is below the minimum allowed for");
+        });
     });
 
     describe("toCustomGroupFileName", () => {

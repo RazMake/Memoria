@@ -245,4 +245,35 @@ describe("SnippetCompletionProvider", () => {
             expect(result![0].label).toBe("NoVis");
         });
     });
+
+    describe("commandId snippets", () => {
+        it("should use commandId and omit trigger from arguments when commandId is set", () => {
+            const snippet = makeSnippet({ trigger: "{template}", label: "Template", commandId: "memoria.expandTemplate" });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result).toHaveLength(1);
+            expect(result![0].insertText).toBe("");
+            expect(result![0].command).toEqual({
+                title: "Expand",
+                command: "memoria.expandTemplate",
+                arguments: ["file:///test.md", 0, 1],
+            });
+        });
+
+        it("should not use commandId when body is defined and no expand/parameters", () => {
+            const snippet = makeSnippet({ body: "hello", commandId: "memoria.expandTemplate" });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result![0].insertText).toBe("hello");
+            expect(result![0].command).toBeUndefined();
+        });
+    });
 });

@@ -1,15 +1,9 @@
 import * as vscode from "vscode";
-import { transform } from "sucrase";
 import type { SnippetDefinition } from "./types";
 import * as dateUtils from "../../utils/dateUtils";
 import * as markdownUtils from "./markdownUtils";
 import { textDecoder } from "../../utils/encoding";
-
-// Blocked Node.js built-ins that snippet files must not require.
-const BLOCKED_MODULES = new Set([
-    "fs", "child_process", "net", "os", "http", "https",
-    "dgram", "cluster", "worker_threads", "vm",
-]);
+import { compileSource } from "./sandbox";
 
 /**
  * Compiles a single .ts snippet file to JavaScript and evaluates it,
@@ -22,40 +16,22 @@ export async function compileSnippetFile(
     const bytes = await fs.readFile(fileUri);
     const source = textDecoder.decode(bytes);
 
-    const result = transform(source, {
-        transforms: ["typescript", "imports"],
+    const definitions = compileSource(source, {
+        module: "memoria-snippets",
+        payload: {
+            elapsedSince: dateUtils.elapsedSince,
+            formatElapsed: dateUtils.formatElapsed,
+            formatDate: dateUtils.formatDate,
+            formatTime: dateUtils.formatTime,
+            formatDueIn: dateUtils.formatDueIn,
+            formatDueBy: dateUtils.formatDueBy,
+            findFirstHeadingBelow: markdownUtils.findFirstHeadingBelow,
+            parseHeadingChildren: markdownUtils.parseHeadingChildren,
+            parseSubHeadings: markdownUtils.parseSubHeadings,
+        },
     });
 
-    const module = { exports: {} as Record<string, unknown> };
-    const fn = new Function("module", "exports", "require", result.code);
-    fn(module, module.exports, createSafeRequire());
-
-    const exported = (module.exports as Record<string, unknown>)["default"] ?? module.exports;
-    const definitions = Array.isArray(exported) ? exported : [exported];
-
     return definitions.filter(isValidSnippetDefinition);
-}
-
-function createSafeRequire(): (id: string) => unknown {
-    return (id: string): unknown => {
-        if (id === "memoria-snippets") {
-            return {
-                elapsedSince: dateUtils.elapsedSince,
-                formatElapsed: dateUtils.formatElapsed,
-                formatDate: dateUtils.formatDate,
-                formatTime: dateUtils.formatTime,
-                formatDueIn: dateUtils.formatDueIn,
-                formatDueBy: dateUtils.formatDueBy,
-                findFirstHeadingBelow: markdownUtils.findFirstHeadingBelow,
-                parseHeadingChildren: markdownUtils.parseHeadingChildren,
-                parseSubHeadings: markdownUtils.parseSubHeadings,
-            };
-        }
-        if (BLOCKED_MODULES.has(id)) {
-            throw new Error(`Snippet files cannot require "${id}".`);
-        }
-        throw new Error(`Unknown module "${id}" — snippet files can only import "memoria-snippets".`);
-    };
 }
 
 function isValidSnippetDefinition(value: unknown): value is SnippetDefinition {

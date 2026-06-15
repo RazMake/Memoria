@@ -106,9 +106,35 @@
                 "command": "memoria.backupHistory",
                 "title": "Backup History",
                 "category": "Memoria"
+            },
+            {
+                "command": "memoria.insertTemplate",
+                "title": "Insert Template",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.renderTemplateToFile",
+                "title": "Render Template to File",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.renderTemplateToClipboard",
+                "title": "Render Template to Clipboard",
+                "category": "Memoria"
+            },
+            {
+                "command": "memoria.expandTemplate",
+                "title": "Expand Template (internal)",
+                "category": "Memoria"
             }
         ],
         "keybindings": [
+            {
+                "command": "memoria.insertTemplate",
+                "key": "ctrl+.",
+                "mac": "cmd+.",
+                "when": "editorTextFocus && memoria.snippetsActive"
+            },
             {
                 "command": "memoria.showDetailedContactHover",
                 "key": "ctrl+shift+h",
@@ -220,6 +246,22 @@
                 {
                     "command": "memoria.backupHistory",
                     "when": "memoria.backupActive"
+                },
+                {
+                    "command": "memoria.insertTemplate",
+                    "when": "memoria.snippetsActive"
+                },
+                {
+                    "command": "memoria.renderTemplateToFile",
+                    "when": "memoria.snippetsActive"
+                },
+                {
+                    "command": "memoria.renderTemplateToClipboard",
+                    "when": "memoria.snippetsActive"
+                },
+                {
+                    "command": "memoria.expandTemplate",
+                    "when": "false"
                 }
             ],
             "explorer/context": [
@@ -307,6 +349,7 @@
         "eslint": "^10.3.0",
         "mocha": "^11.7.5",
         "patch-package": "^8.0.1",
+        "sucrase": "^3.35.1",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.59.2",
         "vitest": "^4.1.4"

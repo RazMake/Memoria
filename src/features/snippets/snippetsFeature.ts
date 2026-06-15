@@ -4,10 +4,15 @@ import type { ResolvedContact } from "../contacts/contactUtils";
 import type { SnippetDefinition, SnippetContext, LoadedSnippetFile } from "./types";
 import type { SnippetProvider } from "./snippetCompletionProvider";
 import type { ContactExpansionMap } from "./snippetHoverProvider";
+import type { TemplateFunction } from "./templates/templateTypes";
+import type { TemplateProvider } from "./templateCommands";
 import { compileSnippetFile } from "./snippetCompiler";
 import { generateContactSnippets } from "./contactSnippets";
 import { DebouncedFileWatcher } from "../../utils/debouncedFileWatcher";
 import { showWarning } from "../../utils/uiMessages";
+import { textDecoder } from "../../utils/encoding";
+import { parseTemplate } from "./templates/templateParser";
+import { compileFunctionSource, validateFunctions, TEMPLATE_MODULE_NAME } from "./templates/functionLoader";
 
 /** Minimal interface for the contact data needed by SnippetsFeature (DIP). */
 export interface ContactDataSource {
@@ -16,16 +21,27 @@ export interface ContactDataSource {
     onDidUpdate(listener: (snapshot: unknown) => void): vscode.Disposable;
 }
 
-export class SnippetsFeature implements vscode.Disposable, SnippetProvider, ContactExpansionMap {
+/** A loaded template entry. */
+interface LoadedTemplate {
+    relativePath: string;
+    title: string | null;
+}
+
+export class SnippetsFeature implements vscode.Disposable, SnippetProvider, ContactExpansionMap, TemplateProvider {
     private workspaceRoot: vscode.Uri | null = null;
     private snippetsFolder: string | null = null;
+    private templatesFolder: string | null = null;
     private active = false;
     private loadedFiles: LoadedSnippetFile[] = [];
     private contactSnippets: SnippetDefinition[] = [];
     private pathSafeSnippets: SnippetDefinition[] = [];
     private contactExpansionEntries: Array<{ text: string; contact: ResolvedContact }> = [];
     private fileWatcher: DebouncedFileWatcher | null = null;
+    private templateWatcher: DebouncedFileWatcher | null = null;
     private contactsDisposable: vscode.Disposable | null = null;
+    private indexedTemplates: LoadedTemplate[] = [];
+    private templateFunctions: TemplateFunction[] = [];
+    private hostFunctions: TemplateFunction[] = [];
 
     private readonly _onDidUpdateExpansionMap = new vscode.EventEmitter<void>();
     readonly onDidUpdateExpansionMap = this._onDidUpdateExpansionMap.event;
@@ -36,6 +52,11 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         private readonly debounceMs: number = 300,
         private readonly fs: typeof vscode.workspace.fs = vscode.workspace.fs,
     ) {}
+
+    /** Sets the host-registered template functions (people/date built-ins). */
+    setHostFunctions(functions: TemplateFunction[]): void {
+        this.hostFunctions = functions;
+    }
 
     async refresh(workspaceRoot: vscode.Uri | null, enabled: boolean): Promise<void> {
         if (!workspaceRoot || !enabled) {
@@ -59,9 +80,13 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
 
         this.workspaceRoot = workspaceRoot;
         this.snippetsFolder = snippetsConfig.snippetsFolder;
+        this.templatesFolder = snippetsConfig.templatesFolder ?? null;
         this.active = true;
 
         await this.reloadAllSnippets();
+        if (this.templatesFolder) {
+            await this.reloadTemplates();
+        }
         this.installWatcher();
         this.subscribeToContacts();
     }
@@ -69,14 +94,19 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
     async stop(): Promise<void> {
         this.fileWatcher?.dispose();
         this.fileWatcher = null;
+        this.templateWatcher?.dispose();
+        this.templateWatcher = null;
         this.contactsDisposable?.dispose();
         this.contactsDisposable = null;
         this.active = false;
         this.workspaceRoot = null;
         this.snippetsFolder = null;
+        this.templatesFolder = null;
         this.loadedFiles = [];
         this.contactSnippets = [];
         this.contactExpansionEntries = [];
+        this.indexedTemplates = [];
+        this.templateFunctions = [];
     }
 
     dispose(): void {
@@ -179,6 +209,110 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         }
 
         return "";
+    }
+
+    // ── TemplateProvider implementation ──────────────────────────────────────
+
+    listTemplates(): Array<{ relativePath: string; title: string | null }> {
+        return this.indexedTemplates.map((t) => ({ relativePath: t.relativePath, title: t.title }));
+    }
+
+    async readTemplate(relativePath: string): Promise<string> {
+        if (!this.workspaceRoot || !this.templatesFolder) {
+            throw new Error("Templates folder is not configured.");
+        }
+        const uri = vscode.Uri.joinPath(this.workspaceRoot, this.templatesFolder, relativePath);
+        const bytes = await this.fs.readFile(uri);
+        return textDecoder.decode(bytes);
+    }
+
+    getFunctions(): TemplateFunction[] {
+        return [...this.hostFunctions, ...this.templateFunctions];
+    }
+
+    // ── Private template loading ──────────────────────────────────────────────
+
+    private async reloadTemplates(): Promise<void> {
+        if (!this.workspaceRoot || !this.templatesFolder) return;
+
+        const folderUri = vscode.Uri.joinPath(this.workspaceRoot, this.templatesFolder);
+        const templates = await this.discoverTemplates(folderUri, "");
+        this.indexedTemplates = templates;
+
+        // Load user functions from _functions/ subfolder
+        const functionsUri = vscode.Uri.joinPath(folderUri, "_functions");
+        this.templateFunctions = await this.loadUserFunctions(functionsUri);
+    }
+
+    private async discoverTemplates(
+        folderUri: vscode.Uri,
+        prefix: string,
+    ): Promise<LoadedTemplate[]> {
+        let entries: [string, vscode.FileType][];
+        try {
+            entries = await this.fs.readDirectory(folderUri);
+        } catch {
+            return [];
+        }
+
+        const results: LoadedTemplate[] = [];
+
+        for (const [name, type] of entries) {
+            if (name.startsWith("_")) continue; // skip _functions/ etc.
+
+            if (type === vscode.FileType.Directory) {
+                const subUri = vscode.Uri.joinPath(folderUri, name);
+                const subPrefix = prefix ? `${prefix}/${name}` : name;
+                const subTemplates = await this.discoverTemplates(subUri, subPrefix);
+                results.push(...subTemplates);
+            } else if (type === vscode.FileType.File && name.endsWith(".md")) {
+                const relativePath = prefix ? `${prefix}/${name}` : name;
+                const uri = vscode.Uri.joinPath(folderUri, name);
+                let title: string | null = null;
+                try {
+                    const bytes = await this.fs.readFile(uri);
+                    const text = textDecoder.decode(bytes);
+                    const parsed = parseTemplate(text);
+                    title = parsed.title;
+                } catch {
+                    // ignore parse errors during indexing
+                }
+                results.push({ relativePath, title });
+            }
+        }
+
+        return results;
+    }
+
+    private async loadUserFunctions(functionsUri: vscode.Uri): Promise<TemplateFunction[]> {
+        let entries: [string, vscode.FileType][];
+        try {
+            entries = await this.fs.readDirectory(functionsUri);
+        } catch {
+            return [];
+        }
+
+        const tsFiles = entries
+            .filter(([name, type]) => type === vscode.FileType.File && name.endsWith(".ts"))
+            .map(([name]) => name);
+
+        const allFunctions: TemplateFunction[] = [];
+
+        for (const fileName of tsFiles) {
+            const fileUri = vscode.Uri.joinPath(functionsUri, fileName);
+            try {
+                const bytes = await this.fs.readFile(fileUri);
+                const source = textDecoder.decode(bytes);
+                const fns = compileFunctionSource(source, {});
+                validateFunctions(fns, new Set(allFunctions.map((f) => f.name)));
+                allFunctions.push(...fns);
+            } catch (err) {
+                const message = (err as Error).message ?? "Unknown error";
+                showWarning(`Failed to load template function file '${fileName}': ${message}`);
+            }
+        }
+
+        return allFunctions;
     }
 
     private async reloadAllSnippets(): Promise<void> {
@@ -323,6 +457,15 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         this.fileWatcher.watch(
             new vscode.RelativePattern(this.workspaceRoot, `${this.snippetsFolder}/*.ts`),
         );
+
+        if (this.templatesFolder) {
+            this.templateWatcher = new DebouncedFileWatcher(this.debounceMs, () => {
+                void this.reloadTemplates();
+            });
+            this.templateWatcher.watch(
+                new vscode.RelativePattern(this.workspaceRoot, `${this.templatesFolder}/**`),
+            );
+        }
     }
 
     private subscribeToContacts(): void {

@@ -91,7 +91,7 @@ export function buildManifest(
         fileManifest,
         taskCollector: features.taskCollector ? { collectorPath: features.taskCollector.collectorPath } : undefined,
         contacts: features.contacts ? buildContactsManifestConfig(features.contacts) : undefined,
-        snippets: features.snippets ? { snippetsFolder: features.snippets.snippetsFolder } : undefined,
+        snippets: features.snippets ? { snippetsFolder: features.snippets.snippetsFolder, templatesFolder: features.snippets.templatesFolder } : undefined,
     };
 }
 

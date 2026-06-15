@@ -87,6 +87,31 @@ export default [{ trigger: "{bad}", label: "Bad", glob: "**/*.md", body: "x" }];
         vi.mocked(mockFs.readFile).mockResolvedValue(new TextEncoder().encode(source));
 
         await expect(compileSnippetFile({ path: "/test.ts" } as any, mockFs))
-            .rejects.toThrow('Snippet files cannot require "fs"');
+            .rejects.toThrow('cannot require "fs"');
+    });
+
+    it("should filter out snippet with non-string body", async () => {
+        const source = `
+export default [
+    { trigger: "{valid}", label: "Valid", glob: "**/*.md", body: "ok" },
+    { trigger: "{bad}", label: "Bad", glob: "**/*.md", body: 42 },
+];
+`;
+        vi.mocked(mockFs.readFile).mockResolvedValue(new TextEncoder().encode(source));
+        const result = await compileSnippetFile({ path: "/test.ts" } as any, mockFs);
+        expect(result).toHaveLength(1);
+        expect(result[0].trigger).toBe("{valid}");
+    });
+
+    it("should filter out snippet with non-function expand", async () => {
+        const source = `
+export default [
+    { trigger: "{valid}", label: "Valid", glob: "**/*.md", body: "ok" },
+    { trigger: "{bad}", label: "Bad", glob: "**/*.md", expand: "not-a-function" },
+];
+`;
+        vi.mocked(mockFs.readFile).mockResolvedValue(new TextEncoder().encode(source));
+        const result = await compileSnippetFile({ path: "/test.ts" } as any, mockFs);
+        expect(result).toHaveLength(1);
     });
 });

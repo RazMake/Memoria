@@ -112,6 +112,59 @@ describe("TaskWriter", () => {
         expect(pendingWrites.register).not.toHaveBeenCalled();
     });
 
+    it("should return false when file does not exist and allowCreate is not set", async () => {
+        const pendingWrites = { register: vi.fn() };
+        const writer = new TaskWriter(pendingWrites as any);
+
+        // openTextDocumentIfPresent returns null when the file doesn't exist
+        mockOpenTextDocument.mockRejectedValue(new Error("file not found"));
+
+        const changed = await writer.mutateDocument(uri, () => "new content");
+
+        expect(changed).toBe(false);
+        expect(mockApplyEdit).not.toHaveBeenCalled();
+    });
+
+    it("should normalize CRLF line endings in CRLF documents", async () => {
+        const pendingWrites = { register: vi.fn() };
+        const writer = new TaskWriter(pendingWrites as any);
+        // Document with CRLF line endings
+        const currentDocument = makeDocument(uri, "alpha\r\nbeta", { eol: 2 /* CRLF */ });
+        const updatedDocument = makeDocument(uri, "gamma\r\ndelta", { eol: 2 });
+
+        mockOpenTextDocument
+            .mockResolvedValueOnce(currentDocument)
+            .mockResolvedValueOnce(updatedDocument);
+        mockApplyEdit.mockResolvedValue(true);
+
+        // Builder returns text with LF only - should be normalized to CRLF
+        const changed = await writer.mutateDocument(uri, () => "gamma\ndelta");
+
+        expect(changed).toBe(true);
+        // The edit should have normalized to CRLF
+        const editOp = mockApplyEdit.mock.calls[0][0].operations[0];
+        expect(editOp.text).toBe("gamma\r\ndelta");
+    });
+
+    it("should create a new file when allowCreate is true and file does not exist", async () => {
+        const pendingWrites = { register: vi.fn() };
+        const writer = new TaskWriter(pendingWrites as any);
+
+        // File doesn't exist - openTextDocument fails on first call
+        const createdDocument = makeDocument(uri, "new content");
+        mockOpenTextDocument
+            .mockRejectedValueOnce(new Error("file not found")) // existing = null
+            .mockResolvedValueOnce(createdDocument); // post-create read
+        mockApplyEdit.mockResolvedValue(true);
+
+        const changed = await writer.mutateDocument(uri, () => "new content", { allowCreate: true });
+
+        expect(changed).toBe(true);
+        const editOps = mockApplyEdit.mock.calls[0][0].operations;
+        expect(editOps).toContainEqual(expect.objectContaining({ type: "createFile" }));
+        expect(editOps).toContainEqual(expect.objectContaining({ type: "insert" }));
+    });
+
     it("should save and register pending writes even when the existing document is already dirty", async () => {
         const pendingWrites = { register: vi.fn() };
         const writer = new TaskWriter(pendingWrites as any);

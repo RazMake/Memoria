@@ -168,4 +168,42 @@ describe("registerLinkReferenceWatcher", () => {
         // Only the good file is written; the bad read is swallowed.
         expect(vscode.workspace.fs.writeFile).toHaveBeenCalledTimes(1);
     });
+
+    it("logs non-Error thrown value as string in error handler", async () => {
+        // This covers the `String(err)` branch when err is not an Error instance
+        const oldUri = uri("/ws/Notes/old.md");
+        const newUri = uri("/ws/Notes/new.md");
+
+        // Throw a plain string (not an Error instance)
+        (vscode.workspace.fs.stat as any).mockRejectedValue("stat failed with string");
+
+        const handler = getHandler();
+        handler({ files: [{ oldUri, newUri }] });
+        await flush();
+
+        expect(telemetry.logError).toHaveBeenCalledWith(
+            "linkReference.renameFailed",
+            expect.objectContaining({ message: "stat failed with string" }),
+        );
+    });
+
+    it("does not write when folder rename has no matching links", async () => {
+        // This covers the false branch of `if (updated !== null)` in handleFolderRename
+        const oldUri = uri("/ws/OldFolder");
+        const newUri = uri("/ws/NewFolder");
+        const indexMd = uri("/ws/index.md");
+
+        (vscode.workspace.fs.stat as any).mockResolvedValue({ type: 2 }); // Directory
+        (vscode.workspace.findFiles as any).mockResolvedValue([indexMd]);
+        // File has no links with OldFolder prefix
+        (vscode.workspace.fs.readFile as any).mockResolvedValue(
+            new TextEncoder().encode("No matching links in this file."),
+        );
+
+        const handler = getHandler();
+        handler({ files: [{ oldUri, newUri }] });
+        await flush();
+
+        expect(vscode.workspace.fs.writeFile).not.toHaveBeenCalled();
+    });
 });

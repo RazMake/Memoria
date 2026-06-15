@@ -71,6 +71,14 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
         if (!snippet.expand && !snippet.parameters?.length && snippet.body !== undefined) {
             // Static snippet — insert body directly.
             item.insertText = snippet.body;
+        } else if (snippet.commandId) {
+            // Snippet with a custom command (e.g. {template} → memoria.expandTemplate).
+            item.insertText = "";
+            item.command = {
+                title: "Expand",
+                command: snippet.commandId,
+                arguments: [document.uri.toString(), position.line, position.character],
+            };
         } else {
             // Dynamic or parameterized snippet — use a command for expansion.
             item.insertText = "";

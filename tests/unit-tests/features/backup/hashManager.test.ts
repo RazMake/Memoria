@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { findChangedFiles, buildHashManifest } from "../../../../src/features/backup/hashManager";
+import { computeFileHash, findChangedFiles, buildHashManifest } from "../../../../src/features/backup/hashManager";
 import * as crypto from "crypto";
 
 vi.mock("vscode", () => ({
@@ -97,5 +97,26 @@ describe("buildHashManifest", () => {
         const manifest = await buildHashManifest(files, mockFs);
 
         expect(Object.keys(manifest)).toHaveLength(0);
+    });
+});
+
+describe("computeFileHash", () => {
+    it("returns sha256 hex hash of file content", async () => {
+        const content = Buffer.from("hello world");
+        const mockFs = { readFile: vi.fn().mockResolvedValue(content) } as any;
+        const uri = makeUri("/workspace/test.md") as any;
+
+        const hash = await computeFileHash(uri, mockFs);
+
+        expect(hash).toBe(sha256("hello world"));
+    });
+
+    it("returns null when the file cannot be read", async () => {
+        const mockFs = { readFile: vi.fn().mockRejectedValue(new Error("ENOENT")) } as any;
+        const uri = makeUri("/workspace/missing.md") as any;
+
+        const hash = await computeFileHash(uri, mockFs);
+
+        expect(hash).toBeNull();
     });
 });

@@ -40,6 +40,7 @@
     ]
   },
   "snippets": {
-    "snippetsFolder": "10-Autocomplete/Snippets/"
+    "snippetsFolder": "10-Autocomplete/Snippets/",
+    "templatesFolder": "11-Templates/"
   }
 }

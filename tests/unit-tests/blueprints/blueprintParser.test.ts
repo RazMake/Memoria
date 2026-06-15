@@ -666,6 +666,33 @@ describe("parseFeatures — snippets and backup", () => {
         ])).toThrow('"snippetsFolder"');
     });
 
+    it("should parse templatesFolder when provided", () => {
+        const features = parseFeatures([
+            {
+                id: "snippets",
+                name: "Snippets",
+                description: "Reusable snippets.",
+                enabledByDefault: true,
+                snippetsFolder: "10-Autocomplete/Snippets",
+                templatesFolder: "11-Templates",
+            },
+        ]);
+        expect((features[0] as any).templatesFolder).toBe("11-Templates/");
+    });
+
+    it("should leave templatesFolder undefined when not provided", () => {
+        const features = parseFeatures([
+            {
+                id: "snippets",
+                name: "Snippets",
+                description: "Reusable snippets.",
+                enabledByDefault: true,
+                snippetsFolder: "10-Autocomplete/Snippets",
+            },
+        ]);
+        expect((features[0] as any).templatesFolder).toBeUndefined();
+    });
+
     it("should parse a backup feature with no extra fields", () => {
         const features = parseFeatures([
             {

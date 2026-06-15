@@ -111,4 +111,89 @@ describe("collectorFormatter", () => {
 
         expect(rendered.content).toContain("      ![arch](../docs/deep/img/arch.png)");
     });
+
+    it("skips stale ids in collectorOrder that are not in tasks map", () => {
+        const index: StoredTaskIndex = {
+            version: 1,
+            collectorPath: "00-Tasks/All-Tasks.md",
+            collectorOrder: { active: ["stale-id", "valid-id"], completed: ["stale-done"] },
+            sourceOrders: {},
+            tasks: {
+                "valid-id": {
+                    id: "valid-id",
+                    source: null,
+                    sourceRoot: null,
+                    sourceOrder: null,
+                    body: "Surviving task",
+                    fingerprint: computeTaskFingerprint("Surviving task"),
+                    firstSeenAt: "2026-04-16T00:00:00.000Z",
+                    completed: false,
+                    doneDate: null,
+                    collectorOwned: true,
+                },
+            },
+        };
+
+        const rendered = renderCollector(index);
+
+        expect(rendered.content).toContain("Surviving task");
+        // stale-id and stale-done are absent from tasks — both !entry continue branches are exercised
+    });
+
+    it("should omit Source: from completed suffix when task is collectorOwned", () => {
+        const index: StoredTaskIndex = {
+            version: 1,
+            collectorPath: "00-Tasks/All-Tasks.md",
+            collectorOrder: { active: [], completed: ["a"] },
+            sourceOrders: {},
+            tasks: {
+                a: {
+                    id: "a",
+                    source: "docs/ship.md",
+                    sourceRoot: null,
+                    sourceOrder: 0,
+                    body: "Owned and done",
+                    fingerprint: computeTaskFingerprint("Owned and done"),
+                    firstSeenAt: "2026-04-14T00:00:00.000Z",
+                    completed: true,
+                    doneDate: "2026-04-14",
+                    collectorOwned: true,
+                },
+            },
+        };
+
+        const rendered = renderCollector(index);
+
+        expect(rendered.content).toContain("- [x] Owned and done");
+        expect(rendered.content).not.toContain("Source:");
+        expect(rendered.content).toContain("Completed 2026-04-14");
+    });
+
+    it("should render completed task with no doneDate and omit suffix", () => {
+        const index: StoredTaskIndex = {
+            version: 1,
+            collectorPath: "00-Tasks/All-Tasks.md",
+            collectorOrder: { active: [], completed: ["a"] },
+            sourceOrders: {},
+            tasks: {
+                a: {
+                    id: "a",
+                    source: null,
+                    sourceRoot: null,
+                    sourceOrder: null,
+                    body: "Done but no date",
+                    fingerprint: computeTaskFingerprint("Done but no date"),
+                    firstSeenAt: "2026-04-14T00:00:00.000Z",
+                    completed: true,
+                    doneDate: null,
+                    collectorOwned: true,
+                },
+            },
+        };
+
+        const rendered = renderCollector(index);
+
+        expect(rendered.content).toContain("- [x] Done but no date");
+        expect(rendered.content).not.toContain("_");
+    });
 });

@@ -16,6 +16,8 @@ import { ContactsFeature } from "./features/contacts/contactsFeature";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
 import { TodoEditorProvider } from "./features/todoEditor/todoEditorProvider";
 import { SnippetsFeature } from "./features/snippets/snippetsFeature";
+import { createPeopleFunctions } from "./features/snippets/peopleFunctions";
+import { LiveContactsProvider } from "./features/snippets/liveContactsProvider";
 import { checkForBlueprintUpdates } from "./blueprintUpdateCheck";
 import { registerFileWatchers, refreshWorkspaceState } from "./fileWatchers";
 import { registerCommands } from "./commandRegistration";
@@ -65,6 +67,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const taskCollectorFeature = new TaskCollectorFeature(manifest, telemetry);
     const contactsFeature = new ContactsFeature(manifest);
     const snippetsFeature = new SnippetsFeature(manifest, contactsFeature);
+    snippetsFeature.setHostFunctions(createPeopleFunctions(new LiveContactsProvider(contactsFeature)));
     const todoEditorProvider = new TodoEditorProvider(manifest, context.extensionUri, snippetsFeature, snippetsFeature);
     const featureManager = new FeatureManager(manifest);
     const backupFeature = new BackupFeature(telemetry);

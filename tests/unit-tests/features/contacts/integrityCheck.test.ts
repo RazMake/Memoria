@@ -192,4 +192,50 @@ describe("integrityCheck", () => {
         ]);
         expect(updatedCareerLevels[0].interviewType).toBe(UNKNOWN_REFERENCE_KEY);
     });
+
+    it("applyContactIntegrityCorrections returns original document when no corrections", () => {
+        const document: ContactGroupDocument = {
+            kind: "colleague",
+            contacts: [
+                { kind: "colleague", id: "a", nickname: "A", fullName: "Alice", title: "T", careerPathKey: "sde", pronounsKey: "they/them", extraFields: {}, droppedFields: {} },
+            ],
+        };
+        const result = applyContactIntegrityCorrections(document, []);
+        expect(result).toBe(document); // returns same reference
+    });
+
+    it("applyContactIntegrityCorrections skips contacts with no corrections", () => {
+        const document: ContactGroupDocument = {
+            kind: "colleague",
+            contacts: [
+                { kind: "colleague", id: "a", nickname: "A", fullName: "Alice", title: "T", careerPathKey: "sde", pronounsKey: "unknown-key", extraFields: {}, droppedFields: {} },
+                { kind: "colleague", id: "b", nickname: "B", fullName: "Bob", title: "T", careerPathKey: "sde", pronounsKey: "they/them", extraFields: {}, droppedFields: {} },
+            ],
+        };
+        const corrections = findContactIntegrityCorrections(document, makeReferenceData());
+        // Only contact "a" should have a correction
+        const result = applyContactIntegrityCorrections(document, corrections);
+        expect(result.contacts[1].pronounsKey).toBe("they/them"); // untouched
+    });
+
+    it("applyCareerLevelIntegrityCorrections returns copy when no corrections", () => {
+        const careerLevels: CareerLevelReference[] = [
+            { key: "l1", id: 1, interviewType: "junior", titlePattern: "{CareerPath}", extraFields: {} },
+        ];
+        const result = applyCareerLevelIntegrityCorrections(careerLevels, []);
+        expect(result).toHaveLength(1);
+        expect(result[0].key).toBe("l1");
+    });
+
+    it("applyCareerLevelIntegrityCorrections leaves unaffected levels unchanged", () => {
+        const careerLevels: CareerLevelReference[] = [
+            { key: "l1", id: 1, interviewType: "junior", titlePattern: "{CareerPath}", extraFields: {} },
+            { key: "l5", id: 5, interviewType: "missing-type", titlePattern: "Senior {CareerPath}", extraFields: {} },
+        ];
+        const corrections = findCareerLevelIntegrityCorrections(careerLevels, makeReferenceData().interviewTypes);
+        const result = applyCareerLevelIntegrityCorrections(careerLevels, corrections);
+        // l1 is not corrected (junior exists), l5 is corrected
+        expect(result[0].interviewType).toBe("junior");
+        expect(result[1].interviewType).toBe(UNKNOWN_REFERENCE_KEY);
+    });
 });

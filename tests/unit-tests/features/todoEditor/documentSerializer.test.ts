@@ -159,6 +159,23 @@ describe("documentSerializer", () => {
             expect(doc.epilogue.length).toBeGreaterThan(0);
             expect(doc.epilogue).toContain("Footer note");
         });
+
+        it("should parse a document with no active and no completed heading", () => {
+            // When there are no active tasks AND no '# Completed' heading, 
+            // everything before the first completed task goes to preamble.
+            // (This exercises the "else" path at lines 91-95 in documentSerializer.ts.)
+            const text = [
+                "# My Notes",
+                "",
+                "Some content here",
+            ].join("\n");
+            const doc = parseTodoDocument(text);
+            expect(doc.active).toHaveLength(0);
+            expect(doc.completed).toHaveLength(0);
+            expect(doc.midSection).toHaveLength(0);
+            // All non-task lines go to preamble when no active tasks and no completed heading
+            expect(doc.preamble.length).toBeGreaterThan(0);
+        });
     });
 
     // -----------------------------------------------------------------------

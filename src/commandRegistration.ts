@@ -18,6 +18,12 @@ import {
 } from "./commands/contactCommands";
 import { createExpandSnippetCommand, createResetSnippetCommand } from "./commands/snippetCommands";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
+import {
+    createExpandTemplateCommand,
+    createInsertTemplateCommand,
+    createRenderTemplateToFileCommand,
+    createRenderTemplateToClipboardCommand,
+} from "./features/snippets/templateCommands";
 import { FeatureManager } from "./features/featureManager";
 import { ContactsFeature } from "./features/contacts/contactsFeature";
 import { TaskCollectorFeature } from "./features/taskCollector/taskCollectorFeature";
@@ -106,6 +112,22 @@ export function registerCommands(
         vscode.commands.registerCommand(
             "memoria.resetSnippet",
             createResetSnippetCommand(manifest, registry),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.expandTemplate",
+            createExpandTemplateCommand(snippetsFeature),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.insertTemplate",
+            createInsertTemplateCommand(snippetsFeature),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.renderTemplateToFile",
+            createRenderTemplateToFileCommand(snippetsFeature),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.renderTemplateToClipboard",
+            createRenderTemplateToClipboardCommand(snippetsFeature),
         ),
         vscode.commands.registerCommand(
             "memoria.openUserGuide",
