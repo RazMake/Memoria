@@ -115,6 +115,40 @@ describe("expressionRenderer", () => {
             expect(diagnostics).toHaveLength(1);
         });
 
+        it("diagnostic lists available properties when nested key is missing", () => {
+            const diagnostics: string[] = [];
+            const scope = { candidate: { firstName: "Alice", lastName: "Smith" } };
+            resolveExpression("candidate.FullName", scope, noFunctions, diagnostics);
+            expect(diagnostics).toHaveLength(1);
+            expect(diagnostics[0]).toContain("firstName");
+            expect(diagnostics[0]).toContain("lastName");
+            expect(diagnostics[0]).toContain("candidate");
+        });
+
+        it("diagnostic says 'was not resolved' when parent is null", () => {
+            const diagnostics: string[] = [];
+            const scope = { candidate: null };
+            resolveExpression("candidate.FullName", scope, noFunctions, diagnostics);
+            expect(diagnostics).toHaveLength(1);
+            expect(diagnostics[0]).toContain("candidate was not resolved");
+        });
+
+        it("diagnostic says 'was not resolved' when parent is undefined", () => {
+            const diagnostics: string[] = [];
+            const scope = { candidate: undefined };
+            resolveExpression("candidate.FullName", scope, noFunctions, diagnostics);
+            expect(diagnostics).toHaveLength(1);
+            expect(diagnostics[0]).toContain("candidate was not resolved");
+        });
+
+        it("diagnostic mentions 'has no properties' when parent object is empty", () => {
+            const diagnostics: string[] = [];
+            const scope = { candidate: {} };
+            resolveExpression("candidate.FullName", scope, noFunctions, diagnostics);
+            expect(diagnostics).toHaveLength(1);
+            expect(diagnostics[0]).toContain("has no properties");
+        });
+
         it("returns non-text marker for null at leaf", () => {
             const diagnostics: string[] = [];
             const scope = { obj: { val: null } };

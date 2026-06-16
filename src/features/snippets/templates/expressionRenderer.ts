@@ -49,7 +49,7 @@ export function resolveExpression(
 
     if (!Object.hasOwn(scope, rootName)) {
         const marker = UNKNOWN_MARKER(path);
-        diagnostics.push(marker);
+        diagnostics.push(`Unresolved expression {{${path}}}`);
         return marker;
     }
 
@@ -62,19 +62,32 @@ export function resolveExpression(
 
     // Navigate nested path
     for (let i = 1; i < parts.length; i++) {
-        if (value === null || value === undefined || typeof value !== "object") {
+        if (value === null || value === undefined) {
+            const parentPath = parts.slice(0, i).join(".");
             const partialPath = parts.slice(0, i + 1).join(".");
             const marker = UNKNOWN_MARKER(partialPath);
-            diagnostics.push(marker);
+            diagnostics.push(`Unresolved expression {{${partialPath}}} — ${parentPath} was not resolved`);
+            return marker;
+        }
+
+        if (typeof value !== "object") {
+            const partialPath = parts.slice(0, i + 1).join(".");
+            const marker = UNKNOWN_MARKER(partialPath);
+            diagnostics.push(`Unresolved expression {{${partialPath}}}`);
             return marker;
         }
 
         const obj = value as Record<string, unknown>;
         const key = parts[i];
         if (!Object.hasOwn(obj, key)) {
+            const parentPath = parts.slice(0, i).join(".");
             const partialPath = parts.slice(0, i + 1).join(".");
             const marker = UNKNOWN_MARKER(partialPath);
-            diagnostics.push(marker);
+            const available = Object.keys(obj);
+            const hint = available.length > 0
+                ? `${parentPath} has: ${available.join(", ")}`
+                : `${parentPath} has no properties`;
+            diagnostics.push(`Unresolved expression {{${partialPath}}} — ${hint}`);
             return marker;
         }
 
@@ -103,14 +116,14 @@ function stringifyValue(
     }
 
     const marker = NON_TEXT_MARKER(name);
-    diagnostics.push(marker);
+    diagnostics.push(`Expression {{${name}}} cannot be displayed as text`);
     return marker;
 }
 
 function stringifyLeaf(value: unknown, path: string, diagnostics: string[]): string {
     if (value === null || value === undefined) {
         const marker = UNKNOWN_MARKER(path);
-        diagnostics.push(marker);
+        diagnostics.push(`Unresolved expression {{${path}}}`);
         return marker;
     }
     if (typeof value === "string") return value;
@@ -118,6 +131,6 @@ function stringifyLeaf(value: unknown, path: string, diagnostics: string[]): str
 
     // Objects at leaf level — non-text marker
     const marker = NON_TEXT_MARKER(path);
-    diagnostics.push(marker);
+    diagnostics.push(`Expression {{${path}}} cannot be displayed as text`);
     return marker;
 }

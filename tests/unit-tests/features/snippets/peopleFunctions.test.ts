@@ -119,10 +119,53 @@ describe("peopleFunctions", () => {
             expect(result["CustomProp"]).toBe("custom-value");
         });
 
-        it("does not override known properties with extraFields values", async () => {
-            // 'fullName' is in KNOWN_CONTACT_PROPS — extraField should be skipped
+        it("exposes PascalCase aliases for all known camelCase properties", async () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({ args: [{ value: "Team" }] });
+            const result = await ps.resolve({ person: "alice" }, ctx) as Record<string, unknown>;
+            expect(result["FullName"]).toBe("alice Smith");
+            expect(result["Id"]).toBe("alice");
+            expect(result["Nickname"]).toBe("alice");
+            expect(result["Title"]).toBe("Engineer");
+            expect(result["CareerPathKey"]).toBe("SWE");
+            expect(result["PronounsKey"]).toBe("they/them");
+            expect(result["GroupName"]).toBe("Team");
+            expect(result["ShortTitle"]).toBe("Eng");
+        });
+
+        it("produces NextLevelId and nextLevelId from levelId when it matches l{n} format", async () => {
+            const contact = makeContact("alice", { levelId: "l59" });
+            const provider = makeProvider({ getGroupContacts: () => [contact] });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
+            expect(result["NextLevelId"]).toBe("l60");
+            expect(result["nextLevelId"]).toBe("l60");
+        });
+
+        it("produces NextLevelId as 'unknown' when levelId does not match l{n} format", async () => {
+            const contact = makeContact("alice", { levelId: "" });
+            const provider = makeProvider({ getGroupContacts: () => [contact] });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
+            expect(result["NextLevelId"]).toBe("unknown");
+        });
+
+        it("produces NextLevelId as 'unknown' when levelId is 'unknown'", async () => {
+            const contact = makeContact("alice", { levelId: "unknown" });
+            const provider = makeProvider({ getGroupContacts: () => [contact] });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
+            expect(result["NextLevelId"]).toBe("unknown");
+        });
+
+        it("does not override known properties with extraFields values (camelCase and PascalCase)", async () => {
+            // 'fullName' and 'FullName' are both in KNOWN_CONTACT_PROPS — extraField should be skipped
             const contactWithShadow = makeContact("alice", {
-                extraFields: { fullName: "SHOULD_BE_SKIPPED" },
+                extraFields: { fullName: "SHOULD_BE_SKIPPED", FullName: "ALSO_SKIPPED" },
             });
             const provider = makeProvider({
                 getGroupContacts: () => [contactWithShadow],
@@ -133,6 +176,7 @@ describe("peopleFunctions", () => {
             const result = await ps.resolve({ person: "alice" }, ctx) as Record<string, unknown>;
             // fullName retains original value, not overridden by extraFields
             expect(result.fullName).toBe("alice Smith");
+            expect(result["FullName"]).toBe("alice Smith");
         });
 
         it("skips extraFields key that already exists directly on the contact", async () => {

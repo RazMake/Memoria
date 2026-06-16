@@ -160,6 +160,56 @@ describe("coreBuiltins", () => {
             expect(() => ifWithinFunction.resolve({}, ctx)).toThrow("invalid date");
         });
 
+        it("accepts MM-DD-YYYY format and returns text when within window", () => {
+            // now = 2026-01-15, date = 01-01-2026 (14 days ago), window = 30d
+            const ctx = makeCtx({
+                args: [
+                    { value: "30d" },
+                    { value: "01-01-2026" },
+                    { value: "You are new!" },
+                ],
+            });
+            const result = ifWithinFunction.resolve({}, ctx);
+            expect(result).toBe("You are new!");
+        });
+
+        it("accepts MM/DD/YYYY format and returns text when within window", () => {
+            // now = 2026-01-15, date = 01/01/2026 (14 days ago), window = 30d
+            const ctx = makeCtx({
+                args: [
+                    { value: "30d" },
+                    { value: "01/01/2026" },
+                    { value: "You are new!" },
+                ],
+            });
+            const result = ifWithinFunction.resolve({}, ctx);
+            expect(result).toBe("You are new!");
+        });
+
+        it("accepts YYYY/MM/DD format and returns text when within window", () => {
+            // now = 2026-01-15, date = 2026/01/01 (14 days ago), window = 30d
+            const ctx = makeCtx({
+                args: [
+                    { value: "30d" },
+                    { value: "2026/01/01" },
+                    { value: "You are new!" },
+                ],
+            });
+            const result = ifWithinFunction.resolve({}, ctx);
+            expect(result).toBe("You are new!");
+        });
+
+        it("throws for invalid calendar date in MM-DD-YYYY (month 13)", () => {
+            const ctx = makeCtx({
+                args: [
+                    { value: "30d" },
+                    { value: "13-01-2026" },
+                    { value: "text" },
+                ],
+            });
+            expect(() => ifWithinFunction.resolve({}, ctx)).toThrow("invalid date");
+        });
+
         it("returns empty string when duration arg is missing", () => {
             const ctx = makeCtx({ args: [] });
             const result = ifWithinFunction.resolve({}, ctx);

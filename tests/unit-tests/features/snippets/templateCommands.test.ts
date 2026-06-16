@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const showInformationMessage = vi.fn();
 const showWarningMessage = vi.fn();
+const showErrorMessage = vi.fn();
 const showQuickPick = vi.fn();
 const showInputBox = vi.fn();
 const openTextDocument = vi.fn();
@@ -17,6 +18,7 @@ vi.mock("vscode", () => ({
         },
         showInformationMessage: (...a: any[]) => showInformationMessage(...a),
         showWarningMessage: (...a: any[]) => showWarningMessage(...a),
+        showErrorMessage: (...a: any[]) => showErrorMessage(...a),
         showQuickPick: (...a: any[]) => showQuickPick(...a),
         showInputBox: (...a: any[]) => showInputBox(...a),
         showTextDocument: (...a: any[]) => showTextDocument(...a),
@@ -98,6 +100,7 @@ beforeEach(() => {
     clipboardWriteText.mockResolvedValue(undefined);
     showInformationMessage.mockResolvedValue(undefined);
     showWarningMessage.mockResolvedValue(undefined);
+    showErrorMessage.mockResolvedValue(undefined);
     renderTemplateMock.mockResolvedValue({ text: "rendered text", scope: {}, diagnostics: [] });
 });
 
@@ -181,11 +184,11 @@ describe("templateCommands", () => {
             await cmd();
 
             expect(showWarningMessage).toHaveBeenCalledWith(
-                expect.stringContaining("diagnostics")
+                expect.stringContaining("issues")
             );
         });
 
-        it("shows warning on render error", async () => {
+        it("shows error on render error", async () => {
             const provider = makeProvider();
             showQuickPick.mockResolvedValue({ label: "My Template", relativePath: "my-template.md" });
             renderTemplateMock.mockRejectedValue(new Error("Template error"));
@@ -193,13 +196,13 @@ describe("templateCommands", () => {
             const cmd = createRenderTemplateToClipboardCommand(provider);
             await cmd();
 
-            expect(showWarningMessage).toHaveBeenCalledWith(
+            expect(showErrorMessage).toHaveBeenCalledWith(
                 expect.stringContaining("Template error")
             );
             expect(clipboardWriteText).not.toHaveBeenCalled();
         });
 
-        it("shows warning on render error with no message property", async () => {
+        it("shows error on render error with no message property", async () => {
             const provider = makeProvider();
             showQuickPick.mockResolvedValue({ label: "My Template", relativePath: "my-template.md" });
             renderTemplateMock.mockRejectedValue({ message: null });
@@ -207,8 +210,8 @@ describe("templateCommands", () => {
             const cmd = createRenderTemplateToClipboardCommand(provider);
             await cmd();
 
-            expect(showWarningMessage).toHaveBeenCalledWith(
-                expect.stringContaining("Template error")
+            expect(showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining("Template failed")
             );
         });
     });

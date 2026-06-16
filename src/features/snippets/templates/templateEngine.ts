@@ -100,7 +100,13 @@ async function resolveEntries(
             };
 
             // Collect inputs
-            const inputs = await fn.describeInputs(ctx);
+            let inputs: TemplateInput[];
+            try {
+                inputs = await fn.describeInputs(ctx);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`${entry.functionName}() for "${entry.name}" failed: ${msg}`);
+            }
             const collectedAnswers: Record<string, string> = {};
             const qualifiedPrefix = entry.name;
 
@@ -123,7 +129,13 @@ async function resolveEntries(
             }
 
             // Run the function
-            const result = await fn.resolve(collectedAnswers, { ...ctx, answers: collectedAnswers });
+            let result: unknown;
+            try {
+                result = await fn.resolve(collectedAnswers, { ...ctx, answers: collectedAnswers });
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`${entry.functionName}() for "${entry.name}" failed: ${msg}`);
+            }
 
             scope[entry.name] = result;
             unresolved.splice(i, 1);

@@ -13,22 +13,79 @@ export type { ResolvedContact, MeProfile };
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** All known ResolvedContact property names — used to prevent flattening collisions. */
-const KNOWN_CONTACT_PROPS = new Set([
-    "kind", "id", "nickname", "fullName", "title", "careerPathKey", "pronounsKey",
-    "levelId", "levelStartDate", "employeeId", "bandRank", "overallRank",
-    "extraFields", "droppedFields",
-    "groupFile", "groupName", "groupType", "isCustomGroup", "shortTitle",
-    "resolvedPronouns", "resolvedCareerPath", "resolvedCareerLevel", "resolvedInterviewType",
+/**
+ * Mapping from camelCase ResolvedContact property names to their PascalCase aliases,
+ * exposed on the flattened contact for template expressions (e.g. {{candidate.FullName}}).
+ */
+const CAMEL_TO_PASCAL_CONTACT_PROPS: ReadonlyMap<string, string> = new Map([
+    ["kind", "Kind"],
+    ["id", "Id"],
+    ["nickname", "Nickname"],
+    ["fullName", "FullName"],
+    ["title", "Title"],
+    ["careerPathKey", "CareerPathKey"],
+    ["pronounsKey", "PronounsKey"],
+    ["extraFields", "ExtraFields"],
+    ["droppedFields", "DroppedFields"],
+    ["levelId", "LevelId"],
+    ["levelStartDate", "LevelStartDate"],
+    ["employeeId", "EmployeeId"],
+    ["bandRank", "BandRank"],
+    ["overallRank", "OverallRank"],
+    ["groupFile", "GroupFile"],
+    ["groupName", "GroupName"],
+    ["groupType", "GroupType"],
+    ["isCustomGroup", "IsCustomGroup"],
+    ["shortTitle", "ShortTitle"],
+    ["resolvedPronouns", "ResolvedPronouns"],
+    ["resolvedCareerPath", "ResolvedCareerPath"],
+    ["resolvedCareerLevel", "ResolvedCareerLevel"],
+    ["resolvedInterviewType", "ResolvedInterviewType"],
 ]);
+
+/** All known ResolvedContact property names (camelCase and PascalCase) — used to prevent flattening collisions. */
+const KNOWN_CONTACT_PROPS = new Set([
+    ...CAMEL_TO_PASCAL_CONTACT_PROPS.keys(),
+    ...CAMEL_TO_PASCAL_CONTACT_PROPS.values(),
+    "nextLevelId", "NextLevelId",
+]);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Computes the next level id from a levelId string.
+ * e.g. "l59" → "l60". Returns "unknown" if the format is unrecognised.
+ */
+function computeNextLevelId(levelId: string): string {
+    const match = /^l(\d+)$/.exec(levelId);
+    if (!match) {
+        return "unknown";
+    }
+    return `l${parseInt(match[1], 10) + 1}`;
+}
 
 // ── Flattened contact type ────────────────────────────────────────────────────
 
 export type FlattenedContact = ResolvedContact & Record<string, unknown>;
 
-/** Flattens a contact's extraFields to top-level properties, skipping known property names. */
+/** Flattens a contact's extraFields to top-level properties, skipping known property names.
+ *  Also adds PascalCase aliases for all known camelCase properties and NextLevelId. */
 function flattenContact(contact: ResolvedContact, diagnostics: string[]): FlattenedContact {
     const flat: Record<string, unknown> = { ...contact };
+
+    // Add PascalCase aliases for all known camelCase properties
+    for (const [camel, pascal] of CAMEL_TO_PASCAL_CONTACT_PROPS) {
+        if (Object.hasOwn(flat, camel)) {
+            flat[pascal] = flat[camel];
+        }
+    }
+
+    // Add NextLevelId / nextLevelId when levelId is present
+    if (Object.hasOwn(flat, "levelId")) {
+        const nextId = computeNextLevelId(flat["levelId"] as string);
+        flat["NextLevelId"] = nextId;
+        flat["nextLevelId"] = nextId;
+    }
 
     for (const [label, value] of Object.entries(contact.extraFields ?? {})) {
         if (KNOWN_CONTACT_PROPS.has(label)) {
@@ -105,9 +162,8 @@ function createPeopleSelector(contacts: ContactsProvider): TemplateFunction<Flat
 
         resolve(inputs: Record<string, string>, ctx: TemplateContext): FlattenedContact {
             if (!contacts.isAvailable()) {
-                // Return an error sentinel that renders as a diagnostic
                 throw new Error(
-                    "⚠️ template: Contacts is unavailable — PeopleSelector/Me cannot resolve"
+                    "Contacts is unavailable — enable contacts in your workspace blueprint to use PeopleSelector()"
                 );
             }
 
@@ -155,14 +211,14 @@ function createMe(contacts: ContactsProvider): TemplateFunction<MeProfile> {
         async resolve(): Promise<MeProfile> {
             if (!contacts.isAvailable()) {
                 throw new Error(
-                    "⚠️ template: Contacts is unavailable — PeopleSelector/Me cannot resolve"
+                    "Contacts is unavailable — enable contacts in your workspace blueprint to use Me()"
                 );
             }
 
             const profile = await Promise.resolve(contacts.getMe());
             if (profile === null) {
                 throw new Error(
-                    "⚠️ template: Me.md not found — create it in the Contacts people folder"
+                    "Me.md not found — create Me.md in your contacts people folder"
                 );
             }
 

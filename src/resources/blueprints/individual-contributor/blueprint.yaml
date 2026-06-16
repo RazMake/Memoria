@@ -33,6 +33,8 @@ workspace:
     children:
       - name: "Contacts/"
         children:
+          - name: "Me.md"
+            seedSource: "contacts/Me.md"
           - name: "Peers.md"
             seedSource: "contacts/Peers.md"
           - name: "Colleagues.md"

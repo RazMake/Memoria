@@ -58,9 +58,9 @@ export const ifWithinFunction: TemplateFunction<string> = {
             throw new Error(`IfWithin: invalid duration "${durationArg}" — ${errorMessage(arguments)}`);
         }
 
-        // Validate ISO 8601 date
-        if (!isValidISODate(dateArg)) {
-            throw new Error(`IfWithin: invalid date "${dateArg}" — expected YYYY-MM-DD format`);
+        // Validate date (auto-detects supported formats)
+        if (!isValidDate(dateArg)) {
+            throw new Error(`IfWithin: invalid date "${dateArg}" — expected YYYY-MM-DD or MM-DD-YYYY format`);
         }
 
         const targetDate = parseLocalDate(dateArg);
@@ -97,13 +97,51 @@ export const RESERVED_BUILTIN_NAMES = new Set([
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function isValidISODate(value: string): boolean {
-    return /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(Date.parse(`${value}T00:00:00.000Z`));
+/**
+ * Attempts to parse a date string in one of the supported formats.
+ * Supported formats (with `-` or `/` as separator):
+ *   - `YYYY-MM-DD` (ISO 8601)
+ *   - `MM-DD-YYYY`
+ * Returns a local-time `Date`, or `null` when the string does not match any
+ * supported format or represents an invalid calendar date (e.g. month 13).
+ */
+function tryParseLocalDate(value: string): Date | null {
+    // YYYY-MM-DD or YYYY/MM/DD
+    const isoMatch = /^(\d{4})[-/](\d{2})[-/](\d{2})$/.exec(value);
+    if (isoMatch) {
+        const year = Number(isoMatch[1]);
+        const month = Number(isoMatch[2]);
+        const day = Number(isoMatch[3]);
+        const d = new Date(year, month - 1, day);
+        if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+            return d;
+        }
+        return null;
+    }
+
+    // MM-DD-YYYY or MM/DD/YYYY
+    const mdyMatch = /^(\d{2})[-/](\d{2})[-/](\d{4})$/.exec(value);
+    if (mdyMatch) {
+        const month = Number(mdyMatch[1]);
+        const day = Number(mdyMatch[2]);
+        const year = Number(mdyMatch[3]);
+        const d = new Date(year, month - 1, day);
+        if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+            return d;
+        }
+        return null;
+    }
+
+    return null;
 }
 
-function parseLocalDate(isoDate: string): Date {
-    const [year, month, day] = isoDate.split("-").map(Number);
-    return new Date(year, month - 1, day);
+function isValidDate(value: string): boolean {
+    return tryParseLocalDate(value) !== null;
+}
+
+function parseLocalDate(dateStr: string): Date {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return tryParseLocalDate(dateStr)!;
 }
 
 function errorMessage(_args: IArguments): string {

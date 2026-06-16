@@ -8,7 +8,7 @@ import type { TemplateFunction } from "./templates/templateTypes";
 import type { RenderResult } from "./templates/templateTypes";
 import { renderTemplate } from "./templates/templateEngine";
 import { VsCodeInputResolver } from "./vscodeInputResolver";
-import { showWarning } from "../../utils/uiMessages";
+import { showWarning, showError } from "../../utils/uiMessages";
 
 export interface TemplateProvider {
     /** Returns all available templates as { relativePath, templateText } entries. */
@@ -62,13 +62,13 @@ async function resolveAndRender(
         });
 
         if (result.diagnostics.length > 0) {
-            showWarning(`Template diagnostics: ${result.diagnostics.join("; ")}`);
+            showWarning(`Template rendered with issues — ${result.diagnostics.join("; ")}`);
         }
 
         return result;
     } catch (err) {
-        const message = (err as Error).message ?? "Unknown error";
-        showWarning(`Template error: ${message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        showError(`Template failed: ${message}`);
         return undefined;
     }
 }
