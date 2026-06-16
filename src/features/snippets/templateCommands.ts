@@ -62,7 +62,19 @@ async function resolveAndRender(
         });
 
         if (result.diagnostics.length > 0) {
-            showWarning(`Template rendered with issues — ${result.diagnostics.join("; ")}`);
+            const resolutionErrors = result.diagnostics.filter((d) => d.startsWith("Unresolved expression"));
+            const otherIssues = result.diagnostics.filter((d) => !d.startsWith("Unresolved expression"));
+
+            if (resolutionErrors.length > 0) {
+                const lines = resolutionErrors
+                    .map((d, i) => `${i + 1}. ${d}`)
+                    .join("\n");
+                showError(`Template has ${resolutionErrors.length} unresolved property reference(s):\n${lines}`);
+            }
+
+            if (otherIssues.length > 0) {
+                showWarning(`Template rendered with issues — ${otherIssues.join("; ")}`);
+            }
         }
 
         return result;

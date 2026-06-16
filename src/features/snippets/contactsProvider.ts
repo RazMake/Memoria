@@ -6,6 +6,7 @@
 
 import type { ResolvedContact } from "../contacts/contactResolution";
 import type { MeProfile } from "../contacts/contactParser";
+import type { CareerLevelReference } from "../contacts/types";
 
 export type { MeProfile } from "../contacts/contactParser";
 export type { ResolvedContact } from "../contacts/contactResolution";
@@ -20,4 +21,8 @@ export interface ContactsProvider {
     getMe(): MeProfile | null | Promise<MeProfile | null>;
     /** Whether Contacts data is available at all (false ⇒ short-circuit people built-ins). */
     isAvailable(): boolean;
+    /** Look up a career level by its id key (e.g. "l59"). Returns null if not found. */
+    getCareerLevel(levelId: string): CareerLevelReference | null;
+    /** Look up a career level by its numeric id (e.g. 59). Returns null if not found. */
+    getCareerLevelByNumericId(id: number): CareerLevelReference | null;
 }

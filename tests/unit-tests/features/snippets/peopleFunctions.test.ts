@@ -61,6 +61,8 @@ function makeProvider(overrides: Partial<ContactsProvider> = {}): ContactsProvid
             return [];
         },
         getMe: () => ({ FullName: "Alice Manager", TeamName: "Engineering", StartDate: "2024-01-15" } as MeProfile),
+        getCareerLevel: () => null,
+        getCareerLevelByNumericId: () => null,
         ...overrides,
     };
 }
@@ -134,32 +136,84 @@ describe("peopleFunctions", () => {
             expect(result["ShortTitle"]).toBe("Eng");
         });
 
-        it("produces NextLevelId and nextLevelId from levelId when it matches l{n} format", async () => {
+        it("exposes pronouns/Pronouns short aliases for resolvedPronouns object", async () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({ args: [{ value: "Team" }] });
+            const result = await ps.resolve({ person: "alice" }, ctx) as Record<string, unknown>;
+            const pronouns = result["pronouns"] as Record<string, unknown>;
+            expect(pronouns).toBeDefined();
+            expect(pronouns["subject"]).toBe("they");
+            expect(pronouns["object"]).toBe("them");
+            expect(pronouns["Subject"]).toBe("they");
+            expect(pronouns["Object"]).toBe("them");
+            expect(pronouns["Key"]).toBe("they/them");
+            expect(pronouns["PossessiveAdjective"]).toBe("their");
+            expect(pronouns["Possessive"]).toBe("theirs");
+            expect(pronouns["Reflexive"]).toBe("themselves");
+            expect(result["Pronouns"]).toBe(result["pronouns"]);
+        });
+
+        it("exposes level/Level short aliases for resolvedCareerLevel object", async () => {
+            const contact = makeContact("alice", { levelId: "l59", resolvedCareerLevel: { key: "l59", id: 59, interviewType: "SWE", titlePattern: "SWE{n}", extraFields: {} } });
+            const provider = makeProvider({ getGroupContacts: () => [contact] });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({ args: [{ value: "Team" }] });
+            const result = await ps.resolve({ person: "alice" }, ctx) as Record<string, unknown>;
+            const level = result["level"] as Record<string, unknown>;
+            expect(level).toBeDefined();
+            expect(level["key"]).toBe("l59");
+            expect(level["id"]).toBe(59);
+            expect(level["Key"]).toBe("l59");
+            expect(level["Id"]).toBe(59);
+            expect(level["InterviewType"]).toBe("SWE");
+            expect(level["TitlePattern"]).toBe("SWE{n}");
+            expect(result["Level"]).toBe(result["level"]);
+        });
+
+        it("exposes nextLevel / NextLevel resolved object when getCareerLevelByNumericId finds next level", async () => {
+            const currentLevel = { key: "l59", id: 59, interviewType: "SWE", titlePattern: "SWE{n}", extraFields: {} };
+            const nextLevelObj = { key: "l60", id: 60, interviewType: "SWE", titlePattern: "SWE{n+1}", extraFields: {} };
+            const contact = makeContact("alice", { levelId: "l59", resolvedCareerLevel: currentLevel });
+            const provider = makeProvider({
+                getGroupContacts: () => [contact],
+                getCareerLevelByNumericId: (id) => id === 60 ? nextLevelObj : null,
+            });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
+            const nextLevel = result["nextLevel"] as Record<string, unknown>;
+            expect(nextLevel).toBeDefined();
+            expect(nextLevel["key"]).toBe("l60");
+            expect(nextLevel["Key"]).toBe("l60");
+            expect(nextLevel["Id"]).toBe(60);
+            expect(nextLevel["InterviewType"]).toBe("SWE");
+            expect(nextLevel["TitlePattern"]).toBe("SWE{n+1}");
+            expect(result["NextLevel"]).toBe(result["nextLevel"]);
+        });
+
+        it("nextLevel is null when getCareerLevel returns null (no next level)", async () => {
+            const currentLevel = { key: "l99", id: 99, interviewType: "SWE", titlePattern: "SWE{n}", extraFields: {} };
+            const contact = makeContact("alice", { levelId: "l99", resolvedCareerLevel: currentLevel });
+            const provider = makeProvider({
+                getGroupContacts: () => [contact],
+                getCareerLevelByNumericId: () => null,
+            });
+            const fns = createPeopleFunctions(provider);
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
+            expect(result["nextLevel"]).toBeNull();
+        });
+
+        it("levelId is not exposed as a top-level property on the flat contact", async () => {
             const contact = makeContact("alice", { levelId: "l59" });
             const provider = makeProvider({ getGroupContacts: () => [contact] });
             const fns = createPeopleFunctions(provider);
             const ps = fns.find((f) => f.name === "PeopleSelector")!;
             const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
-            expect(result["NextLevelId"]).toBe("l60");
-            expect(result["nextLevelId"]).toBe("l60");
-        });
-
-        it("produces NextLevelId as 'unknown' when levelId does not match l{n} format", async () => {
-            const contact = makeContact("alice", { levelId: "" });
-            const provider = makeProvider({ getGroupContacts: () => [contact] });
-            const fns = createPeopleFunctions(provider);
-            const ps = fns.find((f) => f.name === "PeopleSelector")!;
-            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
-            expect(result["NextLevelId"]).toBe("unknown");
-        });
-
-        it("produces NextLevelId as 'unknown' when levelId is 'unknown'", async () => {
-            const contact = makeContact("alice", { levelId: "unknown" });
-            const provider = makeProvider({ getGroupContacts: () => [contact] });
-            const fns = createPeopleFunctions(provider);
-            const ps = fns.find((f) => f.name === "PeopleSelector")!;
-            const result = await ps.resolve({ person: "alice" }, makeCtx({ args: [{ value: "Team" }] })) as Record<string, unknown>;
-            expect(result["NextLevelId"]).toBe("unknown");
+            expect(Object.hasOwn(result, "levelId")).toBe(false);
+            expect(Object.hasOwn(result, "LevelId")).toBe(false);
         });
 
         it("does not override known properties with extraFields values (camelCase and PascalCase)", async () => {
@@ -243,6 +297,38 @@ describe("peopleFunctions", () => {
             const ctxWithAnswers: TemplateContext = { ...ctx, answers: { group: "Team" } };
             const options = await personInput.resolveOptions(ctxWithAnswers);
             expect(options.length).toBe(2); // alice and bob
+        });
+
+        it("uses quoted first arg as label for single-group input", () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({ args: [{ value: "Collecting feedback for", isQuoted: true }, { value: "Team" }] });
+            const inputs = ps.describeInputs(ctx) as any[];
+            expect(inputs).toHaveLength(1);
+            expect(inputs[0].name).toBe("person");
+            expect(inputs[0].label).toBe("Collecting feedback for");
+        });
+
+        it("uses quoted first arg as group label for multi-group input", () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({
+                args: [
+                    { value: "Select candidate", isQuoted: true },
+                    { value: "Team | Colleagues", options: ["Team", "Colleagues"] },
+                ],
+            });
+            const inputs = ps.describeInputs(ctx) as any[];
+            expect(inputs).toHaveLength(2);
+            expect(inputs[0].label).toBe("Select candidate");
+        });
+
+        it("resolve: reads group from args[1] when args[0] is quoted label", async () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ps = fns.find((f) => f.name === "PeopleSelector")!;
+            const ctx = makeCtx({ args: [{ value: "Pick someone", isQuoted: true }, { value: "Team" }] });
+            const result = await ps.resolve({ person: "alice" }, ctx) as any;
+            expect(result.id).toBe("alice");
         });
     });
 
@@ -330,6 +416,28 @@ describe("peopleFunctions", () => {
             // Passing empty inputs so inputs["choice"] is undefined → ?? "0" branch
             const result = ds.resolve({}, ctx);
             expect(typeof result).toBe("string");
+        });
+
+        it("uses quoted first arg as label", () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ds = fns.find((f) => f.name === "DeadlineSelector")!;
+            const ctx = makeCtx({
+                args: [{ value: "Set deadline", isQuoted: true }, { value: "1d" }, { value: "3d" }],
+                now: new Date("2026-01-15"),
+            });
+            const inputs = ds.describeInputs(ctx) as any[];
+            expect(inputs[0].label).toBe("Set deadline");
+            expect(inputs[0].options).toHaveLength(2);
+        });
+
+        it("throws for M unit in duration arg after label", () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ds = fns.find((f) => f.name === "DeadlineSelector")!;
+            const ctx = makeCtx({
+                args: [{ value: "Pick date", isQuoted: true }, { value: "4M" }],
+                now: new Date("2026-01-15"),
+            });
+            expect(() => ds.describeInputs(ctx)).toThrow();
         });
     });
 

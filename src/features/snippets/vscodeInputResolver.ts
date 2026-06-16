@@ -7,9 +7,10 @@ import * as vscode from "vscode";
 import type { InputResolver, TemplateInput } from "./templates/templateTypes";
 
 export class VsCodeInputResolver implements InputResolver {
-    async resolve(input: TemplateInput, _qualifiedKey: string): Promise<string | undefined> {
+    async resolve(input: TemplateInput, qualifiedKey: string): Promise<string | undefined> {
         if (input.kind === "freeText") {
             const result = await vscode.window.showInputBox({
+                title: qualifiedKey,
                 prompt: input.label,
                 value: input.default ?? "",
             });
@@ -29,6 +30,7 @@ export class VsCodeInputResolver implements InputResolver {
         }));
 
         const picked = await vscode.window.showQuickPick(items, {
+            title: qualifiedKey,
             placeHolder: input.label,
         });
 

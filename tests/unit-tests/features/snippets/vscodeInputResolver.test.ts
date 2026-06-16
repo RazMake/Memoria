@@ -35,6 +35,7 @@ describe("VsCodeInputResolver", () => {
             const result = await resolver.resolve(input, "entry.name");
 
             expect(showInputBox).toHaveBeenCalledWith({
+                title: "entry.name",
                 prompt: "Enter your name",
                 value: "Alice",
             });
@@ -58,7 +59,7 @@ describe("VsCodeInputResolver", () => {
             showInputBox.mockResolvedValue("value");
             const input: TemplateInput = { name: "x", kind: "freeText", label: "Label" };
             await resolver.resolve(input, "entry.x");
-            expect(showInputBox).toHaveBeenCalledWith({ prompt: "Label", value: "" });
+            expect(showInputBox).toHaveBeenCalledWith({ title: "entry.x", prompt: "Label", value: "" });
         });
     });
 
@@ -83,7 +84,7 @@ describe("VsCodeInputResolver", () => {
                     { label: "Option A", description: undefined, value: "a" },
                     { label: "Option B", description: "Second option", value: "b" },
                 ],
-                { placeHolder: "Pick one" }
+                { title: "entry.choice", placeHolder: "Pick one" }
             );
             expect(result).toBe("a");
         });

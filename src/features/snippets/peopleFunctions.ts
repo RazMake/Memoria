@@ -5,6 +5,7 @@
 
 import type { TemplateFunction, TemplateContext, TemplateInput } from "./templates/templateTypes";
 import type { ContactsProvider, MeProfile, ResolvedContact } from "./contactsProvider";
+import type { CareerLevelReference, PronounsReference } from "../contacts/types";
 import { formatDueIn, formatDueBy } from "../../utils/dateUtils";
 import { parseDuration } from "./templates/templateParser";
 
@@ -27,7 +28,6 @@ const CAMEL_TO_PASCAL_CONTACT_PROPS: ReadonlyMap<string, string> = new Map([
     ["pronounsKey", "PronounsKey"],
     ["extraFields", "ExtraFields"],
     ["droppedFields", "DroppedFields"],
-    ["levelId", "LevelId"],
     ["levelStartDate", "LevelStartDate"],
     ["employeeId", "EmployeeId"],
     ["bandRank", "BandRank"],
@@ -47,21 +47,38 @@ const CAMEL_TO_PASCAL_CONTACT_PROPS: ReadonlyMap<string, string> = new Map([
 const KNOWN_CONTACT_PROPS = new Set([
     ...CAMEL_TO_PASCAL_CONTACT_PROPS.keys(),
     ...CAMEL_TO_PASCAL_CONTACT_PROPS.values(),
-    "nextLevelId", "NextLevelId",
+    "levelId", "LevelId",
+    "pronouns", "Pronouns",
+    "level", "Level",
+    "nextLevel", "NextLevel",
 ]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Computes the next level id from a levelId string.
- * e.g. "l59" → "l60". Returns "unknown" if the format is unrecognised.
- */
-function computeNextLevelId(levelId: string): string {
-    const match = /^l(\d+)$/.exec(levelId);
-    if (!match) {
-        return "unknown";
-    }
-    return `l${parseInt(match[1], 10) + 1}`;
+/** Returns a copy of a CareerLevelReference with PascalCase property aliases added. */
+function flattenCareerLevelRef(level: CareerLevelReference): CareerLevelReference & Record<string, unknown> {
+    return {
+        ...level,
+        Key: level.key,
+        Id: level.id,
+        InterviewType: level.interviewType,
+        TitlePattern: level.titlePattern,
+        ExtraFields: level.extraFields,
+    };
+}
+
+/** Returns a copy of a PronounsReference with PascalCase property aliases added. */
+function flattenPronounsRef(pronouns: PronounsReference): PronounsReference & Record<string, unknown> {
+    return {
+        ...pronouns,
+        Key: pronouns.key,
+        Subject: pronouns.subject,
+        Object: pronouns.object,
+        PossessiveAdjective: pronouns.possessiveAdjective,
+        Possessive: pronouns.possessive,
+        Reflexive: pronouns.reflexive,
+        ExtraFields: pronouns.extraFields,
+    };
 }
 
 // ── Flattened contact type ────────────────────────────────────────────────────
@@ -69,9 +86,17 @@ function computeNextLevelId(levelId: string): string {
 export type FlattenedContact = ResolvedContact & Record<string, unknown>;
 
 /** Flattens a contact's extraFields to top-level properties, skipping known property names.
- *  Also adds PascalCase aliases for all known camelCase properties and NextLevelId. */
-function flattenContact(contact: ResolvedContact, diagnostics: string[]): FlattenedContact {
+ *  Also adds PascalCase aliases, pronouns/level short aliases, and nextLevel lookup. */
+function flattenContact(
+    contact: ResolvedContact,
+    diagnostics: string[],
+    getCareerLevel: (levelId: string) => CareerLevelReference | null,
+    getCareerLevelByNumericId: (id: number) => CareerLevelReference | null,
+): FlattenedContact {
     const flat: Record<string, unknown> = { ...contact };
+
+    // Remove raw levelId — superseded by level.key
+    delete flat["levelId"];
 
     // Add PascalCase aliases for all known camelCase properties
     for (const [camel, pascal] of CAMEL_TO_PASCAL_CONTACT_PROPS) {
@@ -80,11 +105,24 @@ function flattenContact(contact: ResolvedContact, diagnostics: string[]): Flatte
         }
     }
 
-    // Add NextLevelId / nextLevelId when levelId is present
-    if (Object.hasOwn(flat, "levelId")) {
-        const nextId = computeNextLevelId(flat["levelId"] as string);
-        flat["NextLevelId"] = nextId;
-        flat["nextLevelId"] = nextId;
+    // Add short aliases for the resolved reference objects
+    if (contact.resolvedPronouns !== undefined) {
+        const flatPronouns = flattenPronounsRef(contact.resolvedPronouns);
+        flat["pronouns"] = flatPronouns;
+        flat["Pronouns"] = flatPronouns;
+    }
+    if (contact.resolvedCareerLevel !== undefined) {
+        const flatLevel = contact.resolvedCareerLevel !== null ? flattenCareerLevelRef(contact.resolvedCareerLevel) : null;
+        flat["level"] = flatLevel;
+        flat["Level"] = flatLevel;
+    }
+
+    // Add nextLevel / NextLevel by looking up the level whose numeric id is currentLevel.id + 1
+    if (contact.resolvedCareerLevel !== null && contact.resolvedCareerLevel !== undefined) {
+        const nextLevelRaw = getCareerLevelByNumericId(contact.resolvedCareerLevel.id + 1);
+        const nextLevel = nextLevelRaw !== null ? flattenCareerLevelRef(nextLevelRaw) : null;
+        flat["nextLevel"] = nextLevel;
+        flat["NextLevel"] = nextLevel;
     }
 
     for (const [label, value] of Object.entries(contact.extraFields ?? {})) {
@@ -116,15 +154,17 @@ function createPeopleSelector(contacts: ContactsProvider): TemplateFunction<Flat
                 return []; // short-circuit
             }
 
-            const arg = ctx.args[0];
-            const groups = arg?.options ?? (arg?.value ? [arg.value] : contacts.listGroups());
+            const hasLabel = ctx.args[0]?.isQuoted === true;
+            const inputLabel = hasLabel ? ctx.args[0].value : undefined;
+            const groupArg = ctx.args[hasLabel ? 1 : 0];
+            const groups = groupArg?.options ?? (groupArg?.value ? [groupArg.value] : contacts.listGroups());
 
             if (groups.length > 1) {
                 // Multi-group: first pick group, then pick person
                 return [
                     {
                         name: "group",
-                        label: "Select group",
+                        label: inputLabel ?? "Select group",
                         kind: "pick",
                         options: groups.map((g) => ({ value: g, label: g })),
                     },
@@ -149,7 +189,7 @@ function createPeopleSelector(contacts: ContactsProvider): TemplateFunction<Flat
             return [
                 {
                     name: "person",
-                    label: `Select person from ${groupName}`,
+                    label: inputLabel ?? `Select person from ${groupName}`,
                     kind: "pick",
                     options: contacts.getGroupContacts(groupName).map((c) => ({
                         value: c.id,
@@ -167,8 +207,9 @@ function createPeopleSelector(contacts: ContactsProvider): TemplateFunction<Flat
                 );
             }
 
-            const arg = ctx.args[0];
-            const groups = arg?.options ?? (arg?.value ? [arg.value] : contacts.listGroups());
+            const hasLabel = ctx.args[0]?.isQuoted === true;
+            const groupArg = ctx.args[hasLabel ? 1 : 0];
+            const groups = groupArg?.options ?? (groupArg?.value ? [groupArg.value] : contacts.listGroups());
             const groupName = groups.length > 1
                 ? (inputs["group"] ?? groups[0])
                 : (groups[0] ?? "");
@@ -185,7 +226,7 @@ function createPeopleSelector(contacts: ContactsProvider): TemplateFunction<Flat
                 throw new Error(`PeopleSelector: person "${personId}" not found in group "${groupName}"`);
             }
 
-            return flattenContact(contact, []);
+            return flattenContact(contact, [], contacts.getCareerLevel.bind(contacts), contacts.getCareerLevelByNumericId.bind(contacts));
         },
 
         display(result: FlattenedContact): string {
@@ -243,7 +284,11 @@ function createDeadlineSelector(): TemplateFunction<string> {
         name: "DeadlineSelector",
 
         describeInputs(ctx: TemplateContext): TemplateInput[] {
-            const options = ctx.args
+            const hasLabel = ctx.args[0]?.isQuoted === true;
+            const inputLabel = hasLabel ? ctx.args[0].value : undefined;
+            const durationArgs = hasLabel ? ctx.args.slice(1) : ctx.args;
+
+            const options = durationArgs
                 .filter((a) => !a.options && a.value.trim())
                 .map((a) => {
                     const raw = a.value.trim();
@@ -261,7 +306,7 @@ function createDeadlineSelector(): TemplateFunction<string> {
 
             return [{
                 name: "choice",
-                label: "Select deadline",
+                label: inputLabel ?? "Select deadline",
                 kind: "pick",
                 options,
             }];

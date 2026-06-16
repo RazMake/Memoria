@@ -19,8 +19,7 @@ import {
     buildShortTitleLookup,
     type ContactGroupInfo,
 } from "../features/contacts/contactResolution";
-import type { ContactKind, ContactsReferenceData } from "../features/contacts/types";
-import { createEmptyReferenceData } from "../features/contacts/contactUtils";
+import type { ContactKind, ContactsReferenceData, CareerLevelReference } from "../features/contacts/types";
 
 interface GroupConfig {
     file: string;
@@ -32,6 +31,7 @@ export class DiskContactsProvider implements ContactsProvider {
     private meProfile: MeProfile | null = null;
     private available = false;
     private groupNames: string[] = [];
+    private referenceData: ContactsReferenceData | null = null;
 
     constructor(
         private readonly workspaceRoot: string,
@@ -42,6 +42,7 @@ export class DiskContactsProvider implements ContactsProvider {
     async load(): Promise<void> {
         try {
             const referenceData = this.loadReferenceData();
+            this.referenceData = referenceData;
             const shortTitleLookup = buildShortTitleLookup(referenceData);
 
             for (const group of this.groups) {
@@ -93,6 +94,14 @@ export class DiskContactsProvider implements ContactsProvider {
 
     getMe(): MeProfile | null {
         return this.meProfile;
+    }
+
+    getCareerLevel(levelId: string): CareerLevelReference | null {
+        return this.referenceData.careerLevels.find((cl) => cl.key === levelId) ?? null;
+    }
+
+    getCareerLevelByNumericId(id: number): CareerLevelReference | null {
+        return this.referenceData.careerLevels.find((cl) => cl.id === id) ?? null;
     }
 
     private loadReferenceData(): ContactsReferenceData {

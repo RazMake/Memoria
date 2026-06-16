@@ -148,6 +148,25 @@ describe("templateEngine", () => {
             expect(result.text).toBe("Hello and World");
         });
 
+        it("prompts independent entries in frontmatter top-to-bottom order", async () => {
+            const promptOrder: string[] = [];
+            const trackingResolver: InputResolver = {
+                async resolve(_input: TemplateInput, qualifiedKey: string): Promise<string> {
+                    promptOrder.push(qualifiedKey);
+                    return qualifiedKey.startsWith("alpha") ? "A" : qualifiedKey.startsWith("beta") ? "B" : "C";
+                },
+            };
+
+            const text = "---\nalpha: FreeText()\nbeta: FreeText()\ngamma: FreeText()\n---\n{{alpha}} {{beta}} {{gamma}}";
+            const result = await renderTemplate({
+                templateText: text,
+                inputResolver: trackingResolver,
+                functions: [],
+            });
+            expect(result.text).toBe("A B C");
+            expect(promptOrder).toEqual(["alpha.value", "beta.value", "gamma.value"]);
+        });
+
         it("scope is populated with resolved entries", async () => {
             const text = "---\nname: FreeText()\n---\n{{name}}";
             const result = await renderTemplate({

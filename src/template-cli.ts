@@ -155,7 +155,7 @@ async function cmdInvoke(
         }
 
         const ctx = {
-            args: fnArgs.map((a) => ({ value: a.raw, options: a.options })),
+            args: fnArgs.map((a) => ({ value: a.raw, options: a.options, isQuoted: a.isQuoted })),
             answers: {},
             scope: {},
             now: new Date(),
@@ -205,7 +205,7 @@ async function cmdDescribe(
         if (!fn) continue;
 
         const ctx = {
-            args: entry.args.map((a) => ({ value: a.raw, options: a.options })),
+            args: entry.args.map((a) => ({ value: a.raw, options: a.options, isQuoted: a.isQuoted })),
             answers: {},
             scope: {},
             now,

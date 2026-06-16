@@ -68,7 +68,9 @@ async function resolveEntries(
     while (unresolved.length > 0) {
         const beforeCount = unresolved.length;
 
-        for (let i = unresolved.length - 1; i >= 0; i--) {
+        // Phase 1: collect ready entries in frontmatter (top-to-bottom) order
+        const readyEntries: Array<{ idx: number; entry: FrontmatterEntry; fn: TemplateFunction }> = [];
+        for (let i = 0; i < unresolved.length; i++) {
             const entry = unresolved[i];
             const fn = functions.get(entry.functionName);
 
@@ -79,14 +81,17 @@ async function resolveEntries(
                 );
             }
 
+            const branchArgSet = new Set(fn.branchArgs ?? []);
+            const deps = extractDependencies(entry, knownNames, branchArgSet);
+            if (!deps.some((dep) => !Object.hasOwn(scope, dep))) {
+                readyEntries.push({ idx: i, entry, fn });
+            }
+        }
+
+        // Phase 2: process ready entries in frontmatter order (preserves user-facing prompt order)
+        for (const { entry, fn } of readyEntries) {
             // Determine which arg positions are branch args (not dependency extracted)
             const branchArgSet = new Set(fn.branchArgs ?? []);
-
-            // Check if all dependencies are satisfied
-            const deps = extractDependencies(entry, knownNames, branchArgSet);
-            if (deps.some((dep) => !Object.hasOwn(scope, dep))) {
-                continue; // not ready yet
-            }
 
             // Resolve args (substituting references from current scope)
             const resolvedArgs = renderArgs(entry, scope, branchArgSet, [...functions.values()], diagnostics);
@@ -138,7 +143,14 @@ async function resolveEntries(
             }
 
             scope[entry.name] = result;
-            unresolved.splice(i, 1);
+        }
+
+        // Remove resolved entries from unresolved (splice from end to preserve indices)
+        const resolvedNames = new Set(readyEntries.map(({ entry }) => entry.name));
+        for (let i = unresolved.length - 1; i >= 0; i--) {
+            if (resolvedNames.has(unresolved[i].name)) {
+                unresolved.splice(i, 1);
+            }
         }
 
         // If no progress was made, we have a cycle or unsatisfiable dependency
@@ -186,7 +198,7 @@ function renderArgs(
         if (arg.isQuoted) {
             // Quoted string — substitute {{…}} inside it
             const rendered = renderExpressions(arg.raw, scope, functions, branchArgSet.has(i) ? [] : diagnostics);
-            return { value: rendered };
+            return { value: rendered, isQuoted: true };
         }
 
         // Plain identifier or number+unit — no substitution

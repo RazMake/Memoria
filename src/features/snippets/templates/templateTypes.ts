@@ -41,6 +41,8 @@ export interface TemplateArg {
     value: string;
     /** For union arguments (A | B | C), the list of options; otherwise undefined. */
     options?: string[];
+    /** True when the argument was written as a quoted string literal in the frontmatter. */
+    isQuoted?: boolean;
 }
 
 /** Runtime context passed to TemplateFunction.describeInputs and .resolve. */
