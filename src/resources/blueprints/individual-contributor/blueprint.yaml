@@ -15,6 +15,9 @@ workspace:
       children:
         - name: "contacts-update.prompt.md"
     - name: "skills/"
+      children:
+        - name: "template-based-skill-creator.skill.md"
+          seedSource: "ai-instruction-files/skills/template-based-skill-creator.skill.md"
   - name: "00-Workstreams/"
     children:
       - name: "My-Evaluation/"
