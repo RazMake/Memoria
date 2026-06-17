@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.3
+
+- Added **scheduled backups** — define backup profiles (in `.memoria/backup-config.json`) that compress selected workspace files into dated, incremental zip archives on a recurring schedule. Includes retention limits, a status-bar indicator, a guided **Create Backup Profile** wizard, manual **Run Backup**, **Backup History**, and an opt-in setting to catch up missed backups when VS Code starts.
+- Added **templated text generation** (part of the Snippets feature) — render Markdown templates whose frontmatter declares values produced by functions (people pickers, dates, free text, conditionals, and your own `.ts` functions), then insert, copy, or save the result. The same templates can also be rendered outside VS Code through a bundled Node CLI with a PowerShell wrapper.
+- Extended the visibility toggle to show/hide _individual files_, not just dot-folders — any file can be added to the managed list.
+- Enhanced the **Contacts** feature — team members now include an Employee ID and evaluation fields.
+- Improved the layout of the built-in notebook templates.
+
 ## 0.0.2
 
 - This version is _publicly released_.
