@@ -168,4 +168,4 @@ Changes take effect immediately — no restart required.
 
 ---
 
-[⬅️ **Back** to Features](index.md) 💠 [Commands](../commands/index.md) 💠 [Getting Started](../getting-started.md)
+[⬅️ **Back** to Features](index.md) 💠 [Templates](templates.md) 💠 [Commands](../commands/index.md) 💠 [Getting Started](../getting-started.md)
