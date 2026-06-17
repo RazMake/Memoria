@@ -24,6 +24,8 @@ import { registerCommands } from "./commandRegistration";
 import { registerFeatureHandlers } from "./featureSetup";
 import { registerLinkReferenceWatcher } from "./linkReferenceWatcher";
 import { BackupFeature } from "./features/backup/backupFeature";
+import { ensureGitignoreEntry } from "./utils/filesystem";
+import type { EngineConfig } from "./blueprints/types";
 
 export { isNewerVersion } from "./blueprintUpdateCheck";
 
@@ -112,7 +114,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         todoEditorProvider.setInitializedRoot(workspaceRoot);
         await refreshWorkspaceState(workspaceRoot, roots, manifest, featureManager);
         void registerDefaultFileWatcher(context, workspaceRoot, roots, manifest, defaultFileWatcherHolder);
+        void writeEngineConfigFor(workspaceRoot, context.extensionUri, manifest);
     };
+
+    // Write engine-config.json for the already-initialized root (if any) so the CLI
+    // and wrapper scripts can locate Node + the bundled CLI immediately after activation.
+    if (initializedRoot) {
+        void writeEngineConfigFor(initializedRoot, context.extensionUri, manifest);
+    }
 
     // Check for blueprint updates in the background — this may show a dialog that blocks
     // indefinitely and must not delay decoration rendering.
@@ -152,6 +161,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export function deactivate(): void {
     // Default-file watchers are tracked by the holder created in activate().
     // Context subscriptions handle disposal of all other watchers.
+}
+
+/**
+ * Writes `.memoria/engine-config.json` and ensures it is gitignored.
+ * Best-effort — errors are swallowed so a write failure never breaks activation.
+ */
+async function writeEngineConfigFor(
+    workspaceRoot: vscode.Uri,
+    extensionUri: vscode.Uri,
+    manifest: ManifestManager,
+): Promise<void> {
+    try {
+        const manifestData = await manifest.readManifest(workspaceRoot);
+        const templatesFolder = manifestData?.snippets?.templatesFolder;
+        const config: EngineConfig = {
+            version: "1.0.0",
+            node: process.execPath,
+            cli: vscode.Uri.joinPath(extensionUri, "dist", "template-cli.cjs").fsPath,
+            workspaceRoot: workspaceRoot.fsPath,
+            ...(templatesFolder ? { templatesFolder } : {}),
+        };
+        await manifest.writeEngineConfig(workspaceRoot, config);
+        await ensureGitignoreEntry(vscode.workspace.fs, workspaceRoot, ".memoria/engine-config.json");
+    } catch {
+        // Engine config is a convenience artefact — never surface write failures to the user.
+    }
 }
 
 function registerLanguageProviders(

@@ -49,3 +49,22 @@ export async function ensureDirectory(fs: typeof vscode.workspace.fs, uri: vscod
         // Already exists (or a benign race) — ignore.
     }
 }
+
+/**
+ * Ensures `entry` appears as its own line in the `.gitignore` at the workspace root.
+ * Creates the file if it does not exist. No-ops when the entry is already present.
+ */
+export async function ensureGitignoreEntry(
+    fs: typeof vscode.workspace.fs,
+    workspaceRoot: vscode.Uri,
+    entry: string,
+): Promise<void> {
+    const uri = vscode.Uri.joinPath(workspaceRoot, ".gitignore");
+    const existing = await readTextFile(fs, uri);
+    const lines = existing.split(/\r?\n/);
+    if (lines.some((l) => l.trim() === entry)) {
+        return;
+    }
+    const trailingNewline = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
+    await writeTextFile(fs, uri, `${existing}${trailingNewline}${entry}\n`);
+}

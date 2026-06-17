@@ -156,6 +156,20 @@ export interface SnippetsManifestConfig {
     templatesFolder?: string;
 }
 
+/**
+ * Written to `.memoria/engine-config.json` on extension activation.
+ * Allows external callers (wrapper scripts, SKILLs) to locate Node and
+ * the bundled CLI without guessing installation paths.
+ * Machine-local and gitignored — never committed.
+ */
+export interface EngineConfig {
+    version: string;
+    node: string;
+    cli: string;
+    workspaceRoot: string;
+    templatesFolder?: string;
+}
+
 /** Stored in .memoria/blueprint.json — tracks which blueprint was applied and file hashes. */
 export interface BlueprintManifest {
     blueprintId: string;

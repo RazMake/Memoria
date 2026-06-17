@@ -7,7 +7,7 @@
 // without storing any file content or PII.
 
 import * as vscode from "vscode";
-import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig } from "./types";
+import type { BlueprintManifest, DefaultFilesConfig, DefaultFilesEntry, DecorationsConfig, DotfoldersConfig, FeaturesConfig, EngineConfig } from "./types";
 import { BACKUP_FOLDER_NAME } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 import type { TelemetryEmitter } from "../telemetry";
@@ -169,6 +169,15 @@ export class ManifestManager {
 
     async writeTaskIndex(workspaceRoot: vscode.Uri, index: StoredTaskIndex): Promise<void> {
         await this.writeConfig(workspaceRoot, "tasks-index.json", index);
+    }
+
+    /**
+     * Writes `.memoria/engine-config.json` so external callers (scripts, SKILLs)
+     * can discover the Node executable and bundled CLI without guessing paths.
+     * Overwrites on every call — the file is machine-local and gitignored.
+     */
+    async writeEngineConfig(workspaceRoot: vscode.Uri, config: EngineConfig): Promise<void> {
+        await this.writeConfig(workspaceRoot, "engine-config.json", config);
     }
 
     async deleteTaskIndex(workspaceRoot: vscode.Uri): Promise<void> {

@@ -66,6 +66,9 @@ workspace:
   - name: "13-Scripts/"
     children:
       - name: "Utils/"
+        children:
+          - name: "Invoke-Template.ps1"
+            seedSource: "scripts/Invoke-Template.ps1"
 
 features:
   - id: "taskCollector"

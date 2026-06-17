@@ -193,6 +193,7 @@ async function cmdDescribe(
     }
 
     const templateText = readTemplateFile(workspaceRoot, templatesFolder, templatePath);
+    const params = parseParams(args["params"] as string | undefined);
     const parsed = parseTemplate(templateText);
     const userFunctions = loadUserFunctions(workspaceRoot, templatesFolder);
     const allFunctions = new Map([...CORE_BUILTINS, ...hostFunctions, ...userFunctions].map((f) => [f.name, f]));
@@ -204,9 +205,16 @@ async function cmdDescribe(
         const fn = allFunctions.get(entry.functionName);
         if (!fn) continue;
 
+        // Extract per-entry answers from the flat params: "entryName.inputName" → "inputName"
+        const entryAnswers: Record<string, string> = Object.fromEntries(
+            Object.entries(params)
+                .filter(([k]) => k.startsWith(`${entry.name}.`))
+                .map(([k, v]) => [k.slice(entry.name.length + 1), v]),
+        );
+
         const ctx = {
             args: entry.args.map((a) => ({ value: a.raw, options: a.options, isQuoted: a.isQuoted })),
-            answers: {},
+            answers: entryAnswers,
             scope: {},
             now,
         };
@@ -214,13 +222,18 @@ async function cmdDescribe(
         const inputs = await fn.describeInputs(ctx);
         for (const input of inputs) {
             const qualifiedKey = `${entry.name}.${input.name}`;
-            const isDynamic = typeof input.resolveOptions === "function";
-            schema.push({
-                key: qualifiedKey,
-                label: input.label,
-                kind: input.kind,
-                ...(isDynamic ? { dynamic: true } : { options: input.options }),
-            });
+            if (typeof input.resolveOptions === "function") {
+                if (Object.keys(entryAnswers).length > 0) {
+                    // Caller supplied preceding answers — resolve the options now.
+                    const resolvedOptions = await input.resolveOptions(ctx);
+                    schema.push({ key: qualifiedKey, label: input.label, kind: input.kind, options: resolvedOptions });
+                } else {
+                    // No preceding answers yet — signal caller to re-run describe after answering earlier inputs.
+                    schema.push({ key: qualifiedKey, label: input.label, kind: input.kind, dynamic: true });
+                }
+            } else {
+                schema.push({ key: qualifiedKey, label: input.label, kind: input.kind, options: input.options });
+            }
         }
     }
 
