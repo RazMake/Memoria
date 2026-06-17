@@ -377,17 +377,17 @@ describe("peopleFunctions", () => {
     });
 
     describe("DeadlineSelector", () => {
-        it("describes inputs as a pick of durations", () => {
+        it("describes inputs as a pick of deadline options from numeric range", () => {
             const fns = createPeopleFunctions(makeProvider());
             const ds = fns.find((f) => f.name === "DeadlineSelector")!;
             const ctx = makeCtx({
-                args: [{ value: "1d" }, { value: "3d" }],
+                args: [{ value: "1" }, { value: "4" }],
                 now: new Date("2026-01-15"),
             });
             const inputs = ds.describeInputs(ctx) as any[];
             expect(inputs).toHaveLength(1);
             expect(inputs[0].kind).toBe("pick");
-            expect(inputs[0].options).toHaveLength(2);
+            expect(inputs[0].options).toHaveLength(3); // days 1, 2, 3 ([1, 4))
         });
 
         it("resolves to formatDueBy string", () => {
@@ -399,14 +399,24 @@ describe("peopleFunctions", () => {
             expect(result as string).toContain("by");
         });
 
-        it("throws for M unit in duration arg", () => {
+        it("throws when fewer than 2 numeric arguments are provided", () => {
             const fns = createPeopleFunctions(makeProvider());
             const ds = fns.find((f) => f.name === "DeadlineSelector")!;
             const ctx = makeCtx({
-                args: [{ value: "4M" }],
+                args: [{ value: "5" }],
                 now: new Date("2026-01-15"),
             });
-            expect(() => ds.describeInputs(ctx)).toThrow();
+            expect(() => ds.describeInputs(ctx)).toThrow(/expected 2 numeric arguments/);
+        });
+
+        it("throws when a non-numeric value is passed as start or end", () => {
+            const fns = createPeopleFunctions(makeProvider());
+            const ds = fns.find((f) => f.name === "DeadlineSelector")!;
+            const ctx = makeCtx({
+                args: [{ value: "foo" }, { value: "3" }],
+                now: new Date("2026-01-15"),
+            });
+            expect(() => ds.describeInputs(ctx)).toThrow(/invalid start value/);
         });
 
         it("defaults to 0 days when choice input is undefined", () => {
@@ -422,22 +432,22 @@ describe("peopleFunctions", () => {
             const fns = createPeopleFunctions(makeProvider());
             const ds = fns.find((f) => f.name === "DeadlineSelector")!;
             const ctx = makeCtx({
-                args: [{ value: "Set deadline", isQuoted: true }, { value: "1d" }, { value: "3d" }],
+                args: [{ value: "Set deadline", isQuoted: true }, { value: "1" }, { value: "4" }],
                 now: new Date("2026-01-15"),
             });
             const inputs = ds.describeInputs(ctx) as any[];
             expect(inputs[0].label).toBe("Set deadline");
-            expect(inputs[0].options).toHaveLength(2);
+            expect(inputs[0].options).toHaveLength(3); // days 1, 2, 3 ([1, 4))
         });
 
-        it("throws for M unit in duration arg after label", () => {
+        it("throws when fewer than 2 numeric args are provided after label", () => {
             const fns = createPeopleFunctions(makeProvider());
             const ds = fns.find((f) => f.name === "DeadlineSelector")!;
             const ctx = makeCtx({
-                args: [{ value: "Pick date", isQuoted: true }, { value: "4M" }],
+                args: [{ value: "Pick date", isQuoted: true }, { value: "5" }],
                 now: new Date("2026-01-15"),
             });
-            expect(() => ds.describeInputs(ctx)).toThrow();
+            expect(() => ds.describeInputs(ctx)).toThrow(/expected 2 numeric arguments/);
         });
     });
 

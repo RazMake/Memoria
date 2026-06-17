@@ -108,7 +108,7 @@ handed to a YAML parser (its grammar is defined in §4.2; the fence/body boundar
 candidate: PeopleSelector(Team)
 provider: PeopleSelector(Team | Managers | Peers | Colleagues)
 me: Me()
-deadline: DeadlineSelector(1d, 3d)
+deadline: DeadlineSelector(1, 10)
 project: FreeText()
 ---
 Hi {{provider.nickname}}. I have your name from _{{candidate.fullName}}_ and I am reaching out to
@@ -142,8 +142,10 @@ Each non-empty frontmatter line is a single declaration:
   - **union** — pipe-separated identifiers, e.g. `Team | Managers | Peers | Colleagues`, passed to the
     function as a list of options
   - **number+unit** — `\d+[dwM]`: digits followed by a unit (`d` = calendar days, `w` = weeks
-    ×7 days, `M` = months ×30 days). `DeadlineSelector` accepts only `d` and `w`; the `M` unit is
-    supported only by `IfWithin` (§6.2). An unrecognized unit is a parse error (§12).
+    ×7 days, `M` = months ×30 days). The `M` unit is supported only by `IfWithin` (§6.2).
+    An unrecognized unit is a parse error (§12).
+  - **plain number** — `\d+` with no unit suffix: a bare integer in days, used as the interval
+    bounds of `DeadlineSelector` (§6.2).
   - **quoted string** — `"..."` for literal text; **may embed `{{…}}` references** that are substituted
     before the function runs (e.g. `"…{{candidate.nickname}}…"`)
   - **reference** — `{{other.prop}}` that resolves to another frontmatter entry's value (e.g.
@@ -261,9 +263,10 @@ Templating is surfaced through the existing Snippets autocomplete:
    - `PeopleSelector(Team)` → a QuickPick of the people in the `Team` group.
    - `PeopleSelector(A | B | C)` → first pick a group among `A`, `B`, `C`, **then** pick a person whose
      options are computed from the chosen group (the dependent-input cascade, §6.1).
-   - `DeadlineSelector(1d, 3d)` → a QuickPick among the offered durations, each previewed via
-     `formatDueIn` (e.g. "in 3 days (by Friday, May 01, 2026)"); the pick resolves to the `formatDueBy`
-     phrase (§6.2).
+   - `DeadlineSelector(1, 10)` → a QuickPick offering one option per day in the half-open interval
+     `[start, end)` (days 1–9 in this example), each previewed via `formatDueIn`
+     (e.g. `"in 3 days (by Friday, May 01, 2026)"`); the pick resolves to the `formatDueBy`
+     phrase (§6.2). An optional quoted label may precede the two numbers.
    - `FreeText()` → an input box (its prompt may include resolved references, e.g.
      `FreeText("Notes about {{candidate.nickname}}")`).
    - `Me()` → no prompt (read from `Me.md`, §6.2).
@@ -421,15 +424,15 @@ the Report/Colleague schema: it is a free-form dictionary whose every field — 
 template references** — is **flattened** onto the profile and referenced by its **exact Markdown label**:
 `{{me.TeamName}}`, `{{me.StartDate}}`, `{{me.StartInPosition}}`, `{{me.Email}}`, etc.
 
-**`DeadlineSelector(dur1, dur2, ...)`** → a **human-friendly deadline string** (not a date object). It
-**reuses the existing `dateUtils` helpers and introduces no new phrasing logic**: each duration argument
-uses the grammar `\d+[dw]` (`d` = calendar days, `w` = weeks ×7 days; the `M` unit is **not accepted**
-by `DeadlineSelector` — use `IfWithin` for month-based conditionals, §6.2). The parsed number of days is
-rendered with
-[`formatDueIn`/`formatDueBy`](../../../src/utils/dateUtils.ts). Prompts to pick one of the offered
-durations, each **previewed** as `formatDueIn(days, ctx.now)` (e.g.
-`"in 1 week and 3 days (by Wednesday, Apr 29, 2026)"`); the chosen option **resolves** to
-`formatDueBy(days, ctx.now)` (e.g. `"by Wednesday, Apr 29, 2026"`).
+**`DeadlineSelector([label,] start, end)`** → a **human-friendly deadline string** (not a date object).
+Accepts two **plain integers** (no unit suffix) as the bounds of a half-open day interval `[start, end)`.
+For example, `DeadlineSelector(1, 10)` generates nine options — one per day from 1 through 9.
+An optional quoted `label` argument may precede the two numbers to customise the QuickPick prompt
+(e.g. `DeadlineSelector("Pick a deadline", 1, 10)`).
+**Reuses the existing `dateUtils` helpers and introduces no new phrasing logic**: each option is
+**previewed** as `formatDueIn(days, ctx.now)` (e.g. `"in 3 days (by Wednesday, Apr 29, 2026)"`);
+the chosen option **resolves** to `formatDueBy(days, ctx.now)` (e.g. `"by Wednesday, Apr 29, 2026"`).
+See [`formatDueIn`/`formatDueBy`](../../../src/utils/dateUtils.ts).
 
 **`FreeText([label])`** → the string the user types. The optional `label` argument customizes the
 prompt and **may reference other frontmatter entries** (e.g. `FreeText("Notes about
@@ -1019,12 +1022,12 @@ produced by `describe`), and the trust boundary (templates/functions are user-au
 - **Invalid duration or date argument** — these errors arise at two stages:
   - **Parse-time** — an unrecognized duration unit (e.g. `3x`) or a non-numeric duration (e.g. `abc`)
     is rejected by the frontmatter parser before any function runs.
-  - **Function-validation-time** — a syntactically valid duration used by a function that rejects it
-    (e.g. `DeadlineSelector(4M)` — `4M` parses as a valid `number+unit` per §4.2, but
-    `DeadlineSelector` rejects the `M` unit), or an invalid date string passed to `IfWithin` (anything
-    that is not `YYYY-MM-DD`), is rejected when the function's `resolve` runs. The function throws a
-    descriptive error, which the engine reports as a function failure (same path as “Function throws
-    during `resolve`” above).
+  - **Function-validation-time** — a value that fails the function’s own validation
+    (e.g. `DeadlineSelector` receiving fewer than two numeric bounds, or a non-numeric bound such as
+    `DeadlineSelector(foo, 10)`), or an invalid date string passed to `IfWithin` (anything that is not
+    `YYYY-MM-DD`), is rejected when the function’s `describeInputs` or `resolve` runs. The function
+    throws a descriptive error, which the engine reports as a function failure (same path as “Function
+    throws during `resolve`” above).
 
   In both cases the render fails with a precise message naming the offending argument and function.
 - **Cancellation** (Escape in VS Code): `renderTemplate` aborts **immediately** when any
@@ -1086,8 +1089,9 @@ The engine core is pure and adapter-injected, so the bulk is unit-tested:
 - `peopleFunctions` — `PeopleSelector` (single/union groups, empty group, extra-field flattening,
   Contacts-unavailable short-circuit), `Me` (Me.md present/absent, free-form fields flattened,
   **`Object.hasOwn` field-existence check**), `DeadlineSelector` (**delegates to
-  `formatDueIn`/`formatDueBy`** — assert it calls the helpers, not bespoke phrasing; **rejects `M`
-  unit**). Built against a fake `ContactsProvider`.
+  `formatDueIn`/`formatDueBy`** — assert it calls the helpers, not bespoke phrasing; **generates one
+  option per day in `[start, end)`**; **rejects non-numeric or missing bounds**). Built against a fake
+  `ContactsProvider`.
 - `parseMeProfileDocument` — the new `me`-kind parser (no `#` heading required, **every field**
   included even when no template references it, label casing preserved), added beside the existing
   `parseContactGroupDocument` tests in [contactParser.test](../../../tests/unit-tests).
@@ -1189,10 +1193,10 @@ mention templating, and add the new commands to the commands documentation under
 
 1. **Deadline phrasing / locale** — **Settled for v1:** `DeadlineSelector` introduces **no new phrasing
    logic** and **reuses `dateUtils.formatDueIn`/`formatDueBy`** for both the option preview and the
-   resolved value (§6.2), accepting only `d` (day) and `w` (week) units. The `M` (month) unit is
-   supported by `IfWithin` only, approximated as ×30 calendar days (§6.2) — this is sufficient for
-   conditional checks like `IfWithin(4M, …)` without adding month phrasing to `dateUtils`.
-   `DeadlineSelector` with month units and non-English locales are deferred to a future version.
+   resolved value (§6.2). It accepts two **plain integers** as the half-open interval bounds `[start, end)`
+   (no unit suffix). The `M` (month) unit is supported by `IfWithin` only, approximated as ×30 calendar
+   days (§6.2) — this is sufficient for conditional checks like `IfWithin(4M, …)` without adding month
+   phrasing to `dateUtils`. Non-English locales for `DeadlineSelector` are deferred to a future version.
 2. **Cycle reporting** — **Settled:** the resolver detects stalls by **fixpoint** (§4.4 step 3) — if a
    full pass resolves nothing while entries remain, those entries are unsatisfiable or circular (direct
    `a↔b`, indirect `a→b→c→a`, self-reference, or a reference to a non-existent entry). The render then

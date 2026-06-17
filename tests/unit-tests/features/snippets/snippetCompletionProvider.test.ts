@@ -15,9 +15,9 @@ import type { SnippetDefinition } from "../../../../src/features/snippets/types"
 
 function makeSnippet(overrides: Partial<SnippetDefinition> = {}): SnippetDefinition {
     return {
-        trigger: "{date}",
-        label: "Date",
-        description: "Insert date",
+        trigger: "@john",
+        label: "John Doe",
+        description: "Insert contact",
         glob: "**/*.md",
         pathSafe: false,
         ...overrides,
@@ -50,20 +50,7 @@ describe("SnippetCompletionProvider", () => {
     });
 
     describe("provideCompletionItems", () => {
-        it("should return completions when trigger char is {", () => {
-            const doc = makeDocument("{");
-            const pos = makePosition(0, 1);
-
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
-
-            expect(result).toBeDefined();
-            expect(result).toHaveLength(1);
-            expect(result![0].label).toBe("Date");
-        });
-
         it("should return completions when trigger char is @", () => {
-            const contactSnippet = makeSnippet({ trigger: "@john", label: "John" });
-            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([contactSnippet]);
             const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
@@ -71,7 +58,16 @@ describe("SnippetCompletionProvider", () => {
 
             expect(result).toBeDefined();
             expect(result).toHaveLength(1);
-            expect(result![0].label).toBe("John");
+            expect(result![0].label).toBe("John Doe");
+        });
+
+        it("should return undefined when trigger char is {", () => {
+            const doc = makeDocument("{");
+            const pos = makePosition(0, 1);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+
+            expect(result).toBeUndefined();
         });
 
         it("should return undefined when no trigger character detected", () => {
@@ -83,57 +79,57 @@ describe("SnippetCompletionProvider", () => {
             expect(result).toBeUndefined();
         });
 
-        it("should filter snippets by trigger prefix ({ vs @)", () => {
+        it("should exclude {-prefixed snippets even when @ is the trigger", () => {
             const braceSnippet = makeSnippet({ trigger: "{date}", label: "Date" });
             const contactSnippet = makeSnippet({ trigger: "@john", label: "John" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([braceSnippet, contactSnippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
-            expect(result![0].label).toBe("Date");
+            expect(result![0].label).toBe("John");
         });
 
-        it("should return undefined when no matching snippets", () => {
-            const contactSnippet = makeSnippet({ trigger: "@only-contacts", label: "Contact" });
-            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([contactSnippet]);
-            const doc = makeDocument("{");
+        it("should return undefined when no matching @ snippets", () => {
+            const braceSnippet = makeSnippet({ trigger: "{date}", label: "Date" });
+            vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([braceSnippet]);
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toBeUndefined();
         });
 
         it("should use insertText for static snippets (body defined, no expand)", () => {
-            const snippet = makeSnippet({ body: "2026-04-24" });
+            const snippet = makeSnippet({ body: "John Doe" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
-            expect(result![0].insertText).toBe("2026-04-24");
+            expect(result![0].insertText).toBe("John Doe");
             expect(result![0].command).toBeUndefined();
         });
 
         it("should use command for dynamic snippets (expand defined)", () => {
             const snippet = makeSnippet({ expand: () => "expanded" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].insertText).toBe("");
             expect(result![0].command).toEqual({
                 title: "Expand snippet",
                 command: "memoria.expandSnippet",
-                arguments: ["{date}", "file:///test.md", 0, 1],
+                arguments: ["@john", "file:///test.md", 0, 1],
             });
         });
 
@@ -143,10 +139,10 @@ describe("SnippetCompletionProvider", () => {
                 parameters: [{ name: "name" }],
             });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].insertText).toBe("");
@@ -157,38 +153,47 @@ describe("SnippetCompletionProvider", () => {
         it("should set detail, filterText, sortText, and range on completion item", () => {
             const snippet = makeSnippet({ description: "My desc", filterText: "custom-filter" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result![0].detail).toBe("My desc");
             expect(result![0].filterText).toBe("custom-filter");
-            expect(result![0].sortText).toBe("{date}");
+            expect(result![0].sortText).toBe("@john");
             expect(result![0].range).toBeDefined();
         });
 
         it("should use trigger as filterText when filterText is not defined", () => {
             const snippet = makeSnippet({ filterText: undefined });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
-            expect(result![0].filterText).toBe("{date}");
+            expect(result![0].filterText).toBe("@john");
         });
     });
 
     describe("detectTrigger (via provideCompletionItems)", () => {
-        it("should detect { in middle of line", () => {
-            const doc = makeDocument("hello {dat");
+        it("should detect @ in middle of line", () => {
+            const doc = makeDocument("hello @joh");
             const pos = makePosition(0, 10);
 
             const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext());
 
             expect(result).toBeDefined();
             expect(result).toHaveLength(1);
+        });
+
+        it("should not detect { in middle of line", () => {
+            const doc = makeDocument("hello {dat");
+            const pos = makePosition(0, 10);
+
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext());
+
+            expect(result).toBeUndefined();
         });
 
         it("should stop at whitespace and return undefined", () => {
@@ -201,17 +206,17 @@ describe("SnippetCompletionProvider", () => {
         });
 
         it("should exclude snippets whose visible predicate returns false", () => {
-            const visibleSnippet = makeSnippet({ trigger: "{vis}", label: "Visible" });
+            const visibleSnippet = makeSnippet({ trigger: "@vis", label: "Visible" });
             const hiddenSnippet = makeSnippet({
-                trigger: "{hid}",
+                trigger: "@hid",
                 label: "Hidden",
                 visible: () => false,
             });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([visibleSnippet, hiddenSnippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].label).toBe("Visible");
@@ -219,27 +224,27 @@ describe("SnippetCompletionProvider", () => {
 
         it("should include snippets whose visible predicate returns true", () => {
             const snippet = makeSnippet({
-                trigger: "{show}",
+                trigger: "@show",
                 label: "Show",
                 visible: () => true,
             });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].label).toBe("Show");
         });
 
         it("should include snippets without a visible predicate", () => {
-            const snippet = makeSnippet({ trigger: "{no-vis}", label: "NoVis" });
+            const snippet = makeSnippet({ trigger: "@no-vis", label: "NoVis" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].label).toBe("NoVis");
@@ -248,29 +253,29 @@ describe("SnippetCompletionProvider", () => {
 
     describe("commandId snippets", () => {
         it("should use commandId and omit trigger from arguments when commandId is set", () => {
-            const snippet = makeSnippet({ trigger: "{template}", label: "Template", commandId: "memoria.expandTemplate" });
+            const snippet = makeSnippet({ trigger: "@special", label: "Special", commandId: "some.command" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result).toHaveLength(1);
             expect(result![0].insertText).toBe("");
             expect(result![0].command).toEqual({
                 title: "Expand",
-                command: "memoria.expandTemplate",
+                command: "some.command",
                 arguments: ["file:///test.md", 0, 1],
             });
         });
 
         it("should not use commandId when body is defined and no expand/parameters", () => {
-            const snippet = makeSnippet({ body: "hello", commandId: "memoria.expandTemplate" });
+            const snippet = makeSnippet({ body: "hello", commandId: "some.command" });
             vi.mocked(snippetProvider.getAllSnippets).mockReturnValue([snippet]);
-            const doc = makeDocument("{");
+            const doc = makeDocument("@");
             const pos = makePosition(0, 1);
 
-            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("{"));
+            const result = provider.provideCompletionItems(doc, pos, {} as any, makeContext("@"));
 
             expect(result![0].insertText).toBe("hello");
             expect(result![0].command).toBeUndefined();

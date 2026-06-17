@@ -108,6 +108,11 @@
                 "category": "Memoria"
             },
             {
+                "command": "memoria.insertSnippet",
+                "title": "Insert Snippet",
+                "category": "Memoria"
+            },
+            {
                 "command": "memoria.insertTemplate",
                 "title": "Insert Template",
                 "category": "Memoria"
@@ -130,7 +135,7 @@
         ],
         "keybindings": [
             {
-                "command": "memoria.insertTemplate",
+                "command": "memoria.insertSnippet",
                 "key": "ctrl+.",
                 "mac": "cmd+.",
                 "when": "editorTextFocus && memoria.snippetsActive"
@@ -246,6 +251,10 @@
                 {
                     "command": "memoria.backupHistory",
                     "when": "memoria.backupActive"
+                },
+                {
+                    "command": "memoria.insertSnippet",
+                    "when": "memoria.snippetsActive"
                 },
                 {
                     "command": "memoria.insertTemplate",

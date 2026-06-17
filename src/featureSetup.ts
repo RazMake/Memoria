@@ -86,7 +86,7 @@ export function registerFeatureHandlers(
                     vscode.languages.registerCompletionItemProvider(
                         { scheme: "file" },
                         completionProvider,
-                        "{", "@",
+                        "@",
                     ),
                     vscode.languages.registerHoverProvider(
                         { scheme: "file" },

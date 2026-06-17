@@ -7,7 +7,7 @@ import type { TemplateFunction, TemplateContext, TemplateInput } from "./templat
 import type { ContactsProvider, MeProfile, ResolvedContact } from "./contactsProvider";
 import type { CareerLevelReference, PronounsReference } from "../contacts/types";
 import { formatDueIn, formatDueBy } from "../../utils/dateUtils";
-import { parseDuration } from "./templates/templateParser";
+
 
 // Re-export for convenience
 export type { ResolvedContact, MeProfile };
@@ -275,8 +275,10 @@ function createMe(contacts: ContactsProvider): TemplateFunction<MeProfile> {
 // ── DeadlineSelector ──────────────────────────────────────────────────────────
 
 /**
- * Creates the DeadlineSelector(dur1, dur2, ...) built-in function.
- * Accepts d (days) and w (weeks) only — not M (months).
+ * Creates the DeadlineSelector(start, end) built-in function.
+ * The last two parameters are plain integers (in days) representing the half-open
+ * interval [start, end) from which deadline options are generated.
+ * An optional quoted label may precede them: DeadlineSelector("label", start, end).
  * Reuses formatDueIn/formatDueBy from dateUtils.
  */
 function createDeadlineSelector(): TemplateFunction<string> {
@@ -286,23 +288,31 @@ function createDeadlineSelector(): TemplateFunction<string> {
         describeInputs(ctx: TemplateContext): TemplateInput[] {
             const hasLabel = ctx.args[0]?.isQuoted === true;
             const inputLabel = hasLabel ? ctx.args[0].value : undefined;
-            const durationArgs = hasLabel ? ctx.args.slice(1) : ctx.args;
+            const numericArgs = hasLabel ? ctx.args.slice(1) : ctx.args;
 
-            const options = durationArgs
-                .filter((a) => !a.options && a.value.trim())
-                .map((a) => {
-                    const raw = a.value.trim();
-                    let days: number;
-                    try {
-                        days = parseDuration(raw, new Set(["d", "w"])).days;
-                    } catch {
-                        throw new Error(`DeadlineSelector: invalid duration "${raw}" — use d (days) or w (weeks) only`);
-                    }
-                    return {
-                        value: String(days),
-                        label: formatDueIn(days, ctx.now),
-                    };
+            if (numericArgs.length < 2) {
+                throw new Error(`DeadlineSelector: expected 2 numeric arguments (start, end), got ${numericArgs.length}`);
+            }
+
+            const startRaw = numericArgs[numericArgs.length - 2].value.trim();
+            const endRaw = numericArgs[numericArgs.length - 1].value.trim();
+            const start = parseInt(startRaw, 10);
+            const end = parseInt(endRaw, 10);
+
+            if (isNaN(start)) {
+                throw new Error(`DeadlineSelector: invalid start value "${startRaw}" — must be a plain number`);
+            }
+            if (isNaN(end)) {
+                throw new Error(`DeadlineSelector: invalid end value "${endRaw}" — must be a plain number`);
+            }
+
+            const options: { value: string; label: string }[] = [];
+            for (let days = start; days < end; days++) {
+                options.push({
+                    value: String(days),
+                    label: formatDueIn(days, ctx.now),
                 });
+            }
 
             return [{
                 name: "choice",

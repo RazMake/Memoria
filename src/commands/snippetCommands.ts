@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
+import { minimatch } from "minimatch";
 import type { BlueprintRegistry } from "../blueprints/blueprintRegistry";
 import type { ManifestManager } from "../blueprints/manifestManager";
 import { findInitializedRootSilently } from "./commandHelpers";
 import type { SnippetsFeature } from "../features/snippets/snippetsFeature";
+import type { SnippetDefinition } from "../features/snippets/types";
 import { showInfo, showWarning } from "../utils/uiMessages";
 
 export function createExpandSnippetCommand(
@@ -83,5 +85,67 @@ export function createResetSnippetCommand(
         } catch {
             showWarning("Could not reset snippet — original not found.");
         }
+    };
+}
+
+export function createInsertSnippetCommand(
+    snippetsFeature: SnippetsFeature,
+): () => Promise<void> {
+    return async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) return;
+
+        const { document } = editor;
+        const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+        const position = editor.selection.active;
+        const visibilityCtx = { document, position, params: {}, contacts: [] };
+
+        const snippets = snippetsFeature.getAllSnippets().filter((s) => {
+            if (s.trigger.startsWith("@")) return false;
+            if (!minimatch(relativePath, s.glob)) return false;
+            if (s.visible && !s.visible(visibilityCtx)) return false;
+            return true;
+        });
+
+        type SnippetItem = vscode.QuickPickItem & { snippet?: SnippetDefinition };
+
+        const items: SnippetItem[] = [
+            { label: "Templates", description: "Insert rendered template at cursor" },
+            ...snippets.map((s) => ({ label: s.label, description: s.description, snippet: s })),
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: "Select a snippet",
+            matchOnDescription: true,
+        });
+
+        if (!picked) return;
+
+        if (!picked.snippet) {
+            await vscode.commands.executeCommand("memoria.insertTemplate");
+            return;
+        }
+
+        const { snippet } = picked;
+
+        if (snippet.commandId) {
+            await vscode.commands.executeCommand(
+                snippet.commandId,
+                document.uri.toString(),
+                position.line,
+                position.character,
+            );
+            return;
+        }
+
+        const selectedText = editor.selection.isEmpty
+            ? undefined
+            : document.getText(editor.selection);
+
+        const expanded = await snippetsFeature.expandSnippet(snippet, document, position, selectedText);
+
+        await editor.edit((editBuilder) => {
+            editBuilder.insert(editor.selection.active, expanded);
+        });
     };
 }

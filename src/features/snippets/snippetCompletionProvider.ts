@@ -18,18 +18,14 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
         const detected = context.triggerCharacter
             ? { char: context.triggerCharacter, col: position.character - context.triggerCharacter.length }
             : this.detectTrigger(document, position);
-        if (!detected || (detected.char !== "{" && detected.char !== "@")) return undefined;
+        if (!detected || detected.char !== "@") return undefined;
 
-        const isContactTrigger = detected.char === "@";
         const relativePath = vscode.workspace.asRelativePath(document.uri, false);
 
         const visibilityCtx = { document, position, params: {}, contacts: [] };
 
         const snippets = this.snippetProvider.getAllSnippets().filter((s) => {
-            const matchesPrefix = isContactTrigger
-                ? s.trigger.startsWith("@")
-                : s.trigger.startsWith("{");
-            if (!matchesPrefix || !minimatch(relativePath, s.glob)) return false;
+            if (!s.trigger.startsWith("@") || !minimatch(relativePath, s.glob)) return false;
             if (s.visible && !s.visible(visibilityCtx)) return false;
             return true;
         });
@@ -40,12 +36,12 @@ export class SnippetCompletionProvider implements vscode.CompletionItemProvider 
         return snippets.map((s) => this.toCompletionItem(s, document, position, triggerStart));
     }
 
-    /** Scan backwards from the cursor to find a `@` or `{` that starts the current token. */
+    /** Scan backwards from the cursor to find a `@` that starts the current token. */
     private detectTrigger(document: vscode.TextDocument, position: vscode.Position): { char: string; col: number } | undefined {
         const lineText = document.lineAt(position.line).text;
         for (let col = position.character - 1; col >= 0; col--) {
             const ch = lineText[col];
-            if (ch === "@" || ch === "{") return { char: ch, col };
+            if (ch === "@") return { char: ch, col };
             // Stop at whitespace — trigger must be part of the same token.
             if (/\s/.test(ch)) return undefined;
         }

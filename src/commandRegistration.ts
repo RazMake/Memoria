@@ -16,7 +16,7 @@ import {
     createMovePersonCommand,
     createRepairContactsLocationCommand,
 } from "./commands/contactCommands";
-import { createExpandSnippetCommand, createResetSnippetCommand } from "./commands/snippetCommands";
+import { createExpandSnippetCommand, createResetSnippetCommand, createInsertSnippetCommand } from "./commands/snippetCommands";
 import { createOpenUserGuideCommand } from "./commands/openUserGuide";
 import {
     createExpandTemplateCommand,
@@ -112,6 +112,10 @@ export function registerCommands(
         vscode.commands.registerCommand(
             "memoria.resetSnippet",
             createResetSnippetCommand(manifest, registry),
+        ),
+        vscode.commands.registerCommand(
+            "memoria.insertSnippet",
+            createInsertSnippetCommand(snippetsFeature),
         ),
         vscode.commands.registerCommand(
             "memoria.expandTemplate",
