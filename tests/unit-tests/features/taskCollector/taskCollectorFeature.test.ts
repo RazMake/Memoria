@@ -322,6 +322,29 @@ describe("TaskCollectorFeature", () => {
             expect(firstSaveListenerCount).toBe(1);
             expect(saveListeners.length).toBe(1);
         });
+
+        it("should not surface an error when disabled while a sync job is pending", async () => {
+            // Regression: stop() used to null the reconciler before draining the queue, so a
+            // pending collector job flushed during drain dereferenced null and surfaced a
+            // "Task sync failed — Cannot read properties of null (reading 'reconcileCollector')".
+            const collectorDoc = createMockTextDocument(createUri("/workspace/.memoria/tasks.md"), "");
+            mockOpenTextDocument.mockResolvedValue(collectorDoc as any);
+
+            await feature.refresh(workspaceRoot as any, true, [workspaceRoot as any]);
+
+            // Saving the collector file enqueues a debounced "collector" sync job.
+            const collectorSaveDoc = createMockTextDocument(createUri("/workspace/.memoria/tasks.md"), "- [ ] Pending\n");
+            saveListeners[0](collectorSaveDoc as any);
+
+            // Disable the feature before the debounce fires; stop() drains the pending job.
+            await feature.refresh(workspaceRoot as any, false, [workspaceRoot as any]);
+
+            expect(mockShowErrorMessage).not.toHaveBeenCalled();
+            expect(mockTelemetry.logError).not.toHaveBeenCalledWith(
+                "taskCollector.reconcileFailed",
+                expect.anything(),
+            );
+        });
     });
 
     describe("syncNow", () => {

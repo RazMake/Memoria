@@ -531,13 +531,26 @@ describe("WorkspaceInitConflictResolver", () => {
                 "memoria.conflictDiff",
                 "Merge: Main.todo",
                 expect.anything(),
-                expect.objectContaining({ enableScripts: true }),
+                expect.objectContaining({ enableScripts: true, retainContextWhenHidden: true }),
             );
             expect(mockCreateWebviewPanel).toHaveBeenCalledWith(
                 "memoria.conflictDiff",
                 "Merge: README.md",
                 expect.anything(),
-                expect.objectContaining({ enableScripts: true }),
+                expect.objectContaining({ enableScripts: true, retainContextWhenHidden: true }),
+            );
+        });
+
+        it("should keep hidden panels alive with retainContextWhenHidden", async () => {
+            mockReadFile.mockResolvedValue(encoder.encode("content"));
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            expect(mockCreateWebviewPanel).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+                expect.objectContaining({ retainContextWhenHidden: true }),
             );
         });
 
@@ -570,11 +583,8 @@ describe("WorkspaceInitConflictResolver", () => {
 
             // Simulate webview sending ready
             for (const listener of mockPanel._messageListeners) {
-                listener({ type: "ready" });
+                await listener({ type: "ready" });
             }
-
-            // waitForWebviewReady resolves asynchronously; flush the microtask queue.
-            await new Promise((r) => setTimeout(r, 0));
 
             expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -584,6 +594,31 @@ describe("WorkspaceInitConflictResolver", () => {
                     newVersion: "# new version",
                 }),
             );
+        });
+
+        it("should re-send init every time the webview signals ready", async () => {
+            // When a hidden tab is revealed, VS Code reloads the webview script, which posts
+            // "ready" again. The panel must re-send its diff data each time or the revealed
+            // tab stays blank.
+            mockReadFile
+                .mockResolvedValueOnce(encoder.encode("# pre-existing"))
+                .mockResolvedValueOnce(encoder.encode("# new version"));
+
+            const mockPanel = createMockWebviewPanel();
+            mockCreateWebviewPanel.mockReturnValue(mockPanel);
+
+            const resolver = new WorkspaceInitConflictResolver(mockFs, extensionUri);
+            await resolver.openDiffEditors(workspaceRoot, cleanupRoot, ["00-ToDo/Main.todo"]);
+
+            for (const listener of mockPanel._messageListeners) {
+                await listener({ type: "ready" });
+                await listener({ type: "ready" });
+            }
+
+            const initCalls = mockPanel.webview.postMessage.mock.calls.filter(
+                ([m]: [any]) => m?.type === "init",
+            );
+            expect(initCalls).toHaveLength(2);
         });
 
         it("should write pre-existing content and dispose on keepPreExisting message", async () => {

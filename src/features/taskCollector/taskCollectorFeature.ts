@@ -130,13 +130,15 @@ export class TaskCollectorFeature implements vscode.Disposable {
     private async stop(): Promise<void> {
         const currentQueue = this.queue;
         this.queue = null;
-        this.reconciler = null;
 
         for (const subscription of this.subscriptions) {
             subscription.dispose();
         }
         this.subscriptions = [];
 
+        // Drain in-flight and pending (debounced) jobs BEFORE tearing down the reconciler and
+        // state. Nulling the reconciler first lets a queued job flushed during drain dereference
+        // it, surfacing as "Cannot read properties of null (reading 'reconcileCollector')".
         if (currentQueue) {
             try {
                 await currentQueue.drain();
@@ -146,6 +148,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
             currentQueue.dispose();
         }
 
+        this.reconciler = null;
         this.state.workspaceRoot = null;
         this.state.collectorPath = null;
         this.pendingWrites = null;
@@ -284,30 +287,39 @@ export class TaskCollectorFeature implements vscode.Disposable {
     }
 
     private async handleJob(job: { kind: "source" | "collector" | "full"; uri?: string; renderOnly?: boolean }): Promise<void> {
+        // Capture the reconciler locally. A concurrent refresh/disable can tear the feature down
+        // (nulling this.reconciler) while this job is queued or in flight; the local reference
+        // keeps an in-flight job consistent and lets a torn-down job no-op safely instead of
+        // dereferencing null.
+        const reconciler = this.reconciler;
+        if (!reconciler) {
+            return;
+        }
+
         switch (job.kind) {
             case "full":
-                await this.fullSync();
+                await this.fullSync(reconciler);
                 return;
             case "source":
                 if (job.uri) {
-                    await this.reconciler!.reconcileSource(vscode.Uri.parse(job.uri), true, () => this.enqueueCollectorRender());
+                    await reconciler.reconcileSource(vscode.Uri.parse(job.uri), true, () => this.enqueueCollectorRender());
                 }
                 return;
             case "collector":
-                await this.reconciler!.reconcileCollector(job.renderOnly ?? false);
+                await reconciler.reconcileCollector(job.renderOnly ?? false);
                 return;
         }
     }
 
-    private async fullSync(): Promise<void> {
+    private async fullSync(reconciler: TaskReconciler): Promise<void> {
         if (!this.state.index) {
             return;
         }
 
-        const config = await this.reconciler!.readConfig();
+        const config = await reconciler.readConfig();
         const sources = await findTrackedSources(config, (uri, cfg) => this.isTrackedSourceUri(uri, cfg));
         for (const source of sources) {
-            await this.reconciler!.reconcileSource(source, false, () => this.enqueueCollectorRender());
+            await reconciler.reconcileSource(source, false, () => this.enqueueCollectorRender());
         }
 
         // Full sync always writes the collector even if it is dirty — it is the authoritative
@@ -315,7 +327,7 @@ export class TaskCollectorFeature implements vscode.Disposable {
         // On bootstrap (first run with no persisted index), read the existing collector document
         // so seed content (e.g. sample tasks from the blueprint) is imported into the index
         // before re-rendering — otherwise the seed content would be silently discarded.
-        await this.reconciler!.reconcileCollector(!this.state.bootstrapPending, true);
+        await reconciler.reconcileCollector(!this.state.bootstrapPending, true);
         this.state.bootstrapPending = false;
         this.telemetry.logUsage("taskCollector.syncCompleted", {
             kind: "full",

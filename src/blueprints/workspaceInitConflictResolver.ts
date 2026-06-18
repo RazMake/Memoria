@@ -20,7 +20,6 @@ import { computeFileHash } from "./hashUtils";
 import { stripTrailingSlash } from "../utils/path";
 import { getConflictDiffHtml } from "./conflictDiffHtml";
 import { textDecoder, textEncoder } from "../utils/encoding";
-import { waitForWebviewReady } from "../utils/webview";
 import { prepareWebview } from "../utils/webviewSetup";
 import type {
     BlueprintDefinition,
@@ -177,12 +176,19 @@ export class WorkspaceInitConflictResolver {
         const newVersion = textDecoder.decode(newVersionBytes);
 
         // Create webview panel.
+        //
+        // retainContextWhenHidden keeps each panel's DOM and script state alive while its
+        // tab sits in the background. Re-initialization can open up to 10 panels at once, and
+        // they all stack in the same view column, so only the active tab is ever visible.
+        // Without this flag VS Code tears down every hidden panel's webview — leaving them
+        // blank when the user switches tabs and discarding any in-progress merge decisions.
         const panel = vscode.window.createWebviewPanel(
             "memoria.conflictDiff",
             `Merge: ${fileName}`,
             vscode.ViewColumn.Active,
             {
                 enableScripts: true,
+                retainContextWhenHidden: true,
                 localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "dist")],
             },
         );
@@ -194,17 +200,19 @@ export class WorkspaceInitConflictResolver {
         );
         panel.webview.html = getConflictDiffHtml(panel.webview, nonce, scriptUri, cssUri);
 
-        // Wait for webview ready, then send init data.
-        void waitForWebviewReady(panel.webview).then(() => {
-            try {
-                panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
-            } catch {
-                // Panel was disposed before init could be sent — nothing to do.
-            }
-        });
-
         panel.webview.onDidReceiveMessage(async (msg) => {
             switch (msg?.type) {
+                case "ready":
+                    // The webview script has loaded and attached its message listener.
+                    // Respond to every "ready" — not just the first — so a panel whose script
+                    // only runs the first time its tab is revealed (the common case when many
+                    // panels open at once) still receives its diff data instead of staying blank.
+                    try {
+                        panel.webview.postMessage({ type: "init", fileName, preExisting, newVersion });
+                    } catch {
+                        // Panel was disposed before init could be sent — nothing to do.
+                    }
+                    break;
                 case "keepPreExisting":
                     await this.fs.writeFile(workspaceUri, textEncoder.encode(preExisting));
                     panel.dispose();
