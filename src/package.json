@@ -2,7 +2,7 @@
     "name": "memoria-notebook",
     "displayName": "Memoria - Templated Notebook",
     "description": "Scaffold a personal knowledge base in a workspace - organize notes, meetings, contacts, and TODOs with optional Copilot integration.",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "publisher": "RazMake",
     "icon": "resources/media/icon.png",
     "repository": {
@@ -325,7 +325,7 @@
         "compile:tests": "tsc -p ../tests/e2e-tests/tsconfig.json",
         "pretest:integration": "npm run build && npm run compile:tests",
         "test:integration": "vscode-test",
-        "prepackage": "node -e \"require('fs').mkdirSync('../publish',{recursive:true})\"",
+        "prepackage": "node ../repo-utils/prepare-package-docs.mjs && node -e \"require('fs').mkdirSync('../publish',{recursive:true})\"",
         "package": "node -e \"const p=require('./package.json');const {execSync}=require('child_process');execSync('vsce package --out ../publish/memoria-'+p.version+'.vsix',{stdio:'inherit'})\"",
         "typecheck": "tsc --noEmit",
         "lint": "eslint ."

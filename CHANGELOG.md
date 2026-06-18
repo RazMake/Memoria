@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.4
+
+- Fixed a **Task Collector** crash ("Task sync failed — Cannot read properties of null (reading 'reconcileCollector')") that could occur when task sync was disabled or reconfigured while a sync was still in progress.
+- Fixed merge views showing all black, instead of showing the diff and the merge controls.
+
 ## 0.0.3
 
 - Added **scheduled backups** — define backup profiles (in `.memoria/backup-config.json`) that compress selected workspace files into dated, incremental zip archives on a recurring schedule. Includes retention limits, a status-bar indicator, a guided **Create Backup Profile** wizard, manual **Run Backup**, **Backup History**, and an opt-in setting to catch up missed backups when VS Code starts.

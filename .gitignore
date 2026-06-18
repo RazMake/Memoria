@@ -4,3 +4,7 @@ coverage/
 .vscode-test/
 *.vsix
 publish/
+
+# Generated at package time from the repo-root docs (see repo-utils/prepare-package-docs.mjs)
+src/README.md
+src/CHANGELOG.md
