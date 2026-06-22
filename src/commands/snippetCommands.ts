@@ -20,11 +20,8 @@ export function createExpandSnippetCommand(
 
         // Use the current cursor — VS Code places it after the accepted
         // completion's insertText (which is ""), so the cursor sits where
-        // the trigger text was removed. A stray `}` may remain if the user
-        // typed the full `{trigger}` before accepting.
+        // the trigger text was removed.
         const cursorPos = editor.selection.active;
-        const lineText = editor.document.lineAt(cursorPos.line).text;
-        const hasStrayBrace = lineText[cursorPos.character] === "}";
 
         const selectedText = editor.selection.isEmpty === false
             ? editor.document.getText(editor.selection)
@@ -35,15 +32,7 @@ export function createExpandSnippetCommand(
         );
 
         await editor.edit((editBuilder) => {
-            if (hasStrayBrace) {
-                const braceRange = new vscode.Range(
-                    cursorPos,
-                    new vscode.Position(cursorPos.line, cursorPos.character + 1),
-                );
-                editBuilder.replace(braceRange, expanded);
-            } else {
-                editBuilder.insert(cursorPos, expanded);
-            }
+            editBuilder.insert(cursorPos, expanded);
         });
     };
 }

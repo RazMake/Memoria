@@ -1,6 +1,6 @@
 # Snippets
 
-Text expansion for Markdown files via autocomplete. Type a trigger pattern and select it from the completion list to insert dynamic or static text.
+Text expansion for Markdown files. Press **Ctrl+.** to open the snippet picker (or type an `@` contact trigger directly in the editor) and select an entry to insert dynamic or static text.
 
 ## How it works
 
@@ -9,16 +9,18 @@ Snippet files are TypeScript files (`.ts`) stored in the blueprint's Snippets fo
 - **Individual Contributor** workspaces use `10-Autocomplete/Snippets/`
 - **People Manager** workspaces use `10-Autocomplete/Snippets/`
 
-When the snippets feature is active, Memoria compiles each `.ts` file in the snippets folder using an in-memory TypeScript transpiler, extracts the exported `SnippetDefinition` array, and registers them as completion items. Changes to snippet files are picked up automatically via a file watcher — no restart required.
+When the snippets feature is active, Memoria compiles each `.ts` file in the snippets folder using an in-memory TypeScript transpiler, extracts the exported `SnippetDefinition` array, and makes them available from the **Insert Snippet** picker (**Ctrl+.**). Changes to snippet files are picked up automatically via a file watcher — no restart required.
 
-## Trigger syntax
+## Inserting snippets
 
-Snippets are activated by typing their trigger string in a Markdown file:
+There are two ways to insert a snippet, depending on its kind:
 
-- **`{trigger}`** — Curly-brace triggers for general-purpose snippets (e.g., `{date}`, `{time}`, `{now}`)
-- **`@id`** — At-sign triggers for contact snippets (e.g., `@jdoe`)
+- **General snippets** (e.g. `{date}`, `{time}`, `{now}`) — Press **Ctrl+.** to open the **Insert Snippet** picker, then choose an entry by its label or description. (You can also run **Memoria: Insert Snippet** from the Command Palette.)
+- **Contact snippets** (`@id`) — Type `@` followed by a contact's id, nickname, or name directly in the editor; matching contacts appear in VS Code's autocomplete list.
 
-As you type, VS Code's autocomplete list shows matching snippets. Selecting one either inserts the text directly (static snippets) or runs the expansion function (dynamic snippets).
+Selecting a snippet either inserts the text directly (static snippets) or runs the expansion function (dynamic snippets).
+
+> **Note:** General snippets are no longer activated by typing their `{...}` trigger in the document — the trigger string is now only an internal identifier. Use **Ctrl+.** instead.
 
 ## Built-in snippets
 
@@ -74,15 +76,15 @@ export default snippets;
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `trigger` | `string` | Yes | The text that activates the snippet (e.g., `{date}`) |
-| `label` | `string` | Yes | Display name shown in the completion list |
+| `trigger` | `string` | Yes | Unique identifier for the snippet (e.g., `{date}`). For general snippets this is no longer typed by the user — it only has to be unique. An `@`-prefixed trigger activates a contact snippet when typed in the editor. |
+| `label` | `string` | Yes | Display name shown in the **Insert Snippet** picker (and the `@` completion list for contact snippets) |
 | `description` | `string` | No | Detail text shown alongside the label |
 | `glob` | `string` | Yes | File glob pattern — the snippet only appears in matching files |
 | `body` | `string` | No | Static text to insert (used when there is no `expand` function) |
 | `expand` | `(ctx) => string` | No | Dynamic expansion function — receives a `SnippetContext` |
 | `parameters` | `SnippetParameter[]` | No | Prompts the user with a QuickPick for each parameter before expansion |
 | `pathSafe` | `boolean` | No | When `true`, the snippet is available to other features even if snippets are disabled |
-| `filterText` | `string` | No | Custom text used for filtering in the completion list |
+| `filterText` | `string` | No | Custom filter text for the autocomplete list. Only applies to `@` contact snippets; ignored for general (**Ctrl+.**) snippets. |
 
 ### The `memoria-snippets` module
 
@@ -102,7 +104,7 @@ Snippet files can import from the virtual `memoria-snippets` module, which expos
 
 ## Snippet parameters and prompts
 
-When a snippet defines `parameters`, selecting it from autocomplete opens a QuickPick dialog for each parameter before the expansion runs:
+When a snippet defines `parameters`, selecting it (from the **Ctrl+.** picker, or autocomplete for contact snippets) opens a QuickPick dialog for each parameter before the expansion runs:
 
 ```typescript
 {
@@ -161,7 +163,7 @@ Changes take effect immediately — no restart required.
 
 ## Troubleshooting
 
-- **Snippets not appearing in autocomplete?** Make sure the feature is enabled via **Memoria: Manage features** and that you are editing a Markdown file matching the snippet's `glob` pattern.
+- **Snippets not appearing?** Make sure the feature is enabled via **Memoria: Manage features** and that you are editing a Markdown file matching the snippet's `glob` pattern. Press **Ctrl+.** to open the picker for general snippets; contact snippets appear in autocomplete after typing `@`.
 - **Snippet file errors?** Check the VS Code notification area — Memoria shows a warning if a snippet file fails to compile. Only the `memoria-snippets` module can be imported; other modules will cause an error.
 - **Contact snippets missing?** The Contacts feature must also be enabled and have at least one contact loaded.
 - **Still not working?** Try reloading VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).

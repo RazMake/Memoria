@@ -11,7 +11,7 @@ Use the **Manage features** command to enable or disable these. Which features a
 | [Explorer decorations](decorations.md) | Provides customization for the folder/file colors and badges in the Explorer panel |
 | [Contacts](contacts.md) | Adds a sidebar for browsing, searching, and managing contacts stored in the blueprint-owned people folder |
 | [Task Collector](task-collector.md) | Aggregates all Markdown tasks across workspace files into a single collector file and keeps them in two-way sync |
-| [Snippets](snippets.md) | Text expansion via autocomplete — type `{trigger}` or `@id` in Markdown files to insert dynamic or static text |
+| [Snippets](snippets.md) | Text expansion — press **Ctrl+.** to insert a general snippet, or type `@id` in Markdown files to insert contact text |
 | [Templates](templates.md) | Author parameterised Markdown templates with people-selectors, deadline pickers, and custom functions; render via commands or the terminal wrapper |
 | [Scheduled Backup](backup.md) | Automatically zips selected workspace files to a target folder (e.g. OneDrive) on a recurring schedule |
 

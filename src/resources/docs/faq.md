@@ -90,7 +90,7 @@ Yes. Type a task (`- [ ] …`) anywhere in the `# To do` section of the collecto
 
 ### Snippets are not appearing in autocomplete
 
-Make sure the Snippets feature is enabled via **Memoria: Manage features** and that you are editing a Markdown file matching the snippet's `glob` pattern. Snippet triggers use `{trigger}` syntax (e.g., `{date}`) — start typing the trigger including the opening brace.
+Make sure the Snippets feature is enabled via **Memoria: Manage features** and that you are editing a Markdown file matching the snippet's `glob` pattern. Press **Ctrl+.** to open the snippet picker for general snippets; contact snippets are triggered by typing `@` in the editor.
 
 ### Snippet file shows a compile error
 

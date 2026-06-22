@@ -100,7 +100,7 @@ describe("createExpandSnippetCommand", () => {
         expect(feature.expandSnippet).not.toHaveBeenCalled();
     });
 
-    it("inserts the expansion at the cursor when there is no stray brace", async () => {
+    it("inserts the expansion at the cursor", async () => {
         const editor = makeEditor({
             uri: "file:///doc",
             cursorLine: 0,
@@ -111,19 +111,6 @@ describe("createExpandSnippetCommand", () => {
         const feature = makeSnippetsFeature([{ trigger: "now" }], "2026-06-07");
         await createExpandSnippetCommand(feature)("now", "file:///doc");
         expect(feature.expandSnippet).toHaveBeenCalled();
-        expect(editor.edit).toHaveBeenCalled();
-    });
-
-    it("replaces a stray closing brace when present at the cursor", async () => {
-        const editor = makeEditor({
-            uri: "file:///doc",
-            cursorLine: 0,
-            cursorChar: 0,
-            lineText: "}rest",
-        });
-        activeTextEditorRef.current = editor;
-        const feature = makeSnippetsFeature([{ trigger: "now" }]);
-        await createExpandSnippetCommand(feature)("now", "file:///doc");
         expect(editor.edit).toHaveBeenCalled();
     });
 
