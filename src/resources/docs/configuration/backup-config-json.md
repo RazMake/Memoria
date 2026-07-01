@@ -36,7 +36,7 @@ Stores the profiles for the [Scheduled Backup](../features/backup.md) feature.
 | `schedule.days` | — | Days of the week to run: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun`. |
 | `retention` | `7` | Maximum number of archives to keep per profile. Oldest are deleted first. |
 
-> A hidden `_state` object tracks the last backup time and per-file hashes used for incremental diffing. **Do not edit it manually** — it is managed by the extension.
+> A hidden `_state` object tracks the last backup time and per-file hashes used for incremental diffing. **Do not edit it manually** — it is managed by the extension. In a git workspace, hashes for files that are committed and pushed to the remote are dropped from this object, since those files are excluded from backups.
 
 ## How it is updated
 
