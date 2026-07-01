@@ -83,12 +83,19 @@ export class SnippetsFeature implements vscode.Disposable, SnippetProvider, Cont
         this.templatesFolder = snippetsConfig.templatesFolder ?? null;
         this.active = true;
 
+        // Subscribe to contact updates BEFORE the initial snippet generation.
+        // Feature handlers run in parallel (see FeatureManager.refresh), so the
+        // ContactsFeature may still be loading when reloadAllSnippets() runs — in
+        // which case refreshContactSnippets() produces an empty contact list.
+        // Subscribing first guarantees the one-time onDidUpdate that Contacts fires
+        // on load is never lost, so contact `@` snippets always populate.
+        this.subscribeToContacts();
+
         await this.reloadAllSnippets();
         if (this.templatesFolder) {
             await this.reloadTemplates();
         }
         this.installWatcher();
-        this.subscribeToContacts();
     }
 
     async stop(): Promise<void> {
