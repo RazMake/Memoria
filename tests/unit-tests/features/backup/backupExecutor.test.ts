@@ -260,4 +260,106 @@ describe("executeBackup", () => {
         if (result.kind !== "failed") throw new Error("expected failed");
         expect(result.reason).toBe("Cancelled");
     });
+
+    it("excludes files already pushed to the remote and drops their hashes", async () => {
+        const uriPushed = makeUri("Notes/pushed.md");
+        const uriDirty = makeUri("Notes/dirty.md");
+        contents.set(uriPushed.toString(), new TextEncoder().encode("pushed"));
+        contents.set(uriDirty.toString(), new TextEncoder().encode("dirty"));
+        findFiles.mockResolvedValue([uriPushed, uriDirty]);
+
+        const remoteFilter = {
+            isRepo: true,
+            hasUpstream: true,
+            isPushedToRemote: (fsPath: string) => fsPath.endsWith("pushed.md"),
+        };
+
+        const result = await executeBackup({
+            workspaceRoot: WORKSPACE_ROOT,
+            profileName: "daily",
+            profile: profile(),
+            state: emptyState(),
+            outputChannel: makeChannel(),
+            fs: injectedFs(),
+            remoteFilter,
+            now: () => new Date(2026, 5, 7, 9, 0, 0),
+        });
+
+        expect(result.kind).toBe("success");
+        if (result.kind !== "success") throw new Error("expected success");
+        // Only the dirty file is backed up; the pushed file is excluded.
+        expect(result.fileCount).toBe(1);
+        expect(Object.keys(result.newState.hashes)).toEqual(["Notes/dirty.md"]);
+    });
+
+    it("drops hashes and skips (without a zip) when a tracked file becomes pushed", async () => {
+        const uriA = makeUri("Notes/a.md");
+        contents.set(uriA.toString(), new TextEncoder().encode("alpha"));
+        findFiles.mockResolvedValue([uriA]);
+
+        // Prior state recorded a hash for a.md while it was still dirty.
+        const priorState: BackupProfileState = {
+            lastBackupTime: "2026-06-06T00:00:00.000Z",
+            hashes: { "Notes/a.md": "0000" },
+        };
+
+        // Now the file is confirmed pushed to the remote.
+        const remoteFilter = {
+            isRepo: true,
+            hasUpstream: true,
+            isPushedToRemote: () => true,
+        };
+
+        const result = await executeBackup({
+            workspaceRoot: WORKSPACE_ROOT,
+            profileName: "daily",
+            profile: profile(),
+            state: priorState,
+            outputChannel: makeChannel(),
+            fs: injectedFs(),
+            remoteFilter,
+        });
+
+        expect(result.kind).toBe("skipped");
+        if (result.kind !== "skipped") throw new Error("expected skipped");
+        // The hash for the now-pushed file is dropped, but lastBackupTime is preserved.
+        expect(result.newState).toBeDefined();
+        expect(result.newState!.hashes).toEqual({});
+        expect(result.newState!.lastBackupTime).toBe("2026-06-06T00:00:00.000Z");
+
+        // No zip file should have been written.
+        const written = await fs.promises.readdir(tmpDir);
+        expect(written.some((f) => f.endsWith(".zip"))).toBe(false);
+    });
+
+    it("skips without a state update when nothing changed and nothing became pushed", async () => {
+        const uriA = makeUri("Notes/a.md");
+        contents.set(uriA.toString(), new TextEncoder().encode("alpha"));
+        findFiles.mockResolvedValue([uriA]);
+
+        const first = await executeBackup({
+            workspaceRoot: WORKSPACE_ROOT,
+            profileName: "daily",
+            profile: profile(),
+            state: emptyState(),
+            outputChannel: makeChannel(),
+            fs: injectedFs(),
+        });
+        expect(first.kind).toBe("success");
+        if (first.kind !== "success") throw new Error("expected success");
+
+        const second = await executeBackup({
+            workspaceRoot: WORKSPACE_ROOT,
+            profileName: "daily",
+            profile: profile(),
+            state: first.newState,
+            outputChannel: makeChannel(),
+            fs: injectedFs(),
+        });
+
+        expect(second.kind).toBe("skipped");
+        if (second.kind !== "skipped") throw new Error("expected skipped");
+        // No pushed files and no changes → no state to persist.
+        expect(second.newState).toBeUndefined();
+    });
 });

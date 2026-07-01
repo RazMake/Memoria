@@ -11,11 +11,19 @@ import { findChangedFiles, buildHashManifest } from "./hashManager";
 import { createZip, buildZipFileName, ensureDir, ZipEntry } from "./zipCreator";
 import { enforceRetention } from "./retentionManager";
 import { formatSize } from "./backupUtils";
+import type { RemoteBackupFilter } from "./gitRemoteStatus";
 
 export type BackupStatus =
     | { kind: "success"; profileName: string; fileCount: number; sizeBytes: number }
-    | { kind: "skipped"; profileName: string }
+    | { kind: "skipped"; profileName: string; newState?: BackupProfileState }
     | { kind: "failed"; profileName: string; reason: string };
+
+/** Filter used when none is supplied — treats every file as needing backup. */
+const ALL_FILES_FILTER: RemoteBackupFilter = {
+    isRepo: false,
+    hasUpstream: false,
+    isPushedToRemote: () => false,
+};
 
 export interface BackupExecutorOptions {
     workspaceRoot: vscode.Uri;
@@ -25,6 +33,12 @@ export interface BackupExecutorOptions {
     outputChannel: vscode.OutputChannel;
     /** Injectable for testing — defaults to vscode.workspace.fs. */
     fs?: typeof vscode.workspace.fs;
+    /**
+     * Filter identifying files already committed and pushed to the git remote.
+     * Such files are skipped and their hashes dropped. Defaults to a filter that
+     * treats every file as needing backup (non-git behavior).
+     */
+    remoteFilter?: RemoteBackupFilter;
     /** Injectable for testing — defaults to Date.now(). */
     now?: () => Date;
     /** Progress callback (count of processed files, total files). */
@@ -111,6 +125,7 @@ export async function executeBackup(opts: BackupExecutorOptions): Promise<Backup
         state,
         outputChannel: channel,
         fs: fsApi = vscode.workspace.fs,
+        remoteFilter = ALL_FILES_FILTER,
         now = () => new Date(),
         onProgress,
         token,
@@ -128,20 +143,49 @@ export async function executeBackup(opts: BackupExecutorOptions): Promise<Backup
         return { kind: "failed", profileName, reason: "Cancelled" };
     }
 
-    // 2. Find changed files
+    // 1b. Exclude files already committed and pushed to the git remote. Those are
+    //     safely stored remotely, so they need neither backing up nor a hash entry.
+    const candidates: Array<{ uri: vscode.Uri; relativePath: string }> = [];
+    let pushedCount = 0;
+    for (const file of allFiles) {
+        if (remoteFilter.isPushedToRemote(file.uri.fsPath)) {
+            pushedCount++;
+        } else {
+            candidates.push(file);
+        }
+    }
+
+    if (remoteFilter.isRepo) {
+        logLine(
+            `Git detected (upstream ${remoteFilter.hasUpstream ? "present" : "missing"}): ` +
+            `${pushedCount} file(s) already pushed to remote — excluded from backup`,
+        );
+    }
+
+    // 2. Find changed files (among files not yet safely in the remote)
     const previousHashes = state.hashes ?? {};
     logLine(`Found ${allFiles.length} files, computing changes…`);
 
-    const changedFiles = await findChangedFiles(allFiles, previousHashes, fsApi);
+    const changedFiles = await findChangedFiles(candidates, previousHashes, fsApi);
 
     if (token?.isCancellationRequested) {
         return { kind: "failed", profileName, reason: "Cancelled" };
     }
 
-    logLine(`Found ${allFiles.length} files, ${changedFiles.length} changed since last backup`);
+    logLine(`Found ${candidates.length} candidate files, ${changedFiles.length} changed since last backup`);
 
-    // 3. Skip if nothing changed
+    // 3. Skip if nothing changed. Still persist a pruned hash manifest when files
+    //    that were previously tracked are now safely pushed (drop their hashes).
     if (changedFiles.length === 0) {
+        const prunedHashes = await buildHashManifest(candidates, fsApi);
+        if (!hashesEqual(prunedHashes, previousHashes)) {
+            logLine(`No changes detected — dropping hashes for files now stored in the remote`);
+            return {
+                kind: "skipped",
+                profileName,
+                newState: { lastBackupTime: state.lastBackupTime, hashes: prunedHashes },
+            };
+        }
         logLine(`No changes detected — skipping backup`);
         return { kind: "skipped", profileName };
     }
@@ -172,7 +216,7 @@ export async function executeBackup(opts: BackupExecutorOptions): Promise<Backup
         try {
             const bytes = await fsApi.readFile(file.uri);
             zipEntries.push({ content: Buffer.from(bytes), relativePath: file.relativePath });
-        } catch (err) {
+        } catch {
             logLine(`  Warning: could not read ${file.relativePath} — skipped`);
         }
         done++;
@@ -198,8 +242,9 @@ export async function executeBackup(opts: BackupExecutorOptions): Promise<Backup
 
     logLine(`Created: ${zipPath} (${formatSize(sizeBytes)})`);
 
-    // 7. Update hash manifest for ALL source files (not just changed ones)
-    const newHashes = await buildHashManifest(allFiles, fsApi);
+    // 7. Update hash manifest for the tracked (non-pushed) source files. Files
+    //    already pushed to the remote are intentionally omitted, dropping their hashes.
+    const newHashes = await buildHashManifest(candidates, fsApi);
 
     // 8. Return success — caller is responsible for persisting state
     logLine(`Hash manifest updated for ${changedFiles.length} files`);
@@ -223,4 +268,14 @@ export interface SuccessBackupStatus {
     fileCount: number;
     sizeBytes: number;
     newState: BackupProfileState;
+}
+
+/** Shallow structural equality for two hash manifests. */
+function hashesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const aKeys = Object.keys(a);
+    if (aKeys.length !== Object.keys(b).length) return false;
+    for (const key of aKeys) {
+        if (a[key] !== b[key]) return false;
+    }
+    return true;
 }

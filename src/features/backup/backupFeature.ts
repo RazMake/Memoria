@@ -14,6 +14,7 @@ import { BackupConfigManager } from "./backupConfigManager";
 import { BackupStatusBar } from "./backupStatusBar";
 import { nextOccurrence, mostRecentOccurrence } from "./backupScheduler";
 import { executeBackup, type SuccessBackupStatus } from "./backupExecutor";
+import { getRemoteBackupFilter } from "./gitRemoteStatus";
 import type { TelemetryEmitter } from "../../telemetry";
 import { formatSize } from "./backupUtils";
 import { showError } from "../../utils/uiMessages";
@@ -267,6 +268,8 @@ export class BackupFeature implements vscode.Disposable {
 
         this.statusBar.setState("running", `Backing up ${profileName}…`);
 
+        const remoteFilter = await getRemoteBackupFilter(root);
+
         const start = Date.now();
         const result = await vscode.window.withProgress(
             {
@@ -281,6 +284,7 @@ export class BackupFeature implements vscode.Disposable {
                     profile,
                     state,
                     outputChannel: this.outputChannel,
+                    remoteFilter,
                     token,
                     onProgress: (done, total) => {
                         _progress.report({
@@ -315,6 +319,10 @@ export class BackupFeature implements vscode.Disposable {
                 durationMs: String(durationMs),
             });
         } else if (result.kind === "skipped") {
+            if (result.newState) {
+                await this.configManager.updateState(root, profileName, result.newState);
+                this.config = await this.configManager.read(root);
+            }
             this.statusBar.setState("skipped", `${profileName}: no files changed`);
             vscode.window.showInformationMessage(
                 `Backup '${profileName}' skipped: no files changed since last backup`,
