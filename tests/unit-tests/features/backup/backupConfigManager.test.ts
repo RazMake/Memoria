@@ -68,7 +68,7 @@ describe("BackupConfigManager.write", () => {
         const mockFs = makeFs();
         const mgr = new BackupConfigManager(mockFs);
         await mgr.write(ROOT, config);
-        expect(mockFs.writeFile).toHaveBeenCalledOnce();
+        // First write is the config; a second write adds the .gitignore entry.
         const callArgs = mockFs.writeFile.mock.calls[0]!;
         const written = new TextDecoder().decode(callArgs[1] as Uint8Array);
         expect(JSON.parse(written)).toEqual(config);
@@ -86,7 +86,7 @@ describe("BackupConfigManager.upsertProfile", () => {
             schedule: { time: "09:00", days: ["sat"] },
             retention: 3,
         });
-        expect(mockFs.writeFile).toHaveBeenCalledOnce();
+        // First write is the config; a second write adds the .gitignore entry.
         const written = JSON.parse(
             new TextDecoder().decode(mockFs.writeFile.mock.calls[0]![1] as Uint8Array)
         ) as BackupConfig;

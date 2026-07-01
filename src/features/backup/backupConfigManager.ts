@@ -1,7 +1,7 @@
 /** Reads and writes .memoria/backup-config.json. */
 
 import * as vscode from "vscode";
-import { ensureDirectory } from "../../utils/filesystem";
+import { ensureDirectory, ensureGitignoreEntry } from "../../utils/filesystem";
 import { readJsonFile, writeJsonFile } from "../../utils/jsonFile";
 import { getMemoriaConfigUri, getMemoriaDirUri } from "../../utils/memoriaPaths";
 import type { BackupConfig, BackupProfile, BackupProfileState } from "./types";
@@ -14,6 +14,9 @@ const DEFAULT_CONFIG: BackupConfig = {
 };
 
 export class BackupConfigManager {
+    /** Roots whose .gitignore has already had the backup-config entry added this session. */
+    private readonly gitignoreEnsured = new Set<string>();
+
     constructor(
         private readonly fs: typeof vscode.workspace.fs = vscode.workspace.fs,
     ) {}
@@ -33,6 +36,23 @@ export class BackupConfigManager {
     async write(workspaceRoot: vscode.Uri, config: BackupConfig): Promise<void> {
         await ensureDirectory(this.fs, getMemoriaDirUri(workspaceRoot));
         await writeJsonFile(this.fs, this.configUri(workspaceRoot), config);
+        // backup-config.json holds machine-local paths/schedules — keep it out of git.
+        await this.ensureGitignored(workspaceRoot);
+    }
+
+    /**
+     * Ensures `.memoria/backup-config.json` is listed in the workspace `.gitignore`,
+     * at most once per root per session. Best-effort — a failure never breaks the write.
+     */
+    private async ensureGitignored(workspaceRoot: vscode.Uri): Promise<void> {
+        const key = workspaceRoot.toString();
+        if (this.gitignoreEnsured.has(key)) return;
+        this.gitignoreEnsured.add(key);
+        try {
+            await ensureGitignoreEntry(this.fs, workspaceRoot, ".memoria/backup-config.json");
+        } catch {
+            // Gitignoring is a convenience — swallow failures so the config write still succeeds.
+        }
     }
 
     /**

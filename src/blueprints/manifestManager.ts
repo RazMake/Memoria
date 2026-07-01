@@ -12,6 +12,7 @@ import { BACKUP_FOLDER_NAME } from "./types";
 import type { StoredTaskIndex, TaskCollectorConfig } from "../features/taskCollector/types";
 import type { TelemetryEmitter } from "../telemetry";
 import { readJsonFile, writeJsonFile } from "../utils/jsonFile";
+import { ensureGitignoreEntry } from "../utils/filesystem";
 import { getMemoriaConfigUri, getMemoriaDirUri } from "../utils/memoriaPaths";
 
 export class ManifestManager {
@@ -23,6 +24,12 @@ export class ManifestManager {
      * already exists on some filesystems, so caching ensures we only call it once per root.
      */
     private readonly ensuredDirs = new Set<string>();
+
+    /**
+     * Tracks which roots have had machine-local config files added to .gitignore
+     * this session, so we only read/write .gitignore once per root per file.
+     */
+    private readonly gitignoreEnsured = new Set<string>();
 
     constructor(
         fs: typeof vscode.workspace.fs,
@@ -169,6 +176,8 @@ export class ManifestManager {
 
     async writeTaskIndex(workspaceRoot: vscode.Uri, index: StoredTaskIndex): Promise<void> {
         await this.writeConfig(workspaceRoot, "tasks-index.json", index);
+        // tasks-index.json holds machine-local, regenerable task identity state — keep it out of git.
+        await this.ensureGitignored(workspaceRoot, ".memoria/tasks-index.json");
     }
 
     /**
@@ -191,6 +200,21 @@ export class ManifestManager {
 
     private configUri(root: vscode.Uri, filename: string): vscode.Uri {
         return getMemoriaConfigUri(root, filename);
+    }
+
+    /**
+     * Ensures `entry` is listed in the workspace `.gitignore`, at most once per root
+     * per session. Best-effort — a gitignore write failure never breaks the config write.
+     */
+    private async ensureGitignored(workspaceRoot: vscode.Uri, entry: string): Promise<void> {
+        const key = `${workspaceRoot.toString()}::${entry}`;
+        if (this.gitignoreEnsured.has(key)) return;
+        this.gitignoreEnsured.add(key);
+        try {
+            await ensureGitignoreEntry(this.fs, workspaceRoot, entry);
+        } catch {
+            // Gitignoring is a convenience — swallow failures so the config write still succeeds.
+        }
     }
 
     private memoriaDir(root: vscode.Uri): vscode.Uri {
